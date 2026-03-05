@@ -1,0 +1,79 @@
+<div class="dashboard">
+  <header>
+    <h1>🚗 CarWash Dashboard</h1>
+    <button (click)="cargarDatos()">🔄 Actualizar</button>
+  </header>
+
+  <div class="stats">
+    <div class="stat-card">
+      <h3>💰 Ingresos</h3>
+      <p>${{ totalIngresos | number }}</p>
+    </div>
+    <div class="stat-card">
+      <h3>👥 Clientes</h3>
+      <p>{{ totalClientes }}</p>
+    </div>
+    <div class="stat-card">
+      <h3>⏳ Pendientes</h3>
+      <p>{{ turnosPendientes }}</p>
+    </div>
+  </div>
+
+  <h2>Turnos de hoy</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Hora</th>
+        <th>Cliente</th>
+        <th>Servicio</th>
+        <th>Precio</th>
+        <th>Estado</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let turno of turnosHoy">
+        <td>{{ turno.hora }}</td>
+        <td>{{ turno.cliente_nombre }}</td>
+        <td>{{ turno.servicio_nombre }}</td>
+        <td>${{ turno.precio }}</td>
+        <td>
+          <span [class]="'estado ' + turno.estado">{{ turno.estado }}</span>
+        </td>
+        <td>
+          <button (click)="cambiarEstado(turno.id, 'confirmado')">✅</button>
+          <button (click)="cambiarEstado(turno.id, 'cancelado')">❌</button>
+        </td>
+      </tr>
+      <tr *ngIf="turnosHoy.length === 0">
+        <td colspan="6">No hay turnos para hoy</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Todos los turnos</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Hora</th>
+        <th>Cliente</th>
+        <th>Servicio</th>
+        <th>Precio</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let turno of todosTurnos">
+        <td>{{ turno.fecha }}</td>
+        <td>{{ turno.hora }}</td>
+        <td>{{ turno.cliente_nombre }}</td>
+        <td>{{ turno.servicio_nombre }}</td>
+        <td>${{ turno.precio }}</td>
+        <td>
+          <span [class]="'estado ' + turno.estado">{{ turno.estado }}</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
