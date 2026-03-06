@@ -1,0 +1,89 @@
+<div class="clientes-page">
+
+  <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
+  <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
+
+  <div class="layout" [class.con-detalle]="clienteSeleccionado">
+
+    <!-- LISTA -->
+    <div class="seccion lista-seccion">
+      <div class="seccion-header">
+        <h3>Clientes</h3>
+        <span class="badge-count">{{ clientesFiltrados.length }}</span>
+      </div>
+      <input type="text" class="buscador" [(ngModel)]="busqueda" placeholder="🔍 Buscar por nombre o teléfono..." />
+      <div class="lista-clientes">
+        <div *ngFor="let cliente of clientesFiltrados"
+          class="cliente-item"
+          [class.activo]="clienteSeleccionado?.id === cliente.id"
+          (click)="seleccionarCliente(cliente)">
+          <div class="cliente-avatar">{{ cliente.nombre?.charAt(0)?.toUpperCase() }}</div>
+          <div class="cliente-info">
+            <div class="cliente-nombre">{{ cliente.nombre }}</div>
+            <div class="cliente-tel">{{ cliente.telefonos?.[0]?.telefono || 'Sin teléfono' }}</div>
+          </div>
+          <div class="cliente-arrow">›</div>
+        </div>
+        <div *ngIf="clientesFiltrados.length === 0" class="vacio">No se encontraron clientes</div>
+      </div>
+    </div>
+
+    <!-- DETALLE -->
+    <div *ngIf="clienteSeleccionado" class="seccion detalle-seccion">
+      <div class="seccion-header">
+        <h3>Detalle del cliente</h3>
+        <button class="btn-cerrar" (click)="cerrarDetalle()">✕</button>
+      </div>
+
+      <!-- Nombre -->
+      <div class="detalle-bloque">
+        <h4>Nombre</h4>
+        <div class="campo-editable">
+          <input type="text" [(ngModel)]="clienteSeleccionado.nombre"
+            [readonly]="!clienteSeleccionado.editando"
+            class="input-nombre" />
+          <button *ngIf="!clienteSeleccionado.editando" class="btn-icon" (click)="clienteSeleccionado.editando = true">✏️</button>
+          <button *ngIf="clienteSeleccionado.editando" class="btn-icon" (click)="guardarNombre()">💾</button>
+          <button *ngIf="clienteSeleccionado.editando" class="btn-icon" (click)="clienteSeleccionado.editando = false">↩️</button>
+        </div>
+      </div>
+
+      <!-- Teléfonos -->
+      <div class="detalle-bloque">
+        <h4>Teléfonos</h4>
+        <div class="telefonos-lista">
+          <div *ngFor="let tel of clienteSeleccionado.telefonos" class="telefono-item">
+            <span>{{ tel.telefono }}</span>
+            <span *ngIf="tel.principal" class="badge-principal">principal</span>
+            <button class="btn-icon-sm" (click)="eliminarTelefono(tel)" title="Eliminar">🗑️</button>
+          </div>
+          <div *ngIf="!clienteSeleccionado.telefonos?.length" class="vacio-sm">Sin teléfonos</div>
+        </div>
+        <div class="agregar-tel">
+          <input type="text" [(ngModel)]="nuevoTelefono" placeholder="Agregar teléfono..." class="input-tel" />
+          <button class="btn-primary-sm" (click)="agregarTelefono()">+ Agregar</button>
+        </div>
+      </div>
+
+      <!-- Turnos -->
+      <div class="detalle-bloque">
+        <h4>Historial de turnos</h4>
+        <div *ngIf="cargandoTurnos" class="vacio-sm">Cargando...</div>
+        <div *ngIf="!cargandoTurnos && turnosCliente.length === 0" class="vacio-sm">Sin turnos registrados</div>
+        <div class="turnos-lista">
+          <div *ngFor="let turno of turnosCliente" class="turno-item">
+            <div class="turno-fecha">{{ formatearFecha(turno.fecha) }} a las {{ turno.hora?.slice(0,5) || turno.hora_inicio?.slice(0,5) }}</div>
+            <div class="turno-servicio">{{ turno.servicio_nombre }}</div>
+            <div class="turno-footer">
+              <span class="turno-precio">${{ turno.precio | number }}</span>
+              <span class="badge" [ngClass]="turno.estado">{{ turno.estado }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>

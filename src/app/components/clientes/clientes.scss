@@ -1,0 +1,308 @@
+.clientes-page {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.alerta {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+  &.exito { background: #dcfce7; color: #166534; }
+  &.error { background: #fee2e2; color: #991b1b; }
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+
+  &.con-detalle {
+    grid-template-columns: 1fr 1fr;
+    @media (max-width: 700px) {
+      grid-template-columns: 1fr;
+    }
+  }
+}
+
+.seccion {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.seccion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  h3 { font-size: 1.05rem; color: #334155; margin: 0; }
+}
+
+.badge-count {
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.8rem;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.btn-cerrar {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 4px;
+  &:hover { color: #1e293b; }
+}
+
+.buscador {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  margin-bottom: 12px;
+  background: #f8fafc;
+  &:focus { outline: none; border-color: #3b82f6; background: white; }
+}
+
+.lista-clientes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.cliente-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover { background: #f8fafc; }
+  &.activo { background: #eff6ff; }
+}
+
+.cliente-avatar {
+  width: 38px;
+  height: 38px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.cliente-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cliente-nombre {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.cliente-tel {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.cliente-arrow {
+  color: #cbd5e1;
+  font-size: 1.2rem;
+}
+
+.vacio {
+  text-align: center;
+  color: #94a3b8;
+  padding: 24px;
+  font-size: 0.88rem;
+}
+
+.vacio-sm {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  padding: 8px 0;
+}
+
+// DETALLE
+.detalle-bloque {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f1f5f9;
+
+  &:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+  h4 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: #94a3b8;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+}
+
+.campo-editable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-nombre {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: #f8fafc;
+  color: #1e293b;
+  &:not([readonly]) { background: white; border-color: #3b82f6; }
+  &:focus { outline: none; }
+  &[readonly] { cursor: default; }
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 6px;
+  border-radius: 6px;
+  &:hover { background: #f1f5f9; }
+}
+
+// Teléfonos
+.telefonos-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.telefono-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: #1e293b;
+}
+
+.badge-principal {
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.btn-icon-sm {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+  &:hover { background: #fee2e2; }
+}
+
+.agregar-tel {
+  display: flex;
+  gap: 8px;
+}
+
+.input-tel {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  background: #f8fafc;
+  &:focus { outline: none; border-color: #3b82f6; background: white; }
+}
+
+.btn-primary-sm {
+  padding: 8px 14px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  &:hover { background: #2563eb; }
+}
+
+// Turnos
+.turnos-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.turno-item {
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left: 3px solid #e2e8f0;
+}
+
+.turno-fecha {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.turno-servicio {
+  font-size: 0.82rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.turno-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.turno-precio {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  &.pendiente { background: #fef9c3; color: #854d0e; }
+  &.confirmado { background: #dcfce7; color: #166534; }
+  &.cancelado { background: #fee2e2; color: #991b1b; }
+}

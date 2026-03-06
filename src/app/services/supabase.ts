@@ -148,4 +148,50 @@ export class SupabaseService {
       .eq('id', id);
     if (error) throw error;
   }
+
+    // CLIENTES
+  async getClientes() {
+    const { data, error } = await this.supabase
+      .from('clientes')
+      .select('*, telefonos(*)')
+      .order('nombre', { ascending: true });
+    if (error) throw error;
+    return data;
+  }
+
+  async updateCliente(id: number, nombre: string) {
+    const { error } = await this.supabase
+      .from('clientes')
+      .update({ nombre })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  async getTurnosCliente(clienteId: number) {
+    const { data, error } = await this.supabase
+      .from('turnos')
+      .select('*')
+      .eq('cliente_id', clienteId)
+      .order('fecha', { ascending: false });
+    if (error) throw error;
+    return data;
+  }
+
+  async agregarTelefono(clienteId: number, telefono: string) {
+    const { data, error } = await this.supabase
+      .from('telefonos')
+      .insert({ cliente_id: clienteId, telefono, principal: false })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async eliminarTelefono(id: number) {
+    const { error } = await this.supabase
+      .from('telefonos')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }
 }
