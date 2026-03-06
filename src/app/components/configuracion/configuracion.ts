@@ -20,6 +20,7 @@ export class ConfiguracionComponent implements OnInit {
   diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   nuevoHorario = { dia_semana: 1, hora_inicio: '08:00', hora_fin: '12:00', activo: true };
   mostrarFormHorario = false;
+  editandoDatos = false;
 
   constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
 
@@ -32,24 +33,13 @@ export class ConfiguracionComponent implements OnInit {
     const config = await this.supabase.getConfiguracion();
     this.nombreNegocio = config.find((c: any) => c.clave === 'nombre_negocio')?.valor || '';
     this.descripcion = config.find((c: any) => c.clave === 'descripcion')?.valor || '';
-    this.horarios = await this.supabase.getHorarios();
-    this.cdr.detectChanges();
-  }
-
-  async guardarConfiguracion() {
-    this.guardando = true;
-    this.mensaje = '';
-    this.mensajeError = '';
-    try {
-      await this.supabase.upsertConfiguracion('nombre_negocio', this.nombreNegocio);
-      await this.supabase.upsertConfiguracion('descripcion', this.descripcion);
-      this.mensaje = '✅ Configuración guardada correctamente.';
-      setTimeout(() => { this.mensaje = ''; this.cdr.detectChanges(); }, 3000);
-    } catch (e) {
-      console.error(e);
-      this.mensajeError = '❌ Error al guardar.';
-    }
-    this.guardando = false;
+    this.horarios = (await this.supabase.getHorarios()).map((h: any) => ({
+      ...h,
+      hora_inicio: h.hora_inicio?.slice(0, 5),
+      hora_fin: h.hora_fin?.slice(0, 5),
+      editando: false,
+      editandoDatos: false
+    }));
     this.cdr.detectChanges();
   }
 
@@ -84,11 +74,7 @@ export class ConfiguracionComponent implements OnInit {
     this.mensaje = '✅ Horario agregado.';
     this.cdr.detectChanges();
   }
-  /*
-  getNombreDia(num: number): string {
-    return this.diasSemana[num] || '';
-  }
-  */
+
   formatearHora(hora: string): string {
     return hora ? hora.slice(0, 5) : '';
   }
@@ -98,5 +84,23 @@ export class ConfiguracionComponent implements OnInit {
     const inicio = parseInt(horario.hora_inicio?.slice(0, 2) || '0');
     const turno = inicio < 13 ? 'Mañana' : 'Tarde';
     return `${dia} ${turno}`;
+  }
+
+  async guardarConfiguracion() {
+    this.guardando = true;
+    this.mensaje = '';
+    this.mensajeError = '';
+    try {
+      await this.supabase.upsertConfiguracion('nombre_negocio', this.nombreNegocio);
+      await this.supabase.upsertConfiguracion('descripcion', this.descripcion);
+      this.editandoDatos = false;
+      this.mensaje = '✅ Configuración guardada correctamente.';
+      setTimeout(() => { this.mensaje = ''; this.cdr.detectChanges(); }, 3000);
+    } catch (e) {
+      console.error(e);
+      this.mensajeError = '❌ Error al guardar.';
+    }
+    this.guardando = false;
+    this.cdr.detectChanges();
   }
 }
