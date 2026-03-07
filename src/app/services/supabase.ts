@@ -195,6 +195,7 @@ export class SupabaseService {
     if (error) throw error;
   }
 
+    // GANANCIAS
   async getGanancias(desde: string, hasta: string) {
     const { data, error } = await this.supabase
       .from('turnos')
