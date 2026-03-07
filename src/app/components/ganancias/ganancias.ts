@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
@@ -29,7 +29,7 @@ export class GananciasComponent implements OnInit {
     this.turnos = await this.supabase.getGanancias(desde, hasta);
     this.cargando = false;
     this.cdr.detectChanges();
-    //this.scrollToHoy();
+    this.scrollToHoy();
   }
 
   getRango(): { desde: string, hasta: string } {
@@ -84,21 +84,25 @@ export class GananciasComponent implements OnInit {
       });
       return Object.entries(horas).map(([label, v]) => ({ label, ...v }));
     } else {
-      const dias: { [key: string]: { total: number, cantidad: number } } = {};
       const y = this.fechaActual.getFullYear();
       const m = this.fechaActual.getMonth();
       const diasEnMes = new Date(y, m + 1, 0).getDate();
+      
+      const dias: { label: string, total: number, cantidad: number }[] = [];
       for (let d = 1; d <= diasEnMes; d++) {
-        dias[String(d).padStart(2, '0')] = { total: 0, cantidad: 0 };
+        dias.push({ label: String(d).padStart(2, '0'), total: 0, cantidad: 0 });
       }
+      
       this.turnos.forEach(t => {
-        const d = t.fecha?.slice(8, 10);
-        if (dias[d]) {
-          dias[d].total += t.precio || 0;
-          dias[d].cantidad++;
+        const d = parseInt(t.fecha?.slice(8, 10));
+        const idx = d - 1;
+        if (dias[idx]) {
+          dias[idx].total += t.precio || 0;
+          dias[idx].cantidad++;
         }
       });
-      return Object.entries(dias).map(([label, v]) => ({ label, ...v }));
+      
+      return dias;
     }
   }
 
