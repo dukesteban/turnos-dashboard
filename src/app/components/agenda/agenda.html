@@ -152,8 +152,8 @@
       </div>
     </div>
     <div class="popup-acciones">
-      <button *ngIf="turnoSeleccionado.estado !== 'confirmado' && turnoSeleccionado.estado !== 'cancelado'"
-        class="btn-confirmar" (click)="cambiarEstado('confirmado')">✅ Confirmar</button>
+      <button *ngIf="turnoSeleccionado.estado !== 'atendido' && turnoSeleccionado.estado !== 'cancelado'"
+        class="btn-confirmar" (click)="cambiarEstado('atendido')">✅ Atendido</button>
       <button *ngIf="turnoSeleccionado.estado !== 'cancelado'"
         class="btn-cancelar" (click)="cambiarEstado('cancelado')">❌ Cancelar</button>
     </div>

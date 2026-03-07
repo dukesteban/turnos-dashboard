@@ -5,7 +5,7 @@
     <div class="stat-card">
       <div class="stat-icon">💰</div>
       <div class="stat-info">
-        <span class="stat-label">Ingresos confirmados</span>
+        <span class="stat-label">Ingresos atendidos</span>
         <span class="stat-value">${{ totalIngresos | number }}</span>
       </div>
     </div>
@@ -52,8 +52,8 @@
             <span class="badge" [ngClass]="turno.estado">{{ turno.estado }}</span>
           </td>
           <td class="acciones">
-            <button *ngIf="turno.estado !== 'confirmado' && turno.estado !== 'cancelado'"
-              class="btn-accion confirmar" (click)="cambiarEstado(turno.id, 'confirmado')" title="Confirmar">✅</button>
+            <button *ngIf="turno.estado !== 'atendido' && turno.estado !== 'cancelado'"
+              class="btn-accion confirmar" (click)="cambiarEstado(turno.id, 'atendido')" title="Confirmar">✅</button>
             <button *ngIf="turno.estado !== 'cancelado'"
               class="btn-accion cancelar" (click)="cambiarEstado(turno.id, 'cancelado')" title="Cancelar">❌</button>
           </td>

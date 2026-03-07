@@ -29,7 +29,7 @@ export class DashboardComponent implements OnInit {
     const stats = await this.supabase.getEstadisticas();
 
     this.totalIngresos = stats
-      .filter((t: any) => t.estado === 'confirmado')
+      .filter((t: any) => t.estado === 'atendido')
       .reduce((sum: number, t: any) => sum + (t.precio || 0), 0);
 
     this.totalClientes = new Set(

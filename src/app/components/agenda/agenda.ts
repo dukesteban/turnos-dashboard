@@ -161,7 +161,7 @@ export class AgendaComponent implements OnInit {
   }
 
   getColorTurno(turno: any): string {
-    if (turno.estado === 'confirmado') return 'confirmado';
+    if (turno.estado === 'atendido') return 'atendido';
     return 'pendiente';
   }
 
