@@ -31,47 +31,54 @@
     </div>
 
     <!-- Lista servicios -->
-    <table class="tabla-servicios">
-      <thead>
-        <tr>
-          <th>Nombre</th>
-          <th>Precio</th>
-          <th>Duración</th>
-          <th>Activo</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let servicio of servicios" [class.inactivo]="!servicio.activo">
-          <td>
-            <input type="text" [(ngModel)]="servicio.nombre" class="input-inline" [readonly]="!servicio.editando" />
-          </td>
-          <td>
-            <input type="number" [(ngModel)]="servicio.precio" class="input-inline input-numero" [readonly]="!servicio.editando" />
-          </td>
-          <td>
-            <input type="number" [(ngModel)]="servicio.duracion_minutos" class="input-inline input-numero" [readonly]="!servicio.editando" />
-            <span class="unidad">min</span>
-          </td>
-          <td>
-            <label class="toggle">
-              <input type="checkbox" [checked]="servicio.activo" (change)="toggleServicio(servicio)" />
-              <span class="slider"></span>
-            </label>
-          </td>
+    <div class="tabla-wrapper">
+      <table class="tabla-servicios">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Precio</th>
+            <th>Duración</th>
+            <th>Activo</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let servicio of servicios" [class.inactivo]="!servicio.activo">
+            <td>
+              <input type="text" [(ngModel)]="servicio.nombre" class="input-inline input-nombre" [readonly]="!servicio.editando" />
+            </td>
+            <td>
+              <div class="input-con-prefix">
+                <span class="prefix">$</span>
+                <input type="number" [(ngModel)]="servicio.precio" class="input-inline input-numero" [readonly]="!servicio.editando" />
+              </div>
+            </td>
+            <td>
+              <div class="input-con-suffix">
+                <input type="number" [(ngModel)]="servicio.duracion_minutos" class="input-inline input-numero" [readonly]="!servicio.editando" />
+                <span class="unidad">min</span>
+              </div>
+            </td>
+            <td>
+              <label class="toggle">
+                <input type="checkbox" [checked]="servicio.activo" (change)="toggleServicio(servicio)" />
+                <span class="slider"></span>
+              </label>
+            </td>
+            <td class="acciones">
+              <button *ngIf="!servicio.editando" class="btn-icon" (click)="servicio.editando = true" title="Editar">✏️</button>
+              <button *ngIf="servicio.editando" class="btn-icon" (click)="guardarServicio(servicio)" title="Guardar">💾</button>
+              <button *ngIf="servicio.editando" class="btn-icon" (click)="servicio.editando = false" title="Cancelar">↩️</button>
+              <button class="btn-icon" (click)="eliminarServicio(servicio.id)" title="Eliminar">🗑️</button>
+            </td>
+          </tr>
+          <tr *ngIf="servicios.length === 0">
+            <td colspan="5" class="vacio">No hay servicios configurados</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-          <td class="acciones">
-            <button *ngIf="!servicio.editando" class="btn-edit" (click)="servicio.editando = true" title="Editar">✏️</button>
-            <button *ngIf="servicio.editando" class="btn-save" (click)="guardarServicio(servicio)" title="Guardar">💾</button>
-            <button *ngIf="servicio.editando" class="btn-cancel" (click)="servicio.editando = false" title="Cancelar">↩️</button>
-            <button class="btn-delete" (click)="eliminarServicio(servicio.id)" title="Eliminar">🗑️</button>
-          </td>
-        </tr>
-        <tr *ngIf="servicios.length === 0">
-          <td colspan="5" class="vacio">No hay servicios configurados</td>
-        </tr>
-      </tbody>
-    </table>
   </div>
 
 </div>

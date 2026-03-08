@@ -118,7 +118,7 @@ export class SupabaseService {
     const { data, error } = await this.supabase
       .from('servicios')
       .select('*')
-      .order('nombre', { ascending: true });
+      .order('precio', { ascending: true });
     if (error) throw error;
     return data;
   }
