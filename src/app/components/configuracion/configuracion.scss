@@ -92,6 +92,13 @@
   &:hover { background: #e2e8f0; }
 }
 
+  .botones-edicion {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    justify-content: flex-end;
+  }
+
 .form-nuevo-horario {
   background: #f8fafc;
   border-radius: 8px;

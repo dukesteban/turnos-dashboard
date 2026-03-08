@@ -13,13 +13,6 @@
   <div class="seccion">
     <div class="seccion-header">
       <h3>Datos del negocio</h3>
-      <div>
-        <button *ngIf="!editandoDatos" class="btn-secondary" (click)="editandoDatos = true">✏️ Editar</button>
-        <button *ngIf="editandoDatos" class="btn-primary" (click)="guardarConfiguracion()" [disabled]="guardando">
-          {{ guardando ? 'Guardando...' : '💾 Guardar' }}
-        </button>
-        <button *ngIf="editandoDatos" class="btn-secondary" (click)="editandoDatos = false" style="margin-left: 8px">↩️ Cancelar</button>
-      </div>
     </div>
     <div class="campo">
       <label>Nombre del negocio</label>
@@ -29,6 +22,13 @@
       <label>Descripción</label>
       <input type="text" [(ngModel)]="descripcion" [readonly]="!editandoDatos" placeholder="Ej: Lavadero de autos premium" />
     </div>
+    <div class="botones-edicion">
+      <button *ngIf="!editandoDatos" class="btn-secondary" (click)="editandoDatos = true">✏️ Editar</button>
+      <button *ngIf="editandoDatos" class="btn-primary" (click)="guardarConfiguracion()" [disabled]="guardando">
+        {{ guardando ? 'Guardando...' : '💾 Guardar' }}
+      </button>
+      <button *ngIf="editandoDatos" class="btn-secondary" (click)="editandoDatos = false">↩️ Cancelar</button>
+    </div>
   </div>
 
   <!-- Horarios de atención -->
@@ -36,7 +36,7 @@
     <div class="seccion-header">
       <h3>Horarios de atención</h3>
       <button class="btn-secondary" (click)="mostrarFormHorario = !mostrarFormHorario">
-        {{ mostrarFormHorario ? 'Cancelar' : '+ Agregar horario' }}
+        {{ mostrarFormHorario ? '↩️ Cancelar' : '➕Agregar' }}
       </button>
     </div>
 
@@ -57,7 +57,7 @@
           <label>Hasta</label>
           <input type="time" [(ngModel)]="nuevoHorario.hora_fin" />
         </div>
-        <button class="btn-primary" (click)="agregarHorario()">Agregar</button>
+        <button class="btn-primary" (click)="agregarHorario()">➕ Agregar</button>
       </div>
     </div>
 
