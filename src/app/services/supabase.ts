@@ -19,8 +19,8 @@ export class SupabaseService {
     const { data, error } = await this.supabase
       .from('turnos')
       .select('*')
-      .order('fecha', { ascending: true })
-      .order('hora', { ascending: true });
+      .order('fecha', { ascending: false })
+      .order('hora', { ascending: false });
     if (error) throw error;
     return data;
   }
