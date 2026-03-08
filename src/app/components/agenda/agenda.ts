@@ -74,8 +74,8 @@ export class AgendaComponent implements OnInit {
     const duracion = turno.duracion_minutos || 45;
     const minutosDesdeInicio = (h - this.horaInicio) * 60 + m;
     return {
-      top: minutosDesdeInicio * PX_POR_MINUTO,
-      height: Math.max(duracion * PX_POR_MINUTO, 24)
+      top: minutosDesdeInicio * PX_POR_MINUTO + 8,
+      height: Math.max(duracion * PX_POR_MINUTO, 24) - 9
     };
   }
 
