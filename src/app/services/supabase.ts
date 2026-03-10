@@ -31,7 +31,7 @@ export class SupabaseService {
       .from('turnos')
       .select('*')
       .eq('fecha', hoy)
-      .order('hora', { ascending: true });
+      .order('hora', { ascending: false });
     if (error) throw error;
     return data;
   }

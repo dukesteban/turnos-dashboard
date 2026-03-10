@@ -30,7 +30,7 @@
     <div class="seccion-header">
       <h3>Turnos de hoy</h3>
       <div style="display:flex; gap:8px">
-        <button class="btn-primary" (click)="abrirModalNuevoTurno()">📅 Nuevo turno</button>
+        <button class="btn-primary" (click)="abrirModalNuevoTurno()">➕Nuevo turno📅</button>
       </div>
     </div>
     <table class="tabla">
@@ -67,8 +67,8 @@
     <div class="seccion-header">
       <h3>Turnos</h3>
       <div class="vistas">
-        <button [class.activo]="vistasTurnos === 'semana'" (click)="vistasTurnos = 'semana'">Semana</button>
-        <button [class.activo]="vistasTurnos === 'mes'" (click)="vistasTurnos = 'mes'">Mes</button>
+        <button [class.activo]="vistasTurnos === 'semana'" (click)="vistasTurnos = 'semana'">📅 Semana</button>
+        <button [class.activo]="vistasTurnos === 'mes'" (click)="vistasTurnos = 'mes'">📅 Mes</button>
       </div>
     </div>
     <table class="tabla">
