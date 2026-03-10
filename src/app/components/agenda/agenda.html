@@ -153,7 +153,9 @@
           </div>
           <div class="popup-fila">
             <span class="popup-label">Estado</span>
-            <span class="badge" [ngClass]="turnoSeleccionado.estado">{{ turnoSeleccionado.estado }}</span>
+            <span class="badge" [ngClass]="esVencido(turnoSeleccionado) ? 'vencido' : turnoSeleccionado.estado">
+              {{ esVencido(turnoSeleccionado) ? 'vencido' : turnoSeleccionado.estado }}
+            </span>
           </div>
         </div>
       </div>

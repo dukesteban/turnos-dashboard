@@ -92,7 +92,14 @@ export class AgendaComponent implements OnInit {
 
   // VISTA DÍA
   get fechaISO(): string {
-    return this.fechaActual.toISOString().split('T')[0];
+    return this.formatearFechaLocal(this.fechaActual);
+  }
+
+  formatearFechaLocal(fecha: Date): string {
+    const y = fecha.getFullYear();
+    const m = String(fecha.getMonth() + 1).padStart(2, '0');
+    const d = String(fecha.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
 
   get turnosDia(): any[] {
@@ -114,7 +121,7 @@ export class AgendaComponent implements OnInit {
   }
 
   turnosDeDia(dia: Date): any[] {
-    const fechaStr = dia.toISOString().split('T')[0];
+    const fechaStr = this.formatearFechaLocal(dia);
     return this.turnos.filter(t => t.fecha === fechaStr && t.estado !== 'cancelado');
   }
 
@@ -153,8 +160,7 @@ export class AgendaComponent implements OnInit {
   }
 
   esHoy(fecha: Date): boolean {
-    const hoy = new Date().toISOString().split('T')[0];
-    return fecha.toISOString().split('T')[0] === hoy;
+    return this.formatearFechaLocal(fecha) === this.formatearFechaLocal(new Date());
   }
 
   // POPUP
@@ -182,11 +188,18 @@ export class AgendaComponent implements OnInit {
     this.cerrarPopup();
   }
 
-  getColorTurno(turno: any): string {
-    if (turno.estado === 'atendido') return 'atendido';
-    return 'pendiente';
+  esVencido(turno: any): boolean {
+    if (turno.estado !== 'pendiente') return false;
+    const fechaHora = new Date(`${turno.fecha}T${turno.hora_inicio || turno.hora}`);
+    return fechaHora < new Date();
   }
 
+  getColorTurno(turno: any): string {
+    if (turno.estado === 'atendido') return 'atendido';
+    if (this.esVencido(turno)) return 'vencido';
+    return 'pendiente';
+  }
+  
   formatearHora(inicio: string): string {
     return inicio?.slice(0, 5) || '';
   }
