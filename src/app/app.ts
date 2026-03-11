@@ -12,7 +12,7 @@ import { SupabaseService } from './services/supabase';
 })
 
 export class App implements OnInit {
-  nombreNegocio = localStorage.getItem('nombre_negocio') || 'Turnos-Dashboard';
+  nombreNegocio = localStorage.getItem('nombre_negocio') || 'Hola!👋';
 
   constructor(private supabase: SupabaseService) {}
 
