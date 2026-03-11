@@ -3,16 +3,20 @@
   <!-- Stats -->
   <div class="stats">
     <div class="stat-card">
-      <div class="stat-icon">💰</div>
       <div class="stat-info">
-        <span class="stat-label">Ingresos atendidos</span>
-        <span class="stat-value">${{ totalIngresos | number }}</span>
+        <span class="stat-label">💰 Ingresos hoy</span>
+        <div class="stat-value-row">
+          <span class="stat-value">{{ mostrarIngresos ? ('$' + (totalIngresos | number)) : '$ ****' }}</span>
+          <button class="btn-ojo" (click)="mostrarIngresos = !mostrarIngresos">
+            {{ mostrarIngresos ? '👁️' : '🙈' }}
+          </button>
+        </div>
       </div>
     </div>
     <div class="stat-card">
       <div class="stat-icon">👥</div>
       <div class="stat-info">
-        <span class="stat-label">Clientes únicos</span>
+        <span class="stat-label">Atendidos hoy</span>
         <span class="stat-value">{{ totalClientes }}</span>
       </div>
     </div>

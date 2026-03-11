@@ -32,7 +32,6 @@
     font-size: 0.8rem;
     color: #64748b;
     font-weight: 500;
-    text-transform: uppercase;
     letter-spacing: 0.5px;
   }
 
@@ -41,6 +40,21 @@
     font-weight: 700;
     color: #1e293b;
   }
+}
+
+.stat-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-ojo {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0;
+  line-height: 1;
 }
 
 .seccion {

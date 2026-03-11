@@ -17,6 +17,7 @@ export class DashboardComponent implements OnInit {
   totalClientes = 0;
   turnosPendientes = 0;
   vistasTurnos: 'semana' | 'mes' = 'semana';
+  mostrarIngresos = true;
   
   // Popup
   turnoSeleccionado: any = null;
@@ -59,18 +60,16 @@ export class DashboardComponent implements OnInit {
   async cargarDatos() {
     this.turnosHoy = await this.supabase.getTurnosHoy();
     this.todosTurnos = await this.supabase.getTurnos();
-    const stats = await this.supabase.getEstadisticas();
 
-    this.totalIngresos = stats
+    this.totalIngresos = this.turnosHoy
       .filter((t: any) => t.estado === 'atendido')
-      .reduce((sum: number, t: any) => sum + (t.precio || 0), 0);
+      .reduce((sum: number, t: any) => sum + (Number(t.precio) || 0), 0);
 
-    this.totalClientes = new Set(
-      this.todosTurnos.map((t: any) => t.cliente_telefono)
-    ).size;
+    this.totalClientes = this.turnosHoy
+      .filter((t: any) => t.estado === 'atendido').length;
 
-    this.turnosPendientes = this.todosTurnos
-      .filter((t: any) => t.estado === 'pendiente').length;
+    this.turnosPendientes = this.turnosHoy
+      .filter((t: any) => t.estado === 'pendiente' && !this.esVencido(t)).length;
 
     this.cdr.detectChanges();
   }
