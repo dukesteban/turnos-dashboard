@@ -41,19 +41,9 @@
         </div>
 
         <!-- Turnos -->
-        <div *ngFor="let turno of turnosDia"
-          class="bloque-turno"
-          [ngClass]="getColorTurno(turno)"
-          [style.top.px]="posicionTurno(turno).top"
-          [style.height.px]="posicionTurno(turno).height"
-          (click)="abrirPopup(turno)">
-          <div class="turno-header">
-            <span class="turno-hora">{{ formatearHora(turno.hora_inicio || turno.hora) }}</span>
-            <span class="turno-cliente">{{ turno.cliente_nombre }}</span>
-          </div>
-          <div class="turno-servicio">{{ turno.servicio_nombre }}</div>
-          <div class="turno-precio">${{ turno.precio | number }}</div>
-        </div>
+        <ng-container *ngIf="turnosDia.length > 0">
+          <ng-container *ngTemplateOutlet="turnosConColumnas; context: { turnos: turnosDia }"></ng-container>
+        </ng-container>
 
         <!-- Sin turnos -->
         <div *ngIf="turnosDia.length === 0" class="sin-turnos">
@@ -98,15 +88,7 @@
           </div>
 
           <!-- Turnos del día -->
-          <div *ngFor="let turno of turnosDeDia(dia)"
-            class="bloque-turno-semana"
-            [ngClass]="getColorTurno(turno)"
-            [style.top.px]="posicionTurno(turno).top"
-            [style.height.px]="posicionTurno(turno).height"
-            (click)="abrirPopup(turno)">
-            <div class="turno-cliente-sm">{{ turno.cliente_nombre }}</div>
-            <div class="turno-servicio-sm">{{ turno.servicio_nombre }}</div>
-          </div>
+          <ng-container *ngTemplateOutlet="turnosConColumnas; context: { turnos: turnosDeDia(dia), mini: true }"></ng-container>
         </div>
       </div>
 
@@ -114,6 +96,25 @@
   </div>
 
 </div>
+
+<ng-template #turnosConColumnas let-turnos="turnos" let-mini="mini">
+  <ng-container *ngIf="turnos.length > 0">
+    <div
+      *ngFor="let turno of turnos"
+      [class]="mini ? 'bloque-turno-semana' : 'bloque-turno'"
+      [ngClass]="getColorTurno(turno)"
+      [style.top.px]="posicionTurno(turno, calcularColumnas(turnos)).top"
+      [style.height.px]="posicionTurno(turno, calcularColumnas(turnos)).height"
+      [style.left]="posicionTurno(turno, calcularColumnas(turnos)).left"
+      [style.width]="posicionTurno(turno, calcularColumnas(turnos)).width"
+      (click)="abrirPopup(turno)">
+      <div *ngIf="!mini" class="turno-hora">{{ formatearHora(turno.hora_inicio || turno.hora) }}</div>
+      <div [class]="mini ? 'turno-cliente-sm' : 'turno-cliente'">{{ turno.cliente_nombre }}</div>
+      <div [class]="mini ? 'turno-servicio-sm' : 'turno-servicio'">{{ turno.servicio_nombre }}</div>
+      <div *ngIf="!mini" class="turno-precio">${{ turno.precio | number }}</div>
+    </div>
+  </ng-container>
+</ng-template>
 
 <!-- POPUP -->
 <div *ngIf="mostrarPopup && turnoSeleccionado" class="popup-overlay" (click)="cerrarPopup()">

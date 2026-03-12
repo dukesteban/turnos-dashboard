@@ -77,16 +77,77 @@ export class AgendaComponent implements OnInit {
     return (hora - this.horaInicio) * 60 * PX_POR_MINUTO + 8;
   }
 
-  // Posición y altura de un turno
-  posicionTurno(turno: any): { top: number, height: number } {
+  calcularColumnas(turnos: any[]): Map<number, { col: number, total: number }> {
+    const resultado = new Map<number, { col: number, total: number }>();
+
+    const toMin = (t: any) => {
+      const h = t.hora_inicio || t.hora || '00:00';
+      return parseInt(h.slice(0,2)) * 60 + parseInt(h.slice(3,5));
+    };
+    const toFin = (t: any) => toMin(t) + (t.duracion_minutos || 45);
+
+    // Ordenar por hora de inicio para que el más temprano tome col 0
+    const ordenados = [...turnos].sort((a, b) => toMin(a) - toMin(b));
+
+    ordenados.forEach((t) => {
+      const ini = toMin(t);
+      const fin = toFin(t);
+      const solapados = turnos.filter(u => {
+        if (u.id === t.id) return false;
+        return toMin(u) < fin && toFin(u) > ini;
+      });
+
+      const total = solapados.length + 1;
+
+      // Asignar la primera columna libre
+      const colsUsadas = solapados
+        .filter(u => resultado.has(u.id))
+        .map(u => resultado.get(u.id)!.col);
+      let col = 0;
+      while (colsUsadas.includes(col)) col++;
+
+      resultado.set(t.id, { col, total });
+    });
+
+    // Normalizar total al máximo real del grupo
+    resultado.forEach((val, id) => {
+      const t = turnos.find(x => x.id === id)!;
+      const ini = toMin(t);
+      const fin = toFin(t);
+      const maxTotal = Math.max(...turnos
+        .filter(u => toMin(u) < fin && toFin(u) > ini)
+        .map(u => resultado.get(u.id)?.total || 1), val.total);
+      resultado.set(id, { ...val, total: maxTotal });
+    });
+
+    return resultado;
+  }
+
+  posicionTurno(turno: any, columnas?: Map<number, { col: number, total: number }>): { top: number, height: number, left: string, width: string } {
     const inicio = turno.hora_inicio || turno.hora || '00:00';
     const h = parseInt(inicio.slice(0, 2));
     const m = parseInt(inicio.slice(3, 5));
     const duracion = turno.duracion_minutos || 45;
     const minutosDesdeInicio = (h - this.horaInicio) * 60 + m;
+
+    let left = '0%';
+    let width = '100%';
+    if (columnas?.has(turno.id)) {
+      const { col, total } = columnas.get(turno.id)!;
+      if (total === 1) {
+        width = 'calc(100% - 12px)';
+        left = '0px';
+      } else {
+        width = `calc(${100 / total}% - 6px)`;
+        left = `calc(${(100 / total) * col}% + 3px)`;
+      }
+    }
+
     return {
       top: minutosDesdeInicio * PX_POR_MINUTO + 8,
-      height: Math.max(duracion * PX_POR_MINUTO, 24) - 9
+      height: Math.max(duracion * PX_POR_MINUTO, 24) - 9,
+      left,
+      width
     };
   }
 
@@ -246,8 +307,11 @@ export class AgendaComponent implements OnInit {
     const solapados = await this.supabase.getTurnosSolapados(
       this.nuevaFecha, this.nuevaHora, horaFin, this.turnoSeleccionado.id
     );
-    if (solapados.length > 0) {
-      this.errorEditarTurno = `Ya hay un turno atendiendose de ${solapados[0].cliente_nombre} durante esa hora.`;
+    const puestos = await this.supabase.getPuestosXTurno();
+    if (solapados.length >= puestos) {
+      this.errorEditarTurno = puestos === 1
+        ? `Ya hay un turno de ${solapados[0].cliente_nombre} a esa hora.`
+        : `Ya se alcanzó el límite de ${puestos} turnos simultáneos para ese horario.`;
       return;
     }
 

@@ -166,8 +166,11 @@ export class DashboardComponent implements OnInit {
     const solapados = await this.supabase.getTurnosSolapados(
       this.nuevaFecha, this.nuevaHora, horaFin, this.turnoSeleccionado.id
     );
-    if (solapados.length > 0) {
-      this.errorEditarTurno = `Ya hay un turno de ${solapados[0].cliente_nombre} a esa hora.`;
+    const puestos = await this.supabase.getPuestosXTurno();
+    if (solapados.length >= puestos) {
+      this.errorEditarTurno = puestos === 1
+        ? `Ya hay un turno de ${solapados[0].cliente_nombre} a esa hora.`
+        : `Ya se alcanzó el límite de ${puestos} turnos simultáneos para ese horario.`;
       return;
     }
 
@@ -270,8 +273,11 @@ export class DashboardComponent implements OnInit {
     const solapados = await this.supabase.getTurnosSolapados(
       this.nuevoTurnoFecha, this.nuevoTurnoHora, horaFin, 0
     );
-    if (solapados.length > 0) {
-      this.errorNuevoTurno = `Ya hay un turno de ${solapados[0].cliente_nombre} a esa hora.`;
+    const puestos = await this.supabase.getPuestosXTurno();
+    if (solapados.length >= puestos) {
+      this.errorEditarTurno = puestos === 1
+        ? `Ya hay un turno de ${solapados[0].cliente_nombre} a esa hora.`
+        : `Ya se alcanzó el límite de ${puestos} turnos simultáneos para ese horario.`;
       return;
     }
 

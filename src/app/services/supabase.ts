@@ -26,7 +26,7 @@ export class SupabaseService {
   }
 
   async getTurnosHoy() {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = new Date().toLocaleDateString('en-CA');
     const { data, error } = await this.supabase
       .from('turnos')
       .select('*')
@@ -124,6 +124,16 @@ export class SupabaseService {
       .from('configuracion')
       .upsert({ clave, valor }, { onConflict: 'clave' });
     if (error) throw error;
+  }
+
+  async getPuestosXTurno(): Promise<number> {
+    const { data, error } = await this.supabase
+      .from('configuracion')
+      .select('valor')
+      .eq('clave', 'puestos_por_turno')
+      .single();
+    if (error) return 1;
+    return parseInt(data?.valor) || 1;
   }
 
   // HORARIOS

@@ -22,12 +22,16 @@
       <label>Descripción</label>
       <input type="text" [(ngModel)]="descripcion" [readonly]="!editandoDatos" placeholder="Ej: Lavadero de autos premium" />
     </div>
+    <div class="campo">
+      <label>Puestos por turno</label>
+      <input type="number" min="1" max="10" [(ngModel)]="puestosXTurno" [readonly]="!editandoDatos" />
+    </div>
     <div class="botones-edicion">
       <button *ngIf="!editandoDatos" class="btn-secondary" (click)="editandoDatos = true">✏️ Editar</button>
       <button *ngIf="editandoDatos" class="btn-primary" (click)="guardarConfiguracion()" [disabled]="guardando">
         {{ guardando ? 'Guardando...' : '💾 Guardar' }}
       </button>
-      <button *ngIf="editandoDatos" class="btn-secondary" (click)="editandoDatos = false">↩️ Cancelar</button>
+      <button *ngIf="editandoDatos" class="btn-secondary" (click)="cancelarConfiguracion()">↩️ Cancelar</button>
     </div>
   </div>
 

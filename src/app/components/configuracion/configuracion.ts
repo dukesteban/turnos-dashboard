@@ -21,6 +21,7 @@ export class ConfiguracionComponent implements OnInit {
   nuevoHorario = { dia_semana: 1, hora_inicio: '08:00', hora_fin: '12:00', activo: true };
   mostrarFormHorario = false;
   editandoDatos = false;
+  puestosXTurno = 1;
 
   constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
 
@@ -33,6 +34,7 @@ export class ConfiguracionComponent implements OnInit {
     const config = await this.supabase.getConfiguracion();
     this.nombreNegocio = config.find((c: any) => c.clave === 'nombre_negocio')?.valor || '';
     this.descripcion = config.find((c: any) => c.clave === 'descripcion')?.valor || '';
+    this.puestosXTurno = parseInt(config.find((c: any) => c.clave === 'puestos_por_turno')?.valor) || 1;
     this.horarios = (await this.supabase.getHorarios()).map((h: any) => ({
       ...h,
       hora_inicio: h.hora_inicio?.slice(0, 5),
@@ -93,6 +95,7 @@ export class ConfiguracionComponent implements OnInit {
     try {
       await this.supabase.upsertConfiguracion('nombre_negocio', this.nombreNegocio);
       await this.supabase.upsertConfiguracion('descripcion', this.descripcion);
+      await this.supabase.upsertConfiguracion('puestos_por_turno', String(this.puestosXTurno));
       this.editandoDatos = false;
       this.mensaje = '✅ Configuración guardada correctamente.';
       setTimeout(() => { this.mensaje = ''; this.cdr.detectChanges(); }, 3000);
@@ -102,5 +105,10 @@ export class ConfiguracionComponent implements OnInit {
     }
     this.guardando = false;
     this.cdr.detectChanges();
+  }
+
+  async cancelarConfiguracion() {
+    await this.cargarDatos();
+    this.editandoDatos = false;
   }
 }
