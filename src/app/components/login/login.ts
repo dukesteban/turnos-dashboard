@@ -27,7 +27,7 @@ export class LoginComponent implements OnInit {
 
   async ngOnInit() {
     const config = await this.supabase.getConfiguracion();
-    this.nombreNegocio = config.find((c: any) => c.clave === 'nombre_negocio')?.valor || 'Turnos';
+    this.nombreNegocio = config.find((c: any) => c.clave === 'nombre_negocio')?.valor || 'Bienvenido';
   }
 
   async login() {

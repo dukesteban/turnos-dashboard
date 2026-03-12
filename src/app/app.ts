@@ -22,7 +22,7 @@ export class App implements OnInit {
 
   async ngOnInit() {
     const config = await this.supabase.getConfiguracion();
-    const nombre = config.find((c: any) => c.clave === 'nombre_negocio')?.valor || 'Turnos';
+    const nombre = config.find((c: any) => c.clave === 'nombre_negocio')?.valor || 'Hola!';
     this.nombreNegocio = nombre;
     localStorage.setItem('nombre_negocio', nombre);
   }
