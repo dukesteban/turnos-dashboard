@@ -108,8 +108,11 @@
       [style.left]="posicionTurno(turno, calcularColumnas(turnos)).left"
       [style.width]="posicionTurno(turno, calcularColumnas(turnos)).width"
       (click)="abrirPopup(turno)">
-      <div *ngIf="!mini" class="turno-hora">{{ formatearHora(turno.hora_inicio || turno.hora) }}</div>
-      <div [class]="mini ? 'turno-cliente-sm' : 'turno-cliente'">{{ turno.cliente_nombre }}</div>
+      <div *ngIf="!mini" class="turno-header">
+        <span class="turno-hora">{{ formatearHora(turno.hora_inicio || turno.hora) }}</span>
+        <span class="turno-cliente">{{ turno.cliente_nombre }}</span>
+      </div>
+      <div *ngIf="mini" class="turno-cliente-sm">{{ turno.cliente_nombre }}</div>
       <div [class]="mini ? 'turno-servicio-sm' : 'turno-servicio'">{{ turno.servicio_nombre }}</div>
       <div *ngIf="!mini" class="turno-precio">${{ turno.precio | number }}</div>
     </div>

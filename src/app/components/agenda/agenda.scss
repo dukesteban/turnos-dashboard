@@ -138,19 +138,21 @@
   z-index: 1;
 
   &:hover { filter: brightness(0.93); transform: translateX(2px); }
-
   &.atendido { background: #dcfce7; border-color: #16a34a; }
   &.pendiente { background: #fef9c3; border-color: #ca8a04; }
+
   .turno-header {
     display: flex;
-    gap: 6px;
-    align-items: baseline;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
   }
 
   .turno-hora {
     font-size: 0.7rem;
     color: #64748b;
-    white-space: nowrap;
+    flex-shrink: 0;
+    //white-space: nowrap;
   }
 
   .turno-cliente {
@@ -161,7 +163,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
   .turno-servicio { font-size: 0.78rem; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
   .turno-precio { font-size: 0.75rem; color: #64748b; margin-top: 2px; }
 }
 
@@ -318,6 +322,7 @@
   &.atendido { background: #dcfce7; color: #166534; }
   &.cancelado { background: #fee2e2; color: #991b1b; }
   &.vencido { background: #ffedd5; color: #9a3412; }
+  &.confirmado { background: #dcfce7; color: #166534; }
 }
 
 .popup-acciones {
