@@ -42,11 +42,10 @@ export class LoginComponent implements OnInit {
     try {
       const hash = await this.auth.sha256(this.password);
       const ok = await this.supabase.verificarUsuario(this.usuario.trim(), hash);
-      if (ok) {
-        this.auth.login(this.usuario.trim());
-        this.router.navigate(['/']);
-      } else {
+      if (!ok) {
         this.error = 'Usuario o contraseña incorrectos.';
+        this.cargando = false;
+        return;
       }
     } catch (e) {
       this.error = 'Error al iniciar sesión. Intentá de nuevo.';

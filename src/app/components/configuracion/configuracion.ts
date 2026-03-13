@@ -260,6 +260,7 @@ export class ConfiguracionComponent implements OnInit {
       this.passwordNueva = '';
       this.passwordRepetir = '';
       this.mensajePassword = `✅ Contraseña cambiada. Te quedan ${2 - this.cambiosHoy} cambio(s) hoy.`;
+      setTimeout(() => { this.mensajePassword = ''; this.cdr.detectChanges(); }, 3000);
     } catch (e) {
       this.mensajeErrorPassword = '❌ Error al cambiar la contraseña.';
     }
