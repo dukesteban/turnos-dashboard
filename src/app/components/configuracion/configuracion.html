@@ -22,7 +22,7 @@
         <input type="number" min="1" max="3" [(ngModel)]="puestosXTurno" [readonly]="!editandoDatos" />
       </div>
       <div class="botones-edicion">
-        <button *ngIf="!editandoDatos" class="btn-secondary" (click)="editandoDatos = true">✏️ Editar</button>
+        <button *ngIf="!editandoDatos" class="btn-primary" (click)="editandoDatos = true">✏️ Editar</button>
         <button *ngIf="editandoDatos" class="btn-primary" (click)="guardarConfiguracion()" [disabled]="guardando">
           {{ guardando ? 'Guardando...' : '💾 Guardar' }}
         </button>
@@ -41,7 +41,6 @@
     </div>
     <div class="acordeon-body" [class.visible]="acordeonHorarios">
       <div class="seccion-header">
-        <span></span>
         <button class="btn-primary" (click)="mostrarFormHorario = !mostrarFormHorario">
           {{ mostrarFormHorario ? '↩️ Cancelar' : '➕ Nuevo horario' }}
         </button>
@@ -67,38 +66,40 @@
         </div>
       </div>
 
-      <table class="tabla-horarios">
-        <thead>
-          <tr>
-            <th>Día</th><th>Desde</th><th>Hasta</th><th>Activo</th><th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let horario of horarios" [class.inactivo]="!horario.activo">
-            <td>{{ getNombreDia(horario.dia_semana) }}</td>
-            <td><input type="time" [(ngModel)]="horario.hora_inicio" class="input-hora" [readonly]="!horario.editando" /></td>
-            <td><input type="time" [(ngModel)]="horario.hora_fin" class="input-hora" [readonly]="!horario.editando" /></td>
-            <td>
-              <label class="toggle">
-                <input type="checkbox" [checked]="horario.activo" (change)="toggleHorario(horario)" />
-                <span class="slider"></span>
-              </label>
-            </td>
-            <td class="acciones">
-              <button *ngIf="!horario.editando" class="btn-icon" 
-                (click)="horario._hora_inicio_orig = horario.hora_inicio; horario._hora_fin_orig = horario.hora_fin; horario.editando = true" 
-                title="Editar">✏️
-              </button>
-              <button *ngIf="horario.editando" class="btn-icon" (click)="guardarHorario(horario)" title="Guardar">💾</button>
-              <button *ngIf="horario.editando" class="btn-icon" (click)="cancelarHorario(horario)" title="Cancelar">↩️</button>
-              <button class="btn-icon" (click)="eliminarHorario(horario.id)" title="Eliminar">🗑️</button>
-            </td>
-          </tr>
-          <tr *ngIf="horarios.length === 0">
-            <td colspan="5" class="vacio">No hay horarios configurados</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="tabla-wrapper">
+        <table class="tabla-horarios">
+          <thead>
+            <tr>
+              <th>Día</th><th>Desde</th><th>Hasta</th><th>Activo</th><th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let horario of horarios" [class.inactivo]="!horario.activo">
+              <td>{{ getNombreDia(horario.dia_semana) }}</td>
+              <td><input type="time" [(ngModel)]="horario.hora_inicio" class="input-hora" [readonly]="!horario.editando" /></td>
+              <td><input type="time" [(ngModel)]="horario.hora_fin" class="input-hora" [readonly]="!horario.editando" /></td>
+              <td>
+                <label class="toggle">
+                  <input type="checkbox" [checked]="horario.activo" (change)="toggleHorario(horario)" />
+                  <span class="slider"></span>
+                </label>
+              </td>
+              <td class="acciones">
+                <button *ngIf="!horario.editando" class="btn-icon" 
+                  (click)="horario._hora_inicio_orig = horario.hora_inicio; horario._hora_fin_orig = horario.hora_fin; horario.editando = true" 
+                  title="Editar">✏️
+                </button>
+                <button *ngIf="horario.editando" class="btn-icon" (click)="guardarHorario(horario)" title="Guardar">💾</button>
+                <button *ngIf="horario.editando" class="btn-icon" (click)="cancelarHorario(horario)" title="Cancelar">↩️</button>
+                <button class="btn-icon" (click)="eliminarHorario(horario.id)" title="Eliminar">🗑️</button>
+              </td>
+            </tr>
+            <tr *ngIf="horarios.length === 0">
+              <td colspan="5" class="vacio">No hay horarios configurados</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -112,7 +113,6 @@
     </div>
     <div class="acordeon-body" [class.visible]="acordeonServicios">
       <div class="seccion-header">
-        <span></span>
         <button class="btn-primary" (click)="mostrarFormServicio = !mostrarFormServicio">
           {{ mostrarFormServicio ? '↩️ Cancelar' : '➕ Nuevo servicio' }}
         </button>
@@ -122,11 +122,11 @@
         <div class="fila">
           <div class="campo">
             <label>Nombre</label>
-            <input type="text" [(ngModel)]="nuevoServicio.nombre" placeholder="Ej: Lavado premium" />
+            <input type="text" [(ngModel)]="nuevoServicio.nombre" placeholder="Nombre servicio" />
           </div>
           <div class="campo">
             <label>Precio ($)</label>
-            <input type="number" [(ngModel)]="nuevoServicio.precio" placeholder="15000" />
+            <input type="number" [(ngModel)]="nuevoServicio.precio" placeholder="10000" />
           </div>
           <div class="campo">
             <label>Duración (min)</label>

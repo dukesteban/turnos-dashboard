@@ -31,6 +31,24 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', sans-serif; background: #f1f5f9; }
 
+  .navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .navbar-logo {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+  }
+
+  .navbar-nombre {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
   .navbar {
     display: flex;
     align-items: center;
@@ -90,6 +108,7 @@
     .navbar { padding: 0 12px; }
     .navbar-brand { font-size: 1rem; }
     .navbar-links a { padding: 8px; }
+    .navbar-nombre { display: none; }
     .texto { display: none; }
   }
 </style>

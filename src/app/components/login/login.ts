@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef  } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -22,7 +22,8 @@ export class LoginComponent implements OnInit {
   constructor(
     private auth: AuthService,
     private supabase: SupabaseService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   async ngOnInit() {
@@ -45,12 +46,14 @@ export class LoginComponent implements OnInit {
       if (!ok) {
         this.error = 'Usuario o contraseña incorrectos.';
         this.cargando = false;
+        this.cdr.detectChanges();
         return;
       }
+      this.auth.login(this.usuario.trim());
+      this.router.navigate(['/']);
     } catch (e) {
       this.error = 'Error al iniciar sesión. Intentá de nuevo.';
     }
-
     this.cargando = false;
   }
 }

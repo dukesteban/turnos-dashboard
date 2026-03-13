@@ -34,9 +34,9 @@
 
 .seccion-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  margin-bottom: 16px;
+  margin: 4px 0;
   h3 { margin-bottom: 0; }
 }
 
