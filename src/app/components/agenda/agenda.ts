@@ -1,7 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SupabaseService } from '../../services/supabase';
 import { FormsModule } from '@angular/forms';
+import { SupabaseService } from '../../services/supabase';
 
 const PX_POR_MINUTO = 1.2;
 
@@ -244,9 +244,10 @@ export class AgendaComponent implements OnInit {
 
   async cambiarEstado(estado: string) {
     if (!this.turnoSeleccionado) return;
-    await this.supabase.updateEstadoTurno(this.turnoSeleccionado.id, estado);
-    await this.cargarTurnos();
+    const id = this.turnoSeleccionado.id;
     this.cerrarPopup();
+    await this.supabase.updateEstadoTurno(id, estado);
+    await this.cargarTurnos();
   }
 
   esVencido(turno: any): boolean {

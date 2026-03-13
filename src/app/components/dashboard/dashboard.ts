@@ -126,10 +126,11 @@ export class DashboardComponent implements OnInit {
 
   async cambiarEstadoPopup(estado: string) {
     if (!this.turnoSeleccionado) return;
-    await this.supabase.updateEstadoTurno(this.turnoSeleccionado.id, estado);
-    await this.cargarDatos();
+    const id = this.turnoSeleccionado.id;
     this.cerrarPopup();
-  }
+    await this.supabase.updateEstadoTurno(id, estado);
+    await this.cargarDatos();
+  }  
 
   activarEditarTurno() {
     this.modoEditarTurno = true;
