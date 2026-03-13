@@ -345,15 +345,15 @@
   .btn-cancelado { background: #fee2e2; color: #991b1b; &:hover { background: #fecaca; } }
   .btn-editarTurno { background: #ede9fe; color: #6d28d9; &:hover { background: #ddd6fe; } }
   .btn-editar { background: #fef9c3; color: #334155; &:hover { background: #feefc3; } }
+}
 
-  .error-msg {
-    color: #991b1b;
-    font-size: 0.85rem;
-    background: #fee2e2;
-    padding: 8px 12px;
-    border-radius: 8px;
-    margin-top: 8px;
-  }
+.error-msg {
+  color: #991b1b;
+  font-size: 0.85rem;
+  background: #fee2e2;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-top: 8px;
 }
 
 .campo {

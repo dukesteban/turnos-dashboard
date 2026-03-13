@@ -24,7 +24,7 @@
     </div>
     <div class="campo">
       <label>Puestos por turno</label>
-      <input type="number" min="1" max="10" [(ngModel)]="puestosXTurno" [readonly]="!editandoDatos" />
+      <input type="number" min="1" max="3" [(ngModel)]="puestosXTurno" [readonly]="!editandoDatos" />
     </div>
     <div class="botones-edicion">
       <button *ngIf="!editandoDatos" class="btn-secondary" (click)="editandoDatos = true">✏️ Editar</button>

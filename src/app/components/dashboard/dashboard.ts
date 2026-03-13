@@ -142,7 +142,6 @@ export class DashboardComponent implements OnInit {
   }
 
   async confirmarEditarTurno() {
-    if (!confirm('¿Confirmar cambio de turno?')) return;
     if (!this.nuevaFecha || !this.nuevaHora || !this.nuevoServicioId) {
       this.errorEditarTurno = 'Completá todos los campos.';
       return;
@@ -190,6 +189,9 @@ export class DashboardComponent implements OnInit {
       this.errorEditarTurno = 'El horario está fuera del horario de atención.';
       return;
     }
+
+    // Confirm DESPUÉS de validar
+    if (!confirm('¿Confirmar cambio de turno?')) return;
 
     this.editandoTurno = true;
     await this.supabase.editarTurno(this.turnoSeleccionado.id, {

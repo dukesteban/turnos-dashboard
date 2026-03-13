@@ -89,9 +89,15 @@ export class ConfiguracionComponent implements OnInit {
   }
 
   async guardarConfiguracion() {
-    this.guardando = true;
     this.mensaje = '';
     this.mensajeError = '';
+
+    if (this.puestosXTurno < 1 || this.puestosXTurno > 3 || !Number.isInteger(this.puestosXTurno)) {
+      this.mensajeError = '❌ Los puestos por turno deben ser un número entero entre 1 y 3.';
+      return;
+    }
+
+    this.guardando = true;
     try {
       await this.supabase.upsertConfiguracion('nombre_negocio', this.nombreNegocio);
       await this.supabase.upsertConfiguracion('descripcion', this.descripcion);
