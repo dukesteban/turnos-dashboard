@@ -12,8 +12,8 @@
       <button class="btn-nav" (click)="vista === 'dia' ? navegarDia(1) : navegarSemana(1)">›</button>
     </div>
     <div class="fecha-titulo">
-      <span *ngIf="vista === 'dia'">Turnos: {{ formatearFecha(fechaActual) }}</span>
-      <span *ngIf="vista === 'semana'">Turnos: 
+      <span *ngIf="vista === 'dia'">{{ formatearFecha(fechaActual) }}</span>
+      <span *ngIf="vista === 'semana'">
         {{ formatearFechaCorta(diasDeSemana[0]) }} — {{ formatearFechaCorta(diasDeSemana[diasDeSemana.length - 1]) }}
       </span>
     </div>

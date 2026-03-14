@@ -70,24 +70,21 @@
 
   <!-- Todos los turnos -->
   <div class="seccion">
-    <div class="seccion-header seccion-header-turnos">
-      <div class="turnos-top">
-        <div class="fecha-titulo">
-          <span *ngIf="vistasTurnos === 'semana'">Turnos: {{ rangoSemanaTurnos }}</span>
-          <span *ngIf="vistasTurnos === 'mes'">Turnos: {{ tituloMesTurnos }}</span>
-        </div>
+    <!-- Controles -->
+    <div class="controles">
+      <div class="fecha-titulo">
+          <span *ngIf="vistasTurnos === 'semana'">Turnos - {{ rangoSemanaTurnos }}</span>
+          <span *ngIf="vistasTurnos === 'mes'">Turnos - {{ tituloMesTurnos }}</span>
       </div>
-      <div class="turnos-controles">
-        <div class="vistas">
-          <button [class.activo]="vistasTurnos === 'semana'" (click)="cambiarVistaTurnos('semana')">📅 Semana</button>
-          <button [class.activo]="vistasTurnos === 'mes'" (click)="cambiarVistaTurnos('mes')">📅 Mes</button>
-        </div>
-        <div class="navegacion">
+      <div class="vistas">
+        <button [class.activo]="vistasTurnos === 'semana'" (click)="cambiarVistaTurnos('semana')">📅 Semana</button>
+        <button [class.activo]="vistasTurnos === 'mes'" (click)="cambiarVistaTurnos('mes')">📅 Mes</button>
+      </div>
+      <div class="navegacion">
           <button class="btn-nav" (click)="navegarTurnos(-1)">‹</button>
           <button class="btn-hoy" (click)="irHoyTurnos()">Actual</button>
           <button class="btn-nav" (click)="navegarTurnos(1)">›</button>
-        </div>
-      </div>
+       </div>
     </div>
     <div class="tabla-wrapper">
       <table class="tabla">
