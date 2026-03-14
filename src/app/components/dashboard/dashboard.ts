@@ -226,6 +226,7 @@ export class DashboardComponent implements OnInit {
       // Confirm DESPUÉS de validar
       this.editandoTurno = false;
       if (!confirm('¿Confirmar cambio de turno?')) return;
+      this.editandoTurno = true; 
 
       this.editandoTurno = true;
       await this.supabase.editarTurno(this.turnoSeleccionado.id, {
