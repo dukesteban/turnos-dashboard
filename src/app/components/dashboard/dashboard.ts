@@ -17,7 +17,7 @@ export class DashboardComponent implements OnInit {
   totalClientes = 0;
   turnosPendientes = 0;
   vistasTurnos: 'semana' | 'mes' = 'semana';
-  mostrarIngresos = true;
+  mostrarIngresos = JSON.parse(sessionStorage.getItem('mostrarIngresos') ?? 'true');
   fechaTurnos: Date = new Date();
   
   // Popup
@@ -114,6 +114,11 @@ export class DashboardComponent implements OnInit {
   
   irHoyTurnos() {
     this.fechaTurnos = new Date();
+  }
+
+  toggleIngresos() {
+    this.mostrarIngresos = !this.mostrarIngresos;
+    sessionStorage.setItem('mostrarIngresos', String(this.mostrarIngresos));
   }
 
   async cambiarEstado(id: number, estado: string) {
