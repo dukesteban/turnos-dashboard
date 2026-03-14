@@ -8,7 +8,7 @@
     </div>
     <div class="navegacion">
       <button class="btn-nav" (click)="navegar(-1)">‹</button>
-      <button class="btn-hoy" (click)="irHoy()">Hoy</button>
+      <button class="btn-hoy" (click)="irHoy()">{{ vista === 'dia' ? 'Hoy' : 'Actual' }}</button>
       <button class="btn-nav" (click)="navegar(1)">›</button>
     </div>
     <div class="fecha-titulo">{{ tituloFecha }}</div>
