@@ -99,6 +99,8 @@
   flex-shrink: 0;
   position: relative;
   border-right: 1px solid #e2e8f0;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .etiqueta-hora-abs {
@@ -127,8 +129,7 @@
 
 .bloque-turno {
   position: absolute;
-  left: 6px;
-  right: 6px;
+
   border-radius: 6px;
   border-left: 3px solid #3b82f6;
   background: #dbeafe;
