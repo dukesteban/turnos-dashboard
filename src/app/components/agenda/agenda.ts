@@ -254,9 +254,9 @@ export class AgendaComponent implements OnInit {
   async cambiarEstado(estado: string) {
     if (!this.turnoSeleccionado) return;
     const id = this.turnoSeleccionado.id;
-    this.cerrarPopup();
     await this.supabase.updateEstadoTurno(id, estado);
     await this.cargarTurnos();
+    this.cerrarPopup();
   }
 
   esVencido(turno: any): boolean {

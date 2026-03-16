@@ -25,6 +25,10 @@ export class DashboardComponent implements OnInit {
   mostrarPopup = false;
   horarios: any[] = [];
   servicios: any[] = [];
+  mostrarPopupCancelacion = false;
+  motivoCancelacion = '';
+  enviandoMensaje = false;
+  nombreNegocio = localStorage.getItem('nombre_negocio') || '';
 
   // Editar/Postergar
   modoEditarTurno = false;
@@ -153,9 +157,9 @@ export class DashboardComponent implements OnInit {
   async cambiarEstadoPopup(estado: string) {
     if (!this.turnoSeleccionado) return;
     const id = this.turnoSeleccionado.id;
-    this.cerrarPopup();
     await this.supabase.updateEstadoTurno(id, estado);
     await this.cargarTurnos();
+    this.cerrarPopup();
   }  
 
   activarEditarTurno() {
@@ -224,11 +228,11 @@ export class DashboardComponent implements OnInit {
       }
 
       // Confirm DESPUÉS de validar
-      this.editandoTurno = false;
-      if (!confirm('¿Confirmar cambio de turno?')) return;
-      this.editandoTurno = true; 
+      //this.editandoTurno = false;
+      //if (!confirm('¿Confirmar cambio de turno?')) return;
+      //this.editandoTurno = true; 
 
-      this.editandoTurno = true;
+      this.editandoTurno = false;
       await this.supabase.editarTurno(this.turnoSeleccionado.id, {
         fecha: this.nuevaFecha,
         hora: this.nuevaHora,
@@ -402,5 +406,50 @@ export class DashboardComponent implements OnInit {
     } catch (e) {
       this.errorNuevoTurno = '❌ Error al crear el cliente.';
     }
+  }
+
+  async iniciarCancelacion() {
+    if (!this.turnoSeleccionado) return;
+    await this.supabase.updateEstadoTurno(this.turnoSeleccionado.id, 'cancelado');
+    if (confirm('¿Querés enviarle un mensaje de WhatsApp al cliente?'))
+    {
+      this.motivoCancelacion = '';
+      this.mostrarPopupCancelacion = true;
+    } else
+    {
+      this.mostrarPopupCancelacion = false;
+      this.cerrarPopupCancelacion()
+    }
+    this.cdr.detectChanges();
+  }
+
+  async enviarMensajeCancelacion() {
+    if (!this.turnoSeleccionado?.cliente_telefono) return;
+    this.enviandoMensaje = true;
+    try {
+      const fecha = this.formatearFecha(this.turnoSeleccionado.fecha);
+      const hora = this.formatearHora(this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora);
+      const mensaje = `Estimado cliente, el turno del día ${fecha} a las ${hora} hs ha sido cancelado. ${this.motivoCancelacion} Atte. ${this.nombreNegocio}`;
+      await fetch('https://primary-production-6a94c.up.railway.app/webhook/cancelacion-turno', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telefono: this.turnoSeleccionado.cliente_telefono,
+          mensaje
+        })
+      });
+    } catch (e) {
+      console.error('Error enviando mensaje:', e);
+    }
+    this.enviandoMensaje = false;
+    this.mostrarPopupCancelacion = false;
+    this.cerrarPopup();
+    await this.cargarTurnos();
+  }
+
+  cerrarPopupCancelacion() {
+    this.mostrarPopupCancelacion = false;
+    this.cerrarPopup();
+    this.cargarTurnos();
   }
 }

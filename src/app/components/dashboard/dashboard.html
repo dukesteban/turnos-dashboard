@@ -143,7 +143,7 @@
           <button *ngIf="turnoSeleccionado.estado !== 'atendido' && turnoSeleccionado.estado !== 'cancelado'"
             class="btn-atendido" (click)="cambiarEstadoPopup('atendido')">✅ Atendido</button>
           <button *ngIf="turnoSeleccionado.estado !== 'cancelado' && turnoSeleccionado.estado !== 'atendido'"
-            class="btn-cancelado" (click)="cambiarEstadoPopup('cancelado')">❌ Canceló</button>
+            class="btn-cancelado" (click)="iniciarCancelacion()">❌ Canceló/Cancelar</button>
           <button *ngIf="turnoSeleccionado.estado !== 'atendido' && turnoSeleccionado.estado !== 'cancelado'"
             class="btn-editarTurno" (click)="activarEditarTurno()">📅 Editar</button>
           <button *ngIf="turnoSeleccionado.estado === 'atendido' || turnoSeleccionado.estado === 'cancelado'"
@@ -251,5 +251,38 @@
         <button class="btn-cancelado" (click)="cerrarModalNuevoTurno()">↩️ Cancelar</button>
       </div>
     </div>
+  </div>
+
+  <!-- POPUP CANCELACION -->
+  <div *ngIf="mostrarPopupCancelacion" class="popup-overlay">
+    <div class="popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <h3>📩 Notificar cancelación</h3>
+        <button class="btn-cerrar" (click)="cerrarPopupCancelacion()">✕</button>
+      </div>
+      <div class="popup-body">
+        <div class="campo">
+          <label>Motivo de cancelación</label>
+          <textarea [(ngModel)]="motivoCancelacion" rows="3"
+            placeholder="Ej: por lluvia."></textarea>
+        </div>
+        <div class="mensaje-preview">
+          <span class="preview-label">Vista previa:</span>
+          <p>
+          Estimado cliente:<br>
+          El turno del día {{ formatearFecha(turnoSeleccionado.fecha) }} a las {{ formatearHora(turnoSeleccionado.hora_inicio || turnoSeleccionado.hora) }} hs ha sido cancelado debido a {{ motivoCancelacion || '[escribir razón]' }}.<br>
+          Lamentamos los inconvenientes causados.<br>
+          Atte. {{ nombreNegocio }}
+          </p>
+        </div>
+      </div>
+      <div class="popup-acciones">
+        <button class="btn-atendido" (click)="enviarMensajeCancelacion()"
+          [disabled]="enviandoMensaje || !motivoCancelacion.trim()">
+          {{ enviandoMensaje ? 'Enviando...' : '📩 Enviar mensaje' }}
+        </button>
+        <button class="btn-editar" (click)="cerrarPopupCancelacion()">❌ Omitir</button>
+      </div>
+    </div>  
   </div>
 </div>

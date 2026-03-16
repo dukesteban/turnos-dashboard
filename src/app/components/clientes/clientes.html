@@ -69,7 +69,7 @@
       <div class="detalle-bloque">
         <h4>Historial de turnos</h4>
         <div *ngIf="cargandoTurnos" class="vacio-sm">Cargando...</div>
-        <div *ngIf="!cargandoTurnos && turnosCliente.length === 0" class="vacio-sm">Sin turnos registrados</div>
+        <div *ngIf="!cargandoTurnos && turnosCliente.length === 0" class="vacio-sm">Sin registros</div>
         <div class="turnos-lista">
           <div *ngFor="let turno of turnosCliente" class="turno-item">
             <div class="turno-fecha">{{ formatearFecha(turno.fecha) }} a las {{ turno.hora?.slice(0,5) || turno.hora_inicio?.slice(0,5) }}</div>
