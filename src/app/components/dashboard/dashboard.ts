@@ -430,7 +430,7 @@ export class DashboardComponent implements OnInit {
       const fecha = this.formatearFecha(this.turnoSeleccionado.fecha);
       const hora = this.formatearHora(this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora);
       const mensaje = `Estimado cliente, el turno del día ${fecha} a las ${hora} hs ha sido cancelado. ${this.motivoCancelacion} Atte. ${this.nombreNegocio}`;
-      await fetch('https://primary-production-6a94c.up.railway.app/webhook/cancelacion-turno', {
+      await fetch('https://primary-production-4f919.up.railway.app/webhook/cancelacion-turno', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
