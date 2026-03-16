@@ -137,12 +137,13 @@ export class AgendaComponent implements OnInit {
     let width = '100%';
     if (columnas?.has(turno.id)) {
       const { col, total } = columnas.get(turno.id)!;
+      const esMobile = window.innerWidth <= 640;
       if (total === 1) {
-        width = mini ? 'calc(100% - 13.5px)' : 'calc(100% - 18.5px)';
-        left = mini ? '0px' : '0px';
+        width = mini ? 'calc(100% - 13.5px)' : (esMobile ? 'calc(100% - 18.5px)' : 'calc(100% - 18.5px)');
+        left = '0px';
       } else {
           const pct = 100 / total;
-          width = `calc(${pct}% - 12.5px)`;
+          width = mini ? `calc(${pct}% - 12.5px)` : `calc(${pct}% - 18.5px)`
           left = `calc(${pct * col}% + 0px)`;
         }
     }
