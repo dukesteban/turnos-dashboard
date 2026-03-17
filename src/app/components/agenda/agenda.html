@@ -110,7 +110,10 @@
           <div class="detalle-bloque">
             <div class="popup-fila">
               <span class="popup-label">Cliente</span>
-              <span>{{ turnoSeleccionado.cliente_nombre }}</span>
+              <span>
+                {{ turnoSeleccionado.cliente_nombre }}
+                <span *ngIf="!turnoSeleccionado.cliente_telefono" class="sin-telefono">(Sin teléfono registrado)</span>
+              </span>
             </div>
             <div class="popup-fila">
               <span class="popup-label">Servicio</span>
