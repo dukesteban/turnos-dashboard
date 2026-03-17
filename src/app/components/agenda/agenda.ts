@@ -451,7 +451,7 @@ export class AgendaComponent implements OnInit {
     this.enviandoMensajePostergacion = true;
     try {
       const fecha = this.formatearFechaStr(this._nuevaFechaPostergacion);
-      const mensaje = `Estimado cliente:\nTu turno ha sido reprogramado para el día ${fecha} a las ${this._nuevaHoraPostergacion} hs (${this._nuevoServicioPostergacion}).${this.motivoPostergacion ? '\n' + this.motivoPostergacion : ''}\nAtte. ${this.nombreNegocio}`;
+      const mensaje = `Estimado cliente:\nTu turno ha sido reprogramado para el día ${fecha} a las ${this._nuevaHoraPostergacion} hs (${this._nuevoServicioPostergacion}).${this.motivoPostergacion ? '\n' + this.motivoPostergacion : ''}\nLamentamos los inconvenientes causados.\nAtte. ${this.nombreNegocio}`;
       await fetch('https://primary-production-4f919.up.railway.app/webhook/cancelacion-turno', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -467,7 +467,7 @@ export class AgendaComponent implements OnInit {
     }
     this.enviandoMensajePostergacion = false;
     this.mostrarPopupPostergacion = false;
-    this.cerrarPopup();
+    this.cerrarPopupPostergacion();
     await this.cargarTurnos();
   }
 

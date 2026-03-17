@@ -435,7 +435,7 @@ export class DashboardComponent implements OnInit {
     try {
       const fecha = this.formatearFecha(this.turnoSeleccionado.fecha);
       const hora = this.formatearHora(this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora);
-      const mensaje = `Estimado cliente:\nTu turno ha sido reprogramado para el día ${fecha} a las ${this._nuevaHoraPostergacion} hs (${this._nuevoServicioPostergacion}).${this.motivoPostergacion ? '\n' + this.motivoPostergacion : ''}\nAtte. ${this.nombreNegocio}`;
+      const mensaje = `Estimado cliente:\nEl turno del día ${fecha} a las ${hora} hs ha sido cancelado debido a ${this.motivoCancelacion}.\nLamentamos los inconvenientes causados.\nAtte. ${this.nombreNegocio}`;
       await fetch('https://primary-production-4f919.up.railway.app/webhook/cancelacion-turno', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -480,7 +480,7 @@ export class DashboardComponent implements OnInit {
     this.enviandoMensajePostergacion = true;
     try {
       const fecha = this.formatearFecha(this._nuevaFechaPostergacion);
-      const mensaje = `Estimado cliente:\nTu turno ha sido reprogramado para el día ${fecha} a las ${this._nuevaHoraPostergacion} hs.${this.motivoPostergacion ? '\n' + this.motivoPostergacion : ''}\nAtte. ${this.nombreNegocio}`;
+      const mensaje = `Estimado cliente:\nTu turno ha sido reprogramado para el día ${fecha} a las ${this._nuevaHoraPostergacion} hs (${this._nuevoServicioPostergacion}).${this.motivoPostergacion ? '\n' + this.motivoPostergacion : ''}\nLamentamos los inconvenientes causados.\nAtte. ${this.nombreNegocio}`;
       await fetch('https://primary-production-4f919.up.railway.app/webhook/cancelacion-turno', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -496,7 +496,7 @@ export class DashboardComponent implements OnInit {
     }
     this.enviandoMensajePostergacion = false;
     this.mostrarPopupPostergacion = false;
-    this.cerrarPopup();
+    this.cerrarPopupPostergacion();
     await this.cargarTurnos();
   }
 

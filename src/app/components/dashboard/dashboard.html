@@ -150,9 +150,9 @@
           <button *ngIf="turnoSeleccionado.estado !== 'atendido' && turnoSeleccionado.estado !== 'cancelado'"
             class="btn-atendido" (click)="cambiarEstadoPopup('atendido')">✅ Atendido</button>
           <button *ngIf="turnoSeleccionado.estado !== 'cancelado' && turnoSeleccionado.estado !== 'atendido'"
-            class="btn-cancelado" (click)="iniciarCancelacion()">❌ Canceló/Cancelar</button>
+            class="btn-cancelado" (click)="iniciarCancelacion()">❌ Cancelar</button>
           <button *ngIf="turnoSeleccionado.estado !== 'atendido' && turnoSeleccionado.estado !== 'cancelado'"
-            class="btn-editarTurno" (click)="activarEditarTurno()">📅 Editar/Reprog.</button>
+            class="btn-editarTurno" (click)="activarEditarTurno()">📅 Reprogramar</button>
           <button *ngIf="turnoSeleccionado.estado === 'atendido' || turnoSeleccionado.estado === 'cancelado'"
             class="btn-editar" (click)="cambiarEstadoPopup('pendiente')">↩️ Volver a Pendiente</button>
         </div>
@@ -270,7 +270,7 @@
       </div>
       <div class="popup-body">
         <div class="campo">
-          <label>Motivo de cancelación</label>
+          <label>Motivo de cancelación (obligatgorio)</label>
           <textarea [(ngModel)]="motivoCancelacion" rows="3"
             placeholder="Ej: por lluvia."></textarea>
         </div>
@@ -313,6 +313,7 @@
             Estimado cliente:<br>
             Tu turno ha sido reprogramado para el día {{ formatearFecha(_nuevaFechaPostergacion) }} a las {{ _nuevaHoraPostergacion }} hs ({{ _nuevoServicioPostergacion }}).<br>
             <span *ngIf="motivoPostergacion">{{ motivoPostergacion }}<br></span>
+            Lamentamos los inconvenientes causados.<br>
             Atte. {{ nombreNegocio }}
           </p>
         </div>
