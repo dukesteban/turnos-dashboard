@@ -38,6 +38,12 @@ export class DashboardComponent implements OnInit {
   nuevaHora = '';
   nuevoServicioId: number | null = null;
   esperandoConfirmacion = false;
+  mostrarPopupPostergacion = false;
+  motivoPostergacion = '';
+  enviandoMensajePostergacion = false;
+  _nuevaFechaPostergacion = '';
+  _nuevaHoraPostergacion = '';
+  _nuevoServicioPostergacion = '';
 
   // Nuevo turno
   mostrarModalNuevoTurno = false;
@@ -243,7 +249,7 @@ export class DashboardComponent implements OnInit {
         duracion_minutos: servicio.duracion_minutos
       });
       await this.cargarTurnos();
-      this.cerrarPopup();
+      await this.iniciarNotificacionPostergacion(this.nuevaFecha, this.nuevaHora, servicio.nombre);
     } catch (e) {
       console.error('Error en confirmarEditarTurno:', e);
       this.errorEditarTurno = '❌ Error al guardar. Intentá de nuevo.';
@@ -429,7 +435,7 @@ export class DashboardComponent implements OnInit {
     try {
       const fecha = this.formatearFecha(this.turnoSeleccionado.fecha);
       const hora = this.formatearHora(this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora);
-      const mensaje = `Estimado cliente:\nEl turno del día ${fecha} a las ${hora} hs ha sido cancelado debido a ${this.motivoCancelacion}.\nLamentamos los inconvenientes causados.\nAtte. ${this.nombreNegocio}`;
+      const mensaje = `Estimado cliente:\nTu turno ha sido reprogramado para el día ${fecha} a las ${this._nuevaHoraPostergacion} hs (${this._nuevoServicioPostergacion}).${this.motivoPostergacion ? '\n' + this.motivoPostergacion : ''}\nAtte. ${this.nombreNegocio}`;
       await fetch('https://primary-production-4f919.up.railway.app/webhook/cancelacion-turno', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -451,6 +457,51 @@ export class DashboardComponent implements OnInit {
 
   cerrarPopupCancelacion() {
     this.mostrarPopupCancelacion = false;
+    this.cerrarPopup();
+    this.cargarTurnos();
+  }
+
+  async iniciarNotificacionPostergacion(nuevaFecha: string, nuevaHora: string, nuevoServicio: string) {
+    if (!this.turnoSeleccionado?.cliente_telefono) return;
+    if (confirm('¿Querés enviarle un mensaje de WhatsApp al cliente?')) {
+      this.motivoPostergacion = '';
+      this._nuevaFechaPostergacion = nuevaFecha;
+      this._nuevaHoraPostergacion = nuevaHora;
+      this._nuevoServicioPostergacion = nuevoServicio;
+      this.mostrarPopupPostergacion = true;
+    } else {
+      this.cerrarPopup();
+      await this.cargarTurnos();
+    }
+    this.cdr.detectChanges();
+  }
+
+  async enviarMensajePostergacion() {
+    this.enviandoMensajePostergacion = true;
+    try {
+      const fecha = this.formatearFecha(this._nuevaFechaPostergacion);
+      const mensaje = `Estimado cliente:\nTu turno ha sido reprogramado para el día ${fecha} a las ${this._nuevaHoraPostergacion} hs.${this.motivoPostergacion ? '\n' + this.motivoPostergacion : ''}\nAtte. ${this.nombreNegocio}`;
+      await fetch('https://primary-production-4f919.up.railway.app/webhook/cancelacion-turno', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: this.turnoSeleccionado.cliente_telefono,
+          type: 'text',
+          text: { body: mensaje }
+        })
+      });
+    } catch (e) {
+      console.error('Error enviando mensaje:', e);
+    }
+    this.enviandoMensajePostergacion = false;
+    this.mostrarPopupPostergacion = false;
+    this.cerrarPopup();
+    await this.cargarTurnos();
+  }
+
+  cerrarPopupPostergacion() {
+    this.mostrarPopupPostergacion = false;
     this.cerrarPopup();
     this.cargarTurnos();
   }

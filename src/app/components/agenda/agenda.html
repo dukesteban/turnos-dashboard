@@ -236,5 +236,37 @@
       </div>
     </div>  
   </div>
+  
+  <!-- POPUP POSTERGACION -->
+  <div *ngIf="mostrarPopupPostergacion" class="popup-overlay">
+    <div class="popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <h3>📩 Notificar reprogramación</h3>
+        <button class="btn-cerrar" (click)="cerrarPopupPostergacion()">✕</button>
+      </div>
+      <div class="popup-body">
+        <div class="campo">
+          <label>Aclaración (opcional)</label>
+          <textarea [(ngModel)]="motivoPostergacion" rows="3"
+            placeholder="Ej: surgió un inconveniente, disculpá las molestias."></textarea>
+        </div>
+        <div class="mensaje-preview">
+          <span class="preview-label">Vista previa:</span>
+          <p>
+            Estimado cliente:<br>
+            Tu turno ha sido reprogramado para el día {{ formatearFechaStr(_nuevaFechaPostergacion) }} a las {{ _nuevaHoraPostergacion }} hs ({{ _nuevoServicioPostergacion }}).<br>
+            <span *ngIf="motivoPostergacion">{{ motivoPostergacion }}<br></span>
+            Atte. {{ nombreNegocio }}
+          </p>
+        </div>
+      </div>
+      <div class="popup-acciones">
+        <button class="btn-atendido" (click)="enviarMensajePostergacion()" [disabled]="enviandoMensajePostergacion">
+          {{ enviandoMensajePostergacion ? 'Enviando...' : '📩 Enviar mensaje' }}
+        </button>
+        <button class="btn-editar" (click)="cerrarPopupPostergacion()">❌ Omitir</button>
+      </div>
+    </div>
+  </div>
 
 </div>
