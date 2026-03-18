@@ -419,7 +419,7 @@ export class AgendaComponent implements OnInit {
     try {
       const fecha = this.formatearFechaStr(this.turnoSeleccionado.fecha);
       const hora = this.formatearHora(this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora);
-      const mensaje = `Estimado cliente:\n\nEl turno del día *${fecha}* a las *${hora}* hs ha sido *cancelado* debido a ${this.motivoCancelacion}.\nLamentamos los inconvenientes causados.\n_(Si deseas reservar otro turno escribí *2* o *reservar*)_\n\nAtte. ${this.nombreNegocio}`;
+      const mensaje = `Estimado cliente:\n\n📆 El turno del día *${fecha}* a las *${hora}* hs ha sido *cancelado* debido a ${this.motivoCancelacion}.\nLamentamos los inconvenientes causados.😔\n_(Si deseas reservar otro turno escribí *2* o *reservar*)_\n\nAtte. ${this.nombreNegocio}`;
       await fetch('https://primary-production-4f919.up.railway.app/webhook/cancelacion-turno', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -464,7 +464,7 @@ export class AgendaComponent implements OnInit {
     this.enviandoMensajePostergacion = true;
     try {
       const fecha = this.formatearFechaStr(this._nuevaFechaPostergacion);
-            const mensaje = `Estimado cliente:\n\nTu turno ha sido *reprogramado* para el día *${fecha}* a las *${this._nuevaHoraPostergacion}* hs (para un: *${this._nuevoServicioPostergacion}*).${this.motivoPostergacion ? this.motivoPostergacion + '.' : ''}\nLamentamos los inconvenientes causados.\n_(Si deseas consultar/cancelar tus turnos escribí *3* o *turnos*)_\n\nAtte. ${this.nombreNegocio}`;
+            const mensaje = `Estimado cliente:\n\n📆 Tu turno ha sido *reprogramado* para el día *${fecha}* a las *${this._nuevaHoraPostergacion}* hs (para un: *${this._nuevoServicioPostergacion}*).${this.motivoPostergacion ? this.motivoPostergacion + '.' : ''}\nLamentamos los inconvenientes causados.😔\n_(Si deseas consultar/cancelar tus turnos escribí *3* o *turnos*)_\n\nAtte. ${this.nombreNegocio}`;
       await fetch('https://primary-production-4f919.up.railway.app/webhook/cancelacion-turno', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
