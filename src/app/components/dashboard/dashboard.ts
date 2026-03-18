@@ -198,7 +198,7 @@ export class DashboardComponent implements OnInit {
       return;
     }
     */
-   
+
     this.editandoTurno = true;
 
     try {
@@ -493,7 +493,7 @@ export class DashboardComponent implements OnInit {
     this.enviandoMensajePostergacion = true;
     try {
       const fecha = this.formatearFecha(this._nuevaFechaPostergacion);
-      const mensaje = `Estimado cliente:\nTu turno ha sido reprogramado para el día ${fecha} a las ${this._nuevaHoraPostergacion} hs (${this._nuevoServicioPostergacion}).${this.motivoPostergacion ? '\n' + this.motivoPostergacion + '.' : ''}\nLamentamos los inconvenientes causados.\n(Si deseas consultar tus turnos escribí *3* o *turnos*)\nAtte. ${this.nombreNegocio}`;
+      const mensaje = `Estimado cliente:\nTu turno ha sido reprogramado para el día ${fecha} a las ${this._nuevaHoraPostergacion} hs (${this._nuevoServicioPostergacion}).${this.motivoPostergacion ? '\n' + this.motivoPostergacion + '.' : ''}\nLamentamos los inconvenientes causados.\n(Si deseas consultar/cancelar tus turnos escribí *3* o *turnos*)\nAtte. ${this.nombreNegocio}`;
       await fetch('https://primary-production-4f919.up.railway.app/webhook/cancelacion-turno', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
