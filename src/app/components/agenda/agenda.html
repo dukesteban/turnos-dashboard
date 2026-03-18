@@ -226,7 +226,7 @@
           Estimado cliente:<br>
           El turno del día {{ formatearFechaStr(turnoSeleccionado.fecha) }} a las {{ formatearHora(turnoSeleccionado.hora_inicio || turnoSeleccionado.hora) }} hs ha sido cancelado debido a {{ motivoCancelacion || '[escribir razón]' }}.<br>
           Lamentamos los inconvenientes causados.<br>
-          (Si desea reservar otro turno presione 2 o reservar)<br>
+          (Si deseas reservar otro turno escribí 2 o reservar)<br>
           Atte. {{ nombreNegocio }}
           </p>
         </div>
@@ -261,7 +261,7 @@
             Tu turno ha sido reprogramado para el día {{ formatearFechaStr(_nuevaFechaPostergacion) }} a las {{ _nuevaHoraPostergacion }} hs ({{ _nuevoServicioPostergacion }}).<br>
             <span *ngIf="motivoPostergacion">{{ motivoPostergacion }}<br></span>
             Lamentamos los inconvenientes causados.<br>
-            (Si desea consultar sus turnos presione 3 o turnos)<br>
+            (Si deseas consultar tus turnos escribí 3 o turnos)<br>
             Atte. {{ nombreNegocio }}
           </p>
         </div>
