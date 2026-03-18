@@ -224,9 +224,9 @@
           <span class="preview-label">Vista previa:</span>
           <p>
           Estimado cliente:<br>
-          El turno del día {{ formatearFechaStr(turnoSeleccionado.fecha) }} a las {{ formatearHora(turnoSeleccionado.hora_inicio || turnoSeleccionado.hora) }} hs ha sido cancelado debido a {{ motivoCancelacion || '[escribir razón]' }}.<br>
+          El turno del día <b>{{ formatearFechaStr(turnoSeleccionado.fecha) }}</b> a las <b>{{ formatearHora(turnoSeleccionado.hora_inicio || turnoSeleccionado.hora) }}</b> hs ha sido <b>cancelado</b> debido a {{ motivoCancelacion || '[escribir razón]' }}.<br>
           Lamentamos los inconvenientes causados.<br>
-          (Si deseas reservar otro turno escribí 2 o reservar)<br>
+          <i>(Si deseas reservar otro turno escribí 2 o reservar)</i><br>
           Atte. {{ nombreNegocio }}
           </p>
         </div>
@@ -255,13 +255,13 @@
             placeholder="Ej: Por corte de luz"></textarea>
         </div>
         <div class="mensaje-preview">
-          <span class="preview-label">Vista previa:</span>
+          <span class="preview-label">Vista previa del mensaje:</span>
           <p>
             Estimado cliente:<br>
-            Tu turno ha sido reprogramado para el día {{ formatearFechaStr(_nuevaFechaPostergacion) }} a las {{ _nuevaHoraPostergacion }} hs ({{ _nuevoServicioPostergacion }}).<br>
+            Tu turno ha sido <b>reprogramado</b> para el día <b>{{ formatearFechaStr(_nuevaFechaPostergacion) }}</b> a las <b>{{ _nuevaHoraPostergacion }}</b> hs (para un: <b>{{ _nuevoServicioPostergacion }}</b>).
             <span *ngIf="motivoPostergacion">{{ motivoPostergacion }}.<br></span>
             Lamentamos los inconvenientes causados.<br>
-            (Si deseas consultar/cancelar tus turnos escribí 3 o turnos)<br>
+            <i>(Si deseas consultar/cancelar tus turnos escribí <b>3</b> o <b>turnos</b>)</i><br>
             Atte. {{ nombreNegocio }}
           </p>
         </div>
