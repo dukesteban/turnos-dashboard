@@ -270,7 +270,7 @@
       </div>
       <div class="popup-body">
         <div class="campo">
-          <label>Motivo de cancelación (obligatgorio)</label>
+          <label>Motivo de cancelación (obligatorio)</label>
           <textarea [(ngModel)]="motivoCancelacion" rows="3"
             placeholder="Ej: por lluvia."></textarea>
         </div>
@@ -280,6 +280,7 @@
           Estimado cliente:<br>
           El turno del día {{ formatearFecha(turnoSeleccionado.fecha) }} a las {{ formatearHora(turnoSeleccionado.hora_inicio || turnoSeleccionado.hora) }} hs ha sido cancelado debido a {{ motivoCancelacion || '[escribir razón]' }}.<br>
           Lamentamos los inconvenientes causados.<br>
+          (Si desea reservar otro turno presione 2 o reservar)<br>
           Atte. {{ nombreNegocio }}
           </p>
         </div>
@@ -314,6 +315,7 @@
             Tu turno ha sido reprogramado para el día {{ formatearFecha(_nuevaFechaPostergacion) }} a las {{ _nuevaHoraPostergacion }} hs ({{ _nuevoServicioPostergacion }}).<br>
             <span *ngIf="motivoPostergacion">{{ motivoPostergacion }}<br></span>
             Lamentamos los inconvenientes causados.<br>
+            (Si desea consultar sus turnos presione 3 o turnos)<br>
             Atte. {{ nombreNegocio }}
           </p>
         </div>
