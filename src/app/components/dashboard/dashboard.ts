@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
@@ -10,7 +10,8 @@ import { SupabaseService } from '../../services/supabase';
   templateUrl: './dashboard.html',
   styleUrls: ['./dashboard.scss']
 })
-export class DashboardComponent implements OnInit {
+export class DashboardComponent implements OnInit, OnDestroy {
+  private subscription: any;
   turnosHoy: any[] = [];
   todosTurnos: any[] = [];
   totalIngresos = 0;
@@ -67,6 +68,13 @@ export class DashboardComponent implements OnInit {
   async ngOnInit() {
     await this.cargarTurnos();
     this.cdr.detectChanges();
+    this.subscription = this.supabase.suscribirTurnos(() => {
+      this.cargarTurnos();
+    });
+  }
+
+  ngOnDestroy() {
+    this.subscription?.unsubscribe();
   }
 
   async cargarTurnos() {

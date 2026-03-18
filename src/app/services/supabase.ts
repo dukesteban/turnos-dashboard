@@ -15,6 +15,16 @@ export class SupabaseService {
     );
   }
 
+  suscribirTurnos(callback: () => void) {
+    return this.supabase
+      .channel('turnos-cambios')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'turnos' },
+        () => callback()
+      )
+      .subscribe();
+  }
+  
   // USUARIOS
   async verificarUsuario(usuario: string, passwordHash: string): Promise<boolean> {
     const { data, error } = await this.supabase

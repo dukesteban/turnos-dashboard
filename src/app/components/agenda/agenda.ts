@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
@@ -12,7 +12,9 @@ const PX_POR_MINUTO = 1.2;
   templateUrl: './agenda.html',
   styleUrls: ['./agenda.scss']
 })
-export class AgendaComponent implements OnInit {
+export class AgendaComponent implements OnInit, OnDestroy {
+  private subscription: any;
+
   vista: 'dia' | 'semana' = 'dia';
   fechaActual: Date = new Date();
   turnos: any[] = [];
@@ -56,6 +58,13 @@ export class AgendaComponent implements OnInit {
     await this.cargarHorarios();
     await this.cargarTurnos();
     this.puestosXTurno = await this.supabase.getPuestosXTurno();
+    this.subscription = this.supabase.suscribirTurnos(() => {
+      this.cargarTurnos();
+    });
+  }
+
+  ngOnDestroy() {
+    this.subscription?.unsubscribe();
   }
 
   async cargarHorarios() {
