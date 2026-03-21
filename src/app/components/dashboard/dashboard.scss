@@ -340,6 +340,33 @@ tr.vencido td { background: #fff7ed; }
     color: #1e293b;
     &:focus { outline: none; border-color: #3b82f6; background: white; }
   }
+  .mensaje-preview {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: #334155;
+
+    .preview-label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      display: block;
+      margin-bottom: 4px;
+    }
+  }
+  
+  textarea {
+    width: 100%;
+    resize: none;
+    box-sizing: border-box;
+    padding: 9px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    &:focus { outline: none; border-color: #3b82f6; }
+  }
 }
 
 .error-msg {
@@ -464,33 +491,4 @@ tr.vencido td { background: #fff7ed; }
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
   }
-
-.mensaje-preview {
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-top: 8px;
-  font-size: 0.85rem;
-  color: #334155;
-
-  .preview-label {
-    font-size: 0.75rem;
-    color: #94a3b8;
-    display: block;
-    margin-bottom: 4px;
-  }
-}
-
-textarea {
-  width: 100%;
-  max-width: 600px;
-  resize: none;
-  box-sizing: border-box;
-  padding: 9px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-family: inherit;
-  &:focus { outline: none; border-color: #3b82f6; }
-}
 }
