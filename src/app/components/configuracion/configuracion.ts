@@ -150,6 +150,7 @@ export class ConfiguracionComponent implements OnInit {
     if (!confirm('¿Eliminar este horario?')) return;
     await this.supabase.deleteHorario(id);
     this.horarios = this.horarios.filter(h => h.id !== id);
+    this.cdr.detectChanges();
   }
 
   async agregarHorario() {
@@ -196,7 +197,7 @@ export class ConfiguracionComponent implements OnInit {
 
   seSuperpone(horario: any, otros: any[]): boolean {
     return otros.some(h =>
-      h.dia_semana === horario.dia_semana &&
+      Number(h.dia_semana) === Number(horario.dia_semana) &&
       h.id !== horario.id &&
       horario.hora_inicio < h.hora_fin &&
       horario.hora_fin > h.hora_inicio
