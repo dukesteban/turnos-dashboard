@@ -132,7 +132,7 @@
     <div *ngIf="mensajeDiasCerrados" class="alerta exito">{{ mensajeDiasCerrados }}</div>
     <div *ngIf="mensajeErrorDiasCerrados" class="alerta error">{{ mensajeErrorDiasCerrados }}</div>
     <div class="acordeon-header" (click)="acordeonDiasCerrados = !acordeonDiasCerrados">
-      <span>🚫 Días de cierre</span>
+      <span>🚫 Días cerrados</span>
       <span class="chevron" [class.abierto]="acordeonDiasCerrados">›</span>
     </div>
     <div class="acordeon-body" [class.visible]="acordeonDiasCerrados">
@@ -165,19 +165,33 @@
           <thead>
             <tr><th>Desde</th><th>Hasta</th><th>Motivo</th><th>Acciones</th></tr>
           </thead>
-          <tbody>
-            <tr *ngFor="let dia of diasCerrados" [class.vencido]="esDiaVencido(dia)">
-              <td>{{ formatearFechaStr(dia.fecha) }}</td>
-              <td>{{ dia.fecha_hasta ? formatearFechaStr(dia.fecha_hasta) : '—' }}</td>
-              <td>{{ dia.motivo || '—' }}</td>
-              <td class="acciones">
-                <button class="btn-icon" (click)="eliminarDiaCerrado(dia.id)" title="Eliminar">🗑️</button>
-              </td>
-            </tr>
-            <tr *ngIf="diasCerrados.length === 0">
-              <td colspan="4" class="vacio">No hay días cerrados</td>
-            </tr>
-          </tbody>
+            <tbody>
+              <tr *ngFor="let dia of diasCerrados" [class.vencido]="esDiaVencido(dia)">
+                <td>
+                  <input type="date" [(ngModel)]="dia.fecha" class="input-hora"
+                    [readonly]="!dia.editando" (ngModelChange)="mensajeErrorDiasCerrados = ''" />
+                </td>
+                <td>
+                  <input type="date" [(ngModel)]="dia.fecha_hasta" class="input-hora"
+                    [readonly]="!dia.editando" (ngModelChange)="mensajeErrorDiasCerrados = ''" />
+                </td>
+                <td>
+                  <input type="text" [(ngModel)]="dia.motivo" class="input-inline input-nombre"
+                    [readonly]="!dia.editando" placeholder="—" />
+                </td>
+                <td class="acciones">
+                  <button *ngIf="!dia.editando" class="btn-icon"
+                    (click)="dia._fecha_orig = dia.fecha; dia._fecha_hasta_orig = dia.fecha_hasta; dia._motivo_orig = dia.motivo; dia.editando = true"
+                    title="Editar">✏️</button>
+                  <button *ngIf="dia.editando" class="btn-icon" (click)="guardarDiaCerrado(dia)" title="Guardar">💾</button>
+                  <button *ngIf="dia.editando" class="btn-icon" (click)="cancelarDiaCerrado(dia)" title="Cancelar">↩️</button>
+                  <button class="btn-icon" (click)="eliminarDiaCerrado(dia.id)" title="Eliminar">🗑️</button>
+                </td>
+              </tr>
+              <tr *ngIf="diasCerrados.length === 0">
+                <td colspan="4" class="vacio">No hay días cerrados</td>
+              </tr>
+            </tbody>
         </table>
       </div>
     </div>

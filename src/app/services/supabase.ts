@@ -218,7 +218,7 @@ export class SupabaseService {
     return data;
   }
 
-  async createDiaCerrado(fecha: string, fechaHasta: string | null, motivo: string) {
+  async createDiasCerrados(fecha: string, fechaHasta: string | null, motivo: string) {
     const { data, error } = await this.supabase
       .from('dias_cerrados')
       .insert({ fecha, fecha_hasta: fechaHasta || null, motivo })
@@ -228,7 +228,15 @@ export class SupabaseService {
     return data;
   }
 
-  async deleteDiaCerrado(id: number) {
+  async updateDiasCerrados(id: number, fecha: string, fechaHasta: string | null, motivo: string) {
+    const { error } = await this.supabase
+      .from('dias_cerrados')
+      .update({ fecha, fecha_hasta: fechaHasta || null, motivo })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  async deleteDiasCerrados(id: number) {
     const { error } = await this.supabase
       .from('dias_cerrados')
       .delete()

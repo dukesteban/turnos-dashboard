@@ -140,7 +140,7 @@ export class ConfiguracionComponent implements OnInit {
       return;
     }
     try {
-      const nuevo = await this.supabase.createDiaCerrado(
+      const nuevo = await this.supabase.createDiasCerrados(
         this.nuevoDiaCerrado.fecha,
         this.nuevoDiaCerrado.fecha_hasta || null,
         this.nuevoDiaCerrado.motivo
@@ -159,13 +159,43 @@ export class ConfiguracionComponent implements OnInit {
   async eliminarDiaCerrado(id: number) {
     if (!confirm('¿Eliminar este día/período de cierre?')) return;
     try {
-      await this.supabase.deleteDiaCerrado(id);
+      await this.supabase.deleteDiasCerrados(id);
       this.diasCerrados = this.diasCerrados.filter(d => d.id !== id);
       this.cdr.detectChanges();
     } catch (e) {
       this.mensajeErrorDiasCerrados = '❌ Error al eliminar.';
       this.cdr.detectChanges();
     }
+  }
+
+  async guardarDiaCerrado(dia: any) {
+    this.mensajeErrorDiasCerrados = '';
+    if (!dia.fecha) {
+      this.mensajeErrorDiasCerrados = '❌ La fecha es obligatoria.';
+      this.cdr.detectChanges();
+      return;
+    }
+    if (dia.fecha_hasta && dia.fecha_hasta < dia.fecha) {
+      this.mensajeErrorDiasCerrados = '❌ La fecha hasta debe ser mayor que la fecha desde.';
+      this.cdr.detectChanges();
+      return;
+    }
+    try {
+      await this.supabase.updateDiasCerrados(dia.id, dia.fecha, dia.fecha_hasta || null, dia.motivo);
+      dia.editando = false;
+      this.mostrarMensaje('✅ Día/período actualizado.', 'diasCerrados' as any);
+    } catch (e) {
+      this.mensajeErrorDiasCerrados = '❌ Error al actualizar.';
+      this.cdr.detectChanges();
+    }
+  }
+
+  cancelarDiaCerrado(dia: any) {
+    dia.fecha = dia._fecha_orig;
+    dia.fecha_hasta = dia._fecha_hasta_orig;
+    dia.motivo = dia._motivo_orig;
+    dia.editando = false;
+    this.mensajeErrorDiasCerrados = '';
   }
 
   esDiaVencido(dia: any): boolean {
