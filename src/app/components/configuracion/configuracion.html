@@ -160,24 +160,26 @@
         </div>  
       </div>
 
-      <table class="tabla-horarios">
-        <thead>
-          <tr><th>Desde</th><th>Hasta</th><th>Motivo</th><th>Acciones</th></tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let dia of diasCerrados" [class.vencido]="esDiaVencido(dia)">
-            <td>{{ formatearFechaStr(dia.fecha) }}</td>
-            <td>{{ dia.fecha_hasta ? formatearFechaStr(dia.fecha_hasta) : '—' }}</td>
-            <td>{{ dia.motivo || '—' }}</td>
-            <td class="acciones">
-              <button class="btn-icon" (click)="eliminarDiaCerrado(dia.id)" title="Eliminar">🗑️</button>
-            </td>
-          </tr>
-          <tr *ngIf="diasCerrados.length === 0">
-            <td colspan="4" class="vacio">No hay días cerrados</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="tabla-wrapper">
+        <table class="tabla-horarios">
+          <thead>
+            <tr><th>Desde</th><th>Hasta</th><th>Motivo</th><th>Acciones</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let dia of diasCerrados" [class.vencido]="esDiaVencido(dia)">
+              <td>{{ formatearFechaStr(dia.fecha) }}</td>
+              <td>{{ dia.fecha_hasta ? formatearFechaStr(dia.fecha_hasta) : '—' }}</td>
+              <td>{{ dia.motivo || '—' }}</td>
+              <td class="acciones">
+                <button class="btn-icon" (click)="eliminarDiaCerrado(dia.id)" title="Eliminar">🗑️</button>
+              </td>
+            </tr>
+            <tr *ngIf="diasCerrados.length === 0">
+              <td colspan="4" class="vacio">No hay días cerrados</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
