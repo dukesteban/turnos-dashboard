@@ -259,6 +259,20 @@
   .turno-servicio-sm { color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 
+.col-dia-header.dia-cerrado {
+  background: #f23d3dad;
+}
+
+.aviso-cerrado {
+  background: #f1f5f9;
+  color: #94a3b8;
+  text-align: center;
+  padding: 8px;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
 // POPUP
 .popup-overlay {
   position: fixed;

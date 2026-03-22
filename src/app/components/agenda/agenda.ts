@@ -30,6 +30,7 @@ export class AgendaComponent implements OnInit, OnDestroy {
   turnoSeleccionado: any = null;
   mostrarPopup = false;
   puestosXTurno = 1;
+  diasCerrados: any[] = [];
   
   // Editar/Postergar
   modoEditarTurno = false;
@@ -58,6 +59,7 @@ export class AgendaComponent implements OnInit, OnDestroy {
     await this.cargarHorarios();
     await this.cargarTurnos();
     this.puestosXTurno = await this.supabase.getPuestosXTurno();
+    this.diasCerrados = await this.supabase.getDiasCerrados();
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
     });
@@ -82,6 +84,15 @@ export class AgendaComponent implements OnInit, OnDestroy {
   async cargarTurnos() {
     this.turnos = await this.supabase.getTurnos();
     this.cdr.detectChanges();
+  }
+
+  esDiaCerrado(dia: Date): boolean {
+    const fechaStr = dia.toLocaleDateString('en-CA');
+    return this.diasCerrados.some(d => {
+      const desde = d.fecha;
+      const hasta = d.fecha_hasta || d.fecha;
+      return fechaStr >= desde && fechaStr <= hasta;
+    });
   }
 
   // Altura total del contenedor en px

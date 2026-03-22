@@ -21,6 +21,9 @@
 
   <!-- VISTA DÍA -->
   <div *ngIf="vista === 'dia'" class="grilla-contenedor">
+    <div *ngIf="esDiaCerrado(fechaActual)" class="aviso-cerrado">
+      🚫 Día cerrado
+    </div>
     <div class="grilla-dia">
       <div class="spacer-top"></div>
       <!-- Columna de horas -->
@@ -33,7 +36,7 @@
       </div>
 
       <!-- Columna de turnos -->
-      <div class="col-turnos" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal">
+      <div class="col-turnos" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal" [class.dia-cerrado]="esDiaCerrado(fechaActual)">
         <!-- Líneas de hora -->
         <div *ngFor="let hora of horasEtiquetas"
           class="linea-hora"
@@ -63,7 +66,8 @@
         <div *ngFor="let dia of diasDeSemana"
           class="col-dia-header"
           [style.min-width]="anchoPuestos"
-          [class.hoy]="esHoy(dia)">
+          [class.hoy]="esHoy(dia)"
+          [class.dia-cerrado]="esDiaCerrado(dia)">
           <div class="dia-nombre">{{ diasSemana[dia.getDay()] }}</div>
           <div class="dia-fecha" [class.dia-fecha-hoy]="esHoy(dia)">{{ formatearFechaCorta(dia) }}</div>
         </div>
@@ -81,7 +85,7 @@
         </div>
 
         <!-- Columnas por día -->
-        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal">
+        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal" [class.dia-cerrado]="esDiaCerrado(dia)">
           <!-- Líneas de hora -->
           <div *ngFor="let hora of horasEtiquetas"
             class="linea-hora"
