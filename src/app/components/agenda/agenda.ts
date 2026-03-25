@@ -63,6 +63,7 @@ export class AgendaComponent implements OnInit, OnDestroy {
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
     });
+    this.cdr.detectChanges();
   }
 
   ngOnDestroy() {

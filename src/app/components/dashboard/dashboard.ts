@@ -71,6 +71,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
     });
+    this.cdr.detectChanges();
   }
 
   ngOnDestroy() {
