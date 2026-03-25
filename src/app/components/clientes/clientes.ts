@@ -26,6 +26,7 @@ export class ClientesComponent implements OnInit {
 
   async ngOnInit() {
     await this.cargarClientes();
+    this.cdr.detectChanges();
   }
 
   async cargarClientes() {

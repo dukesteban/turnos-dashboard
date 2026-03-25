@@ -72,6 +72,7 @@ export class ConfiguracionComponent implements OnInit {
 
   async ngOnInit() {
     await this.cargarDatos();
+    this.cdr.detectChanges();
   }
 
   async cargarDatos() {

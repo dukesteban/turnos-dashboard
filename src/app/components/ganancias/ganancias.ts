@@ -21,6 +21,7 @@ export class GananciasComponent implements OnInit {
 
   async ngOnInit() {
     await this.cargarDatos();
+    this.cdr.detectChanges();
   }
 
   async cargarDatos() {
