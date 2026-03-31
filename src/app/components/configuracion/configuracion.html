@@ -126,7 +126,6 @@
     </div>
   </div>
 
-  
   <!-- ── DÍAS CERRADOS ── -->
   <div class="acordeon">
     <div *ngIf="mensajeDiasCerrados" class="alerta exito">{{ mensajeDiasCerrados }}</div>
@@ -267,6 +266,68 @@
             </tr>
             <tr *ngIf="servicios.length === 0">
               <td colspan="5" class="vacio">No hay servicios configurados</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MÉTODOS DE PAGO ── -->
+  <div class="acordeon">
+    <div *ngIf="mensajeMetodosPago" class="alerta exito">{{ mensajeMetodosPago }}</div>
+    <div *ngIf="mensajeErrorMetodosPago" class="alerta error">{{ mensajeErrorMetodosPago }}</div>
+    <div class="acordeon-header" (click)="acordeonMetodosPago = !acordeonMetodosPago">
+      <span>💳 Métodos de pago</span>
+      <span class="chevron" [class.abierto]="acordeonMetodosPago">›</span>
+    </div>
+    <div class="acordeon-body" [class.visible]="acordeonMetodosPago">
+      <div class="seccion-header">
+        <button class="btn-primary" (click)="mostrarFormMetodoPago = !mostrarFormMetodoPago; mensajeErrorMetodosPago = ''; nuevoMetodoPago = { nombre: '', emoji: '' }">
+          {{ mostrarFormMetodoPago ? '↩️ Cancelar' : '➕ Nuevo método' }}
+        </button>
+      </div>
+
+      <div *ngIf="mostrarFormMetodoPago" class="form-nuevo-horario">
+        <div class="fila">
+          <div class="campo">
+            <label>Emoji</label>
+            <input type="text" [(ngModel)]="nuevoMetodoPago.emoji" placeholder="💵" style="width:70px" />
+          </div>
+          <div class="campo">
+            <label>Nombre</label>
+            <input type="text" [(ngModel)]="nuevoMetodoPago.nombre" placeholder="Ej: Efectivo" (ngModelChange)="mensajeErrorMetodosPago = ''" />
+          </div>
+          <button class="btn-primary" (click)="agregarMetodoPago()">➕ Agregar</button>
+        </div>
+      </div>
+
+      <div class="tabla-wrapper">
+        <table class="tabla-horarios">
+          <thead>
+            <tr><th>Emoji</th><th>Nombre</th><th>Activo</th><th>Acciones</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let m of metodosPago" [class.inactivo]="!m.activo">
+              <td><input type="text" [(ngModel)]="m.emoji" class="input-inline" style="width:50px" [readonly]="!m.editando" /></td>
+              <td><input type="text" [(ngModel)]="m.nombre" class="input-inline input-nombre" [readonly]="!m.editando" /></td>
+              <td>
+                <label class="toggle">
+                  <input type="checkbox" [checked]="m.activo" (change)="toggleMetodoPago(m)" />
+                  <span class="slider"></span>
+                </label>
+              </td>
+              <td class="acciones">
+                <button *ngIf="!m.editando" class="btn-icon"
+                  (click)="m._nombre_orig = m.nombre; m._emoji_orig = m.emoji; m.editando = true"
+                  title="Editar">✏️</button>
+                <button *ngIf="m.editando" class="btn-icon" (click)="guardarMetodoPago(m)" title="Guardar">💾</button>
+                <button *ngIf="m.editando" class="btn-icon" (click)="cancelarMetodoPago(m)" title="Cancelar">↩️</button>
+                <button class="btn-icon" (click)="eliminarMetodoPago(m.id)" title="Eliminar">🗑️</button>
+              </td>
+            </tr>
+            <tr *ngIf="metodosPago.length === 0">
+              <td colspan="4" class="vacio">No hay métodos de pago configurados</td>
             </tr>
           </tbody>
         </table>

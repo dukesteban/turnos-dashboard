@@ -20,6 +20,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   vistasTurnos: 'semana' | 'mes' = 'semana';
   mostrarIngresos = JSON.parse(sessionStorage.getItem('mostrarIngresos') ?? 'true');
   fechaTurnos: Date = new Date();
+  metodosPago: any[] = [];
+  modoAtendido = false;
+  atendidoServicioId: any = null;
+  atendidoPrecio: number = 0;
+  atendidoMetodoPago = 'efectivo';
+  atendidoObservaciones = '';
+  guardandoAtendido = false;
+  errorAtendido = '';
   
   // Popup
   turnoSeleccionado: any = null;
@@ -67,7 +75,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     await this.cargarTurnos();
-    this.cdr.detectChanges();
+    this.metodosPago = await this.supabase.getMetodosPago();
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
     });
@@ -84,7 +92,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     this.totalIngresos = this.turnosHoy
       .filter((t: any) => t.estado === 'atendido')
-      .reduce((sum: number, t: any) => sum + (Number(t.precio) || 0), 0);
+      .reduce((sum: number, t: any) => sum + (Number(t.precio_final || t.precio) || 0), 0);
 
     this.totalClientes = this.turnosHoy
       .filter((t: any) => t.estado === 'atendido').length;
@@ -166,16 +174,62 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.mostrarPopup = false;
     this.turnoSeleccionado = null;
     this.modoEditarTurno = false;
+    this.modoAtendido = false;
     this.cdr.detectChanges();
   }
 
   async cambiarEstadoPopup(estado: string) {
     if (!this.turnoSeleccionado) return;
+    if (estado === 'atendido') {
+      this.modoAtendido = true;
+      this.atendidoServicioId = this.turnoSeleccionado.servicio_id;
+      this.atendidoMetodoPago = this.metodosPago[0]?.nombre || '';
+      this.atendidoPrecio = this.turnoSeleccionado.precio;
+      this.atendidoObservaciones = '';
+      this.errorAtendido = '';
+      return;
+    }
+    if (estado === 'pendiente') {
+      const id = this.turnoSeleccionado.id;
+      await this.supabase.volverAPendiente(id);
+      await this.cargarTurnos(); // cargarDatos() en dashboard
+      this.cerrarPopup();
+      return;
+    }
     const id = this.turnoSeleccionado.id;
     await this.supabase.updateEstadoTurno(id, estado);
     await this.cargarTurnos();
     this.cerrarPopup();
-  }  
+  }
+
+  get atendidoServicio(): any {
+    return this.servicios.find(s => s.id == this.atendidoServicioId) || null;
+  }
+
+  async confirmarAtendido() {
+    this.errorAtendido = '';
+    if (!this.atendidoServicioId || !this.atendidoPrecio || !this.atendidoMetodoPago) {
+      this.errorAtendido = 'Completá los campos requeridos.';
+      this.cdr.detectChanges();
+      return;
+    }
+    this.guardandoAtendido = true;
+    try {
+      const servicio = this.atendidoServicio;
+      await this.supabase.marcarAtendido(this.turnoSeleccionado.id, {
+        servicio_nombre_final: servicio?.nombre || this.turnoSeleccionado.servicio_nombre,
+        precio_final: this.atendidoPrecio,
+        metodo_pago: this.atendidoMetodoPago,
+        observaciones: this.atendidoObservaciones
+      });
+      await this.cargarTurnos(); // cargarDatos() en dashboard
+      this.cerrarPopup();
+    } catch (e) {
+      this.errorAtendido = '❌ Error al guardar.';
+      this.cdr.detectChanges();
+    }
+    this.guardandoAtendido = false;
+  }
 
   activarEditarTurno() {
     this.modoEditarTurno = true;

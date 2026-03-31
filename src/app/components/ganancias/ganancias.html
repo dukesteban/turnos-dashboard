@@ -30,11 +30,20 @@
         <span class="stat-value">{{ totalAtendidos }}</span>
       </div>
     </div>
+    <!--
     <div class="stat-card naranja">
       <div class="stat-icon">🎯</div>
       <div class="stat-info">
         <span class="stat-label">Ticket promedio</span>
         <span class="stat-value">${{ ticketPromedio | number }}</span>
+      </div>
+    </div>
+    -->
+    <div class="stat-card naranja">
+      <div class="stat-icon">💳</div>
+      <div class="stat-info">
+        <span class="stat-label">Pago más usado</span>
+        <span class="stat-value stat-value-sm">{{ metodoPagoMasUsado }}</span>
       </div>
     </div>
     <div class="stat-card violeta">
@@ -83,6 +92,24 @@
             <div class="servicio-barra" [style.width.%]="(s.total / totalGanancias) * 100"></div>
           </div>
           <span class="servicio-total">${{ s.total | number }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Por método de pago -->
+    <div class="seccion">
+      <h3>Por método de pago</h3>
+      <div *ngIf="totalPorMetodoPago.length === 0" class="vacio">Sin datos</div>
+      <div class="servicios-lista">
+        <div *ngFor="let m of totalPorMetodoPago" class="servicio-fila">
+          <div class="servicio-info">
+            <span class="servicio-nombre">{{ m.metodo }}</span>
+            <span class="servicio-cantidad">{{ m.cantidad }} {{ m.cantidad === 1 ? 'turno' : 'turnos' }}</span>
+          </div>
+          <div class="servicio-barra-wrap">
+            <div class="servicio-barra" [style.width.%]="(m.total / totalGanancias) * 100"></div>
+          </div>
+          <span class="servicio-total">${{ m.total | number }}</span>
         </div>
       </div>
     </div>

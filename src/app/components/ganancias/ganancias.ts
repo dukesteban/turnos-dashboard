@@ -33,6 +33,19 @@ export class GananciasComponent implements OnInit {
     this.scrollToHoy();
   }
 
+  get totalPorMetodoPago(): { metodo: string, cantidad: number, total: number }[] {
+    const mapa: { [key: string]: { cantidad: number, total: number } } = {};
+    this.turnos.forEach(t => {
+      const metodo = t.metodo_pago || 'Sin registrar';
+      if (!mapa[metodo]) mapa[metodo] = { cantidad: 0, total: 0 };
+      mapa[metodo].cantidad++;
+      mapa[metodo].total += Number(t.precio_final || t.precio) || 0;
+    });
+    return Object.entries(mapa)
+      .map(([metodo, v]) => ({ metodo, ...v }))
+      .sort((a, b) => b.total - a.total);
+  }
+
   getRango(): { desde: string, hasta: string } {
     const formatLocal = (d: Date) => {
       const y = d.getFullYear();
@@ -55,15 +68,24 @@ export class GananciasComponent implements OnInit {
 
   // STATS
   get totalGanancias(): number {
-    return this.turnos.reduce((sum, t) => sum + (Number(t.precio) || 0), 0);
+    return this.turnos.reduce((sum, t) => sum + (Number(t.precio_final || t.precio) || 0), 0);
   }
 
   get totalAtendidos(): number {
     return this.turnos.length;
   }
 
-  get ticketPromedio(): number {
-    return this.totalAtendidos > 0 ? Math.round(this.totalGanancias / this.totalAtendidos) : 0;
+  //get ticketPromedio(): number {
+    //return this.totalAtendidos > 0 ? Math.round(this.totalGanancias / this.totalAtendidos) : 0;
+  //}
+
+  get metodoPagoMasUsado(): string {
+    if (!this.turnos.length) return '-';
+    const conteo: { [key: string]: number } = {};
+    this.turnos.forEach(t => {
+      conteo[t.metodo_pago] = (conteo[t.metodo_pago] || 0) + 1;
+    });
+    return Object.entries(conteo).sort((a, b) => b[1] - a[1])[0][0];
   }
 
   get servicioMasVendido(): string {
@@ -86,7 +108,7 @@ export class GananciasComponent implements OnInit {
         const h = parseInt(t.hora_inicio?.slice(0, 2) || t.hora?.slice(0, 2) || '0');
         const key = `${h}:00`;
         if (horas[key]) {
-          horas[key].total += t.precio || 0;
+          horas[key].total += (t.estado === 'atendido' && t.precio_final ? t.precio_final : t.precio) || 0;
           horas[key].cantidad++;
         }
       });
@@ -105,7 +127,7 @@ export class GananciasComponent implements OnInit {
         const d = parseInt(t.fecha?.slice(8, 10));
         const idx = d - 1;
         if (dias[idx]) {
-          dias[idx].total += t.precio || 0;
+          dias[idx].total += (t.estado === 'atendido' && t.precio_final ? t.precio_final : t.precio) || 0;
           dias[idx].cantidad++;
         }
       });
@@ -121,9 +143,11 @@ export class GananciasComponent implements OnInit {
   get totalPorServicio(): { nombre: string, cantidad: number, total: number }[] {
     const mapa: { [key: string]: { cantidad: number, total: number } } = {};
     this.turnos.filter(t => t.estado === 'atendido').forEach(t => {
-      if (!mapa[t.servicio_nombre]) mapa[t.servicio_nombre] = { cantidad: 0, total: 0 };
-      mapa[t.servicio_nombre].cantidad++;
-      mapa[t.servicio_nombre].total += Number(t.precio) || 0;
+      const nombre = t.servicio_nombre_final || t.servicio_nombre;
+      const precio = t.precio_final || t.precio;
+      if (!mapa[nombre]) mapa[nombre] = { cantidad: 0, total: 0 };
+      mapa[nombre].cantidad++;
+      mapa[nombre].total += Number(precio) || 0;
     });
     return Object.entries(mapa)
       .map(([nombre, v]) => ({ nombre, ...v }))

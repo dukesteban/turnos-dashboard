@@ -137,6 +137,36 @@ export class SupabaseService {
     return data;
   }
 
+  async marcarAtendido(id: number, datos: {
+    servicio_nombre_final: string,
+    precio_final: number,
+    metodo_pago: string,
+    observaciones: string
+  }) {
+    const { error } = await this.supabase
+      .from('turnos')
+      .update({ 
+        estado: 'atendido',
+        ...datos
+      })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  async volverAPendiente(id: number) {
+    const { error } = await this.supabase
+      .from('turnos')
+      .update({ 
+        estado: 'pendiente',
+        metodo_pago: null,
+        precio_final: null,
+        observaciones: null,
+        servicio_nombre_final: null
+      })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
   // CONFIGURACION
   async getConfiguracion() {
     const { data, error } = await this.supabase
@@ -169,6 +199,42 @@ export class SupabaseService {
       .single();
     if (error) return 1;
     return parseInt(data?.valor) || 1;
+  }
+
+  // METODOS DE PAGOS
+  async getMetodosPago() {
+    const { data, error } = await this.supabase
+      .from('metodos_pago')
+      .select('*')
+      .eq('activo', true)
+      .order('orden');
+    if (error) throw error;
+    return data;
+  }
+
+  async createMetodoPago(nombre: string, emoji: string) {
+    const { data, error } = await this.supabase
+      .from('metodos_pago')
+      .insert({ nombre, emoji, orden: 99 })
+      .select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  async updateMetodoPago(id: number, datos: any) {
+    const { error } = await this.supabase
+      .from('metodos_pago')
+      .update(datos)
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  async deleteMetodoPago(id: number) {
+    const { error } = await this.supabase
+      .from('metodos_pago')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
   }
 
   // HORARIOS
