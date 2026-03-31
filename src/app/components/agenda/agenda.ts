@@ -31,6 +31,14 @@ export class AgendaComponent implements OnInit, OnDestroy {
   mostrarPopup = false;
   puestosXTurno = 1;
   diasCerrados: any[] = [];
+  metodosPago: any[] = [];
+  modoAtendido = false;
+  atendidoServicioId: any = null;
+  atendidoPrecio: number = 0;
+  atendidoMetodoPago = 'efectivo';
+  atendidoObservaciones = '';
+  guardandoAtendido = false;
+  errorAtendido = '';
   
   // Editar/Postergar
   modoEditarTurno = false;
@@ -58,6 +66,7 @@ export class AgendaComponent implements OnInit, OnDestroy {
   async ngOnInit() {
     await this.cargarHorarios();
     await this.cargarTurnos();
+    this.metodosPago = await this.supabase.getMetodosPago();
     this.puestosXTurno = await this.supabase.getPuestosXTurno();
     this.diasCerrados = await this.supabase.getDiasCerrados();
     this.subscription = this.supabase.suscribirTurnos(() => {
@@ -285,15 +294,61 @@ export class AgendaComponent implements OnInit, OnDestroy {
   cerrarPopup() {
     this.mostrarPopup = false;
     this.turnoSeleccionado = null;
+    this.modoAtendido = false;
     this.cdr.detectChanges();
   }
 
   async cambiarEstadoPopup(estado: string) {
     if (!this.turnoSeleccionado) return;
+    if (estado === 'atendido') {
+      this.modoAtendido = true;
+      this.atendidoServicioId = this.turnoSeleccionado.servicio_id;
+      this.atendidoMetodoPago = this.metodosPago[0]?.nombre || '';
+      this.atendidoPrecio = this.turnoSeleccionado.precio;
+      this.atendidoObservaciones = '';
+      this.errorAtendido = '';
+      return;
+    }
+    if (estado === 'pendiente') {
+      const id = this.turnoSeleccionado.id;
+      await this.supabase.volverAPendiente(id);
+      await this.cargarTurnos(); // cargarDatos() en dashboard
+      this.cerrarPopup();
+      return;
+    }
     const id = this.turnoSeleccionado.id;
     await this.supabase.updateEstadoTurno(id, estado);
     await this.cargarTurnos();
     this.cerrarPopup();
+  }
+
+  get atendidoServicio(): any {
+    return this.servicios.find(s => s.id == this.atendidoServicioId) || null;
+  }
+
+  async confirmarAtendido() {
+    this.errorAtendido = '';
+    if (!this.atendidoServicioId || !this.atendidoPrecio || !this.atendidoMetodoPago) {
+      this.errorAtendido = 'Completá los campos requeridos.';
+      this.cdr.detectChanges();
+      return;
+    }
+    this.guardandoAtendido = true;
+    try {
+      const servicio = this.atendidoServicio;
+      await this.supabase.marcarAtendido(this.turnoSeleccionado.id, {
+        servicio_nombre_final: servicio?.nombre || this.turnoSeleccionado.servicio_nombre,
+        precio_final: this.atendidoPrecio,
+        metodo_pago: this.atendidoMetodoPago,
+        observaciones: this.atendidoObservaciones
+      });
+      await this.cargarTurnos(); // cargarDatos() en dashboard
+      this.cerrarPopup();
+    } catch (e) {
+      this.errorAtendido = '❌ Error al guardar.';
+      this.cdr.detectChanges();
+    }
+    this.guardandoAtendido = false;
   }
 
   esVencido(turno: any): boolean {

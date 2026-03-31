@@ -54,7 +54,15 @@ export class ConfiguracionComponent implements OnInit {
   mostrarFormServicio = false;
   nuevoServicio: any = { nombre: '', precio: null, duracion_minutos: null, activo: true };
   mensajeServicios = '';
-  mensajeErrorServicios = ''
+  mensajeErrorServicios = '';
+
+  // Métodos de pago
+  acordeonMetodosPago = false;
+  metodosPago: any[] = [];
+  mostrarFormMetodoPago = false;
+  nuevoMetodoPago = { nombre: '', emoji: '' };
+  mensajeMetodosPago = '';
+  mensajeErrorMetodosPago = '';
 
   // Contraseña
   passwordActual = '';
@@ -86,6 +94,7 @@ export class ConfiguracionComponent implements OnInit {
     this.diasCerrados = await this.supabase.getDiasCerrados();
     this.horarios = await this.supabase.getHorarios();
     this.servicios = await this.supabase.getServicios();
+    this.metodosPago = await this.supabase.getMetodosPago();
     this.cdr.detectChanges();
   }
 
@@ -410,6 +419,70 @@ export class ConfiguracionComponent implements OnInit {
     this.mensajeErrorServicios = '';
   }
 
+    // ── METODOS DE PAGO ──────────────────────────────────────────────
+
+  async agregarMetodoPago() {
+    this.mensajeErrorMetodosPago = '';
+    if (!this.nuevoMetodoPago.nombre.trim()) {
+      this.mensajeErrorMetodosPago = '❌ El nombre es obligatorio.';
+      this.cdr.detectChanges();
+      return;
+    }
+    try {
+      const nuevo = await this.supabase.createMetodoPago(
+        this.nuevoMetodoPago.nombre.trim(),
+        this.nuevoMetodoPago.emoji.trim()
+      );
+      this.metodosPago.push(nuevo);
+      this.mostrarFormMetodoPago = false;
+      this.nuevoMetodoPago = { nombre: '', emoji: '' };
+      this.mostrarMensaje('✅ Método de pago agregado.', 'metodosPago');
+    } catch (e) {
+      this.mensajeErrorMetodosPago = '❌ Error al agregar.';
+      this.cdr.detectChanges();
+    }
+  }
+
+  async guardarMetodoPago(metodo: any) {
+    try {
+      await this.supabase.updateMetodoPago(metodo.id, {
+        nombre: metodo.nombre,
+        emoji: metodo.emoji,
+        activo: metodo.activo
+      });
+      metodo.editando = false;
+      this.mostrarMensaje('✅ Método actualizado.', 'metodosPago');
+    } catch (e) {
+      this.mensajeErrorMetodosPago = '❌ Error al actualizar.';
+      this.cdr.detectChanges();
+    }
+  }
+
+  cancelarMetodoPago(metodo: any) {
+    metodo.nombre = metodo._nombre_orig;
+    metodo.emoji = metodo._emoji_orig;
+    metodo.editando = false;
+    this.mensajeErrorMetodosPago = '';
+  }
+
+  async toggleMetodoPago(metodo: any) {
+    metodo.activo = !metodo.activo;
+    await this.supabase.updateMetodoPago(metodo.id, { activo: metodo.activo });
+    this.cdr.detectChanges();
+  }
+
+  async eliminarMetodoPago(id: number) {
+    if (!confirm('¿Eliminar este método de pago?')) return;
+    try {
+      await this.supabase.deleteMetodoPago(id);
+      this.metodosPago = this.metodosPago.filter(m => m.id !== id);
+      this.cdr.detectChanges();
+    } catch (e) {
+      this.mensajeErrorMetodosPago = '❌ Error al eliminar.';
+      this.cdr.detectChanges();
+    }
+  }
+
   // ── CONTRASEÑA ─────────────────────────────────────────────
 
   get cambiosHoy(): number {
@@ -479,17 +552,19 @@ export class ConfiguracionComponent implements OnInit {
 
   // ── UTILS ──────────────────────────────────────────────────
 
-  mostrarMensaje(msg: string, seccion: 'datos' | 'horarios' | 'servicios' | 'diasCerrados') {
+  mostrarMensaje(msg: string, seccion: 'datos' | 'horarios' | 'servicios' | 'diasCerrados' | 'metodosPago') {
     if (seccion === 'datos') { this.mensajeDatos = msg; this.mensajeErrorDatos = ''; }
     else if (seccion === 'horarios') { this.mensajeHorarios = msg; this.mensajeErrorHorarios = ''; }
     else if (seccion === 'servicios') { this.mensajeServicios = msg; this.mensajeErrorServicios = ''; }
-    else { this.mensajeDiasCerrados = msg; this.mensajeErrorDiasCerrados = ''; }
+    else if (seccion === 'diasCerrados') { this.mensajeDiasCerrados = msg; this.mensajeErrorDiasCerrados = ''; }
+    else { this.mensajeMetodosPago = msg; this.mensajeErrorMetodosPago = ''; }
     this.cdr.detectChanges();
     setTimeout(() => {
       if (seccion === 'datos') this.mensajeDatos = '';
       else if (seccion === 'horarios') this.mensajeHorarios = '';
       else if (seccion === 'servicios') this.mensajeServicios = '';
-      else this.mensajeDiasCerrados = '';
+      else if (seccion === 'diasCerrados') this.mensajeDiasCerrados = '';
+      else this.mensajeMetodosPago = '';
       this.cdr.detectChanges();
     }, 3000);
   }
