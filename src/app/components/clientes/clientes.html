@@ -73,9 +73,12 @@
         <div class="turnos-lista">
           <div *ngFor="let turno of turnosCliente" class="turno-item">
             <div class="turno-fecha">{{ formatearFecha(turno.fecha) }} a las {{ turno.hora?.slice(0,5) || turno.hora_inicio?.slice(0,5) }}</div>
-            <div class="turno-servicio">{{ turno.servicio_nombre }}</div>
+            <div class="turno-servicio">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</div>
             <div class="turno-footer">
-              <span class="turno-precio">${{ turno.precio | number }}</span>
+              <span class="turno-precio">
+                ${{ (turno.estado === 'atendido' && turno.precio_final ? turno.precio_final : turno.precio) | number }}
+                <span *ngIf="turno.estado === 'atendido' && turno.metodo_pago"> - {{ turno.metodo_pago }}</span>
+              </span>
               <span class="badge" [ngClass]="turno.estado">{{ turno.estado }}</span>
             </div>
           </div>
