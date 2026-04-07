@@ -268,6 +268,67 @@
   &:hover { background: #2563eb; }
 }
 
+// Fusionar
+.btn-fusionar {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  color: #64748b;
+  cursor: pointer;
+  &:hover { background: #f8fafc; border-color: #cbd5e1; }
+}
+
+.fusionar-aviso {
+  font-size: 0.83rem;
+  color: #64748b;
+  margin-bottom: 10px;
+}
+
+.fusionar-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.fusionar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  &:hover { background: #f8fafc; }
+  &.seleccionado { background: #eff6ff; border-color: #3b82f6; }
+}
+
+.check-sel {
+  margin-left: auto;
+  color: #3b82f6;
+  font-weight: 700;
+}
+
+.fusionar-acciones {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-cancelar-sm {
+  padding: 8px 14px;
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #64748b;
+  cursor: pointer;
+  &:hover { background: #f8fafc; }
+}
+
 // Turnos
 .turnos-lista {
   display: flex;

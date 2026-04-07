@@ -19,6 +19,9 @@ export class ClientesComponent implements OnInit {
   nuevoTelefono = '';
   cargandoTurnos = false;
   busqueda = '';
+  mostrandoFusionar = false;
+  busquedaFusionar = '';
+  clienteParaFusionar: any = null;
 
   diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
@@ -142,6 +145,41 @@ export class ClientesComponent implements OnInit {
       this.mostrarMensaje('✅ Teléfono actualizado.');
     } catch (e) {
       this.mostrarError('❌ Error al actualizar. Puede que ya exista ese número.');
+    }
+  }
+
+  get clientesParaFusionar(): any[] {
+    if (!this.busquedaFusionar) return [];
+    const q = this.busquedaFusionar.toLowerCase();
+    return this.clientes.filter(c =>
+      c.id !== this.clienteSeleccionado?.id &&
+      (c.nombre?.toLowerCase().includes(q) ||
+      c.telefonos?.some((t: any) => t.telefono?.includes(q)))
+    );
+  }
+
+  async confirmarFusion() {
+    if (!this.clienteParaFusionar) return;
+    const confirmado = confirm(
+      `¿Fusionar "${this.clienteParaFusionar.nombre}" dentro de "${this.clienteSeleccionado.nombre}"?\n\nLos turnos y teléfonos de "${this.clienteParaFusionar.nombre}" pasarán al principal y el duplicado se eliminará.`
+    );
+    if (!confirmado) return;
+
+    try {
+      await this.supabase.fusionarClientes(
+        this.clienteSeleccionado.id,
+        this.clienteParaFusionar.id
+      );
+      // Eliminar duplicado de la lista local
+      this.clientes = this.clientes.filter(c => c.id !== this.clienteParaFusionar.id);
+      // Recargar teléfonos y turnos del principal
+      await this.seleccionarCliente(this.clienteSeleccionado);
+      this.mostrandoFusionar = false;
+      this.busquedaFusionar = '';
+      this.clienteParaFusionar = null;
+      this.mostrarMensaje('✅ Clientes fusionados correctamente.');
+    } catch (e) {
+      this.mostrarError('❌ Error al fusionar los clientes.');
     }
   }
 
