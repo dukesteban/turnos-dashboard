@@ -116,6 +116,35 @@ export class ClientesComponent implements OnInit {
     }
   }
 
+  async marcarPrincipal(tel: any) {
+    if (!confirm(`¿Marcar ${tel.telefono} como principal? Se actualizará en todos los turnos.`)) return;
+    try {
+      await this.supabase.marcarTelefonoPrincipal(this.clienteSeleccionado.id, tel.id);
+      // Actualizar localmente
+      this.clienteSeleccionado.telefonos.forEach((t: any) => t.principal = t.id === tel.id);
+      // Actualizar teléfono en turnos
+      await this.supabase.actualizarTelefonoEnTurnos(this.clienteSeleccionado.id, tel.telefono);
+      this.mostrarMensaje('✅ Teléfono principal actualizado.');
+    } catch (e) {
+      this.mostrarError('❌ Error al cambiar el teléfono principal.');
+    }
+  }
+
+  async guardarTelefono(tel: any) {
+    if (!tel._telEditando?.trim()) return;
+    try {
+      await this.supabase.editarTelefono(tel.id, tel._telEditando.trim());
+      tel.telefono = tel._telEditando.trim();
+      tel.editandoTel = false;
+      if (tel.principal) {
+        await this.supabase.actualizarTelefonoEnTurnos(this.clienteSeleccionado.id, tel.telefono);
+      }
+      this.mostrarMensaje('✅ Teléfono actualizado.');
+    } catch (e) {
+      this.mostrarError('❌ Error al actualizar. Puede que ya exista ese número.');
+    }
+  }
+
   formatearFecha(fecha: string): string {
     if (!fecha) return '';
     const f = new Date(fecha + 'T12:00:00');

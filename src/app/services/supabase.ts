@@ -407,6 +407,25 @@ export class SupabaseService {
     if (error) throw error;
   }
 
+  async marcarTelefonoPrincipal(clienteId: number, telId: number) {
+    // Desmarcar todos
+    await this.supabase.from('telefonos')
+      .update({ principal: false })
+      .eq('cliente_id', clienteId);
+    // Marcar el nuevo
+    const { error } = await this.supabase.from('telefonos')
+      .update({ principal: true })
+      .eq('id', telId);
+    if (error) throw error;
+  }
+
+  async editarTelefono(id: number, telefono: string) {
+    const { error } = await this.supabase.from('telefonos')
+      .update({ telefono })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
   async crearCliente(nombre: string) {
     const { data, error } = await this.supabase
       .from('clientes')
