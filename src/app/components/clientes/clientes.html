@@ -86,6 +86,49 @@
         </div>
       </div>
 
+      <!-- Fusionar -->
+      <div class="detalle-bloque">
+        <h4>Fusionar cliente</h4>
+
+        <div *ngIf="!mostrandoFusionar">
+          <button class="btn-fusionar" (click)="mostrandoFusionar = true">🔗 Fusionar con duplicado...</button>
+        </div>
+
+        <div *ngIf="mostrandoFusionar">
+          <p class="fusionar-aviso">
+            Este cliente es el <strong>principal</strong>. Elegí el duplicado a eliminar.
+          </p>
+          <input type="text" class="buscador" [(ngModel)]="busquedaFusionar"
+            placeholder="🔍 Buscar duplicado por nombre o teléfono..." />
+
+          <div class="fusionar-lista">
+            <div *ngFor="let c of clientesParaFusionar"
+              class="fusionar-item"
+              [class.seleccionado]="clienteParaFusionar?.id === c.id"
+              (click)="clienteParaFusionar = c">
+              <div class="cliente-avatar">{{ c.nombre?.charAt(0)?.toUpperCase() }}</div>
+              <div class="cliente-info">
+                <div class="cliente-nombre">{{ c.nombre }}</div>
+                <div class="cliente-tel">{{ c.telefonos?.[0]?.telefono || 'Sin teléfono' }}</div>
+              </div>
+              <span *ngIf="clienteParaFusionar?.id === c.id" class="check-sel">✓</span>
+            </div>
+            <div *ngIf="busquedaFusionar && clientesParaFusionar.length === 0" class="vacio-sm">
+              No se encontraron clientes
+            </div>
+          </div>
+
+          <div class="fusionar-acciones">
+            <button class="btn-primary-sm" [disabled]="!clienteParaFusionar" (click)="confirmarFusion()">
+              🔗 Confirmar fusión
+            </button>
+            <button class="btn-cancelar-sm" (click)="mostrandoFusionar = false; busquedaFusionar = ''; clienteParaFusionar = null">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Turnos -->
       <div class="detalle-bloque">
         <h4>Historial de turnos</h4>

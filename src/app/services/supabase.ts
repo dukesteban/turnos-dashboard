@@ -381,6 +381,68 @@ export class SupabaseService {
     return data;
   }
 
+  async fusionarClientes(principalId: number, duplicadoId: number) {
+    // 1. Obtener teléfonos del principal para evitar duplicados
+    const { data: telsPrincipal } = await this.supabase
+      .from('telefonos')
+      .select('telefono')
+      .eq('cliente_id', principalId);
+
+    const numerosExistentes = new Set(telsPrincipal?.map((t: any) => t.telefono) || []);
+
+    // 2. Obtener teléfonos del duplicado
+    const { data: telsDuplicado } = await this.supabase
+      .from('telefonos')
+      .select('*')
+      .eq('cliente_id', duplicadoId);
+
+    // 3. Mover solo los teléfonos que no existen ya en el principal
+    for (const tel of telsDuplicado || []) {
+      if (!numerosExistentes.has(tel.telefono)) {
+        await this.supabase
+          .from('telefonos')
+          .update({ cliente_id: principalId, principal: false })
+          .eq('id', tel.id);
+      }
+    }
+
+    // 3b. Eliminar los teléfonos duplicados que quedaron en el duplicado
+    await this.supabase
+      .from('telefonos')
+      .delete()
+      .eq('cliente_id', duplicadoId);
+
+    // 4. Mover todos los turnos del duplicado al principal
+    const { data: clientePrincipal } = await this.supabase
+      .from('clientes')
+      .select('nombre')
+      .eq('id', principalId)
+      .single();
+
+    const { data: telPrincipal } = await this.supabase
+      .from('telefonos')
+      .select('telefono')
+      .eq('cliente_id', principalId)
+      .eq('principal', true)
+      .single();
+
+    await this.supabase
+      .from('turnos')
+      .update({
+        cliente_id: principalId,
+        cliente_nombre: clientePrincipal?.nombre,
+        cliente_telefono: telPrincipal?.telefono || ''
+      })
+      .eq('cliente_id', duplicadoId);
+
+    // 5. Eliminar el duplicado
+    const { error } = await this.supabase
+      .from('clientes')
+      .delete()
+      .eq('id', duplicadoId);
+    if (error) throw error;
+  }
+
   async agregarTelefono(clienteId: number, telefono: string) {
     const { data, error } = await this.supabase
       .from('telefonos')
