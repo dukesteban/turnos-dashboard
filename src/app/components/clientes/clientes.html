@@ -49,16 +49,37 @@
       <!-- Teléfonos -->
       <div class="detalle-bloque">
         <h4>Teléfonos</h4>
-        <div class="telefonos-lista">
-          <div *ngFor="let tel of clienteSeleccionado.telefonos" class="telefono-item">
-            <span>{{ tel.telefono }}</span>
-            <span *ngIf="tel.principal" class="badge-principal">principal</span>
-            <button class="btn-icon-sm"
-              *ngIf="!tel.principal"
-              (click)="eliminarTelefono(tel)" title="Eliminar">🗑️</button>
+          <div class="telefonos-lista">
+            <div *ngFor="let tel of clienteSeleccionado.telefonos" class="telefono-item">
+              
+              <!-- Vista normal -->
+              <ng-container *ngIf="!tel.editandoTel">
+                <span class="tel-numero">{{ tel.telefono }}</span>
+                <span *ngIf="tel.principal" class="badge-principal">principal</span>
+                <div class="tel-acciones">
+                  <button class="btn-icon-sm" title="Editar"
+                    (click)="tel._telEditando = tel.telefono; tel.editandoTel = true">✏️</button>
+                  <button class="btn-icon-sm" title="Hacer principal"
+                    *ngIf="!tel.principal"
+                    (click)="marcarPrincipal(tel)">⭐</button>
+                  <button class="btn-icon-sm" title="Eliminar"
+                    *ngIf="!tel.principal"
+                    (click)="eliminarTelefono(tel)">🗑️</button>
+                </div>
+              </ng-container>
+
+              <!-- Vista edición -->
+              <ng-container *ngIf="tel.editandoTel">
+                <input type="text" [(ngModel)]="tel._telEditando" class="input-tel" />
+                <div class="tel-acciones">
+                  <button class="btn-icon-sm" (click)="guardarTelefono(tel)" title="Guardar">💾</button>
+                  <button class="btn-icon-sm" (click)="tel.editandoTel = false" title="Cancelar">↩️</button>
+                </div>
+              </ng-container>
+
+            </div>
+            <div *ngIf="!clienteSeleccionado.telefonos?.length" class="vacio-sm">Sin teléfonos</div>
           </div>
-          <div *ngIf="!clienteSeleccionado.telefonos?.length" class="vacio-sm">Sin teléfonos</div>
-        </div>
         <div class="agregar-tel">
           <input type="text" [(ngModel)]="nuevoTelefono" placeholder="Agregar teléfono..." class="input-tel" />
           <button class="btn-primary-sm" (click)="agregarTelefono()">➕ Agregar</button>
