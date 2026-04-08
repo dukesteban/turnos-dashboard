@@ -232,6 +232,11 @@
   white-space: nowrap;
 }
 
+.barra-col.clickeable {
+  cursor: pointer;
+  &:hover .barra { filter: brightness(0.85); }
+}
+
 // POR SERVICIO
 .servicios-lista {
   display: flex;

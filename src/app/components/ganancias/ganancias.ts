@@ -206,4 +206,13 @@ export class GananciasComponent implements OnInit {
       }
     }, 800);
   }
+
+  irADia(label: string) {
+    if (this.vista !== 'mes') return;
+    const dia = parseInt(label);
+    const nueva = new Date(this.fechaActual.getFullYear(), this.fechaActual.getMonth(), dia);
+    this.fechaActual = nueva;
+    this.vista = 'dia';
+    this.cargarDatos();
+  }
 }
