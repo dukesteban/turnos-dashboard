@@ -52,13 +52,6 @@ export class ClientesComponent implements OnInit {
     this.cargandoTurnos = true;
     this.turnosCliente = await this.supabase.getTurnosCliente(cliente.id);
     this.cargandoTurnos = false;
-
-    // Ordenar: principal primero
-    if (this.clienteSeleccionado.telefonos) {
-      this.clienteSeleccionado.telefonos = [...this.clienteSeleccionado.telefonos]
-        .sort((a: any, b: any) => (b.principal ? 1 : 0) - (a.principal ? 1 : 0));
-    }
-
     this.cdr.detectChanges();
   }
 

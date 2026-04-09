@@ -351,7 +351,8 @@ export class SupabaseService {
     const { data, error } = await this.supabase
       .from('clientes')
       .select('*, telefonos(*)')
-      .order('nombre', { ascending: true });
+      .order('nombre', { ascending: true })
+      .order('principal', { ascending: false, referencedTable: 'telefonos' });
     if (error) throw error;
     return data;
   }
