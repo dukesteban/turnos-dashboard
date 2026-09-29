@@ -92,7 +92,12 @@ export class ConfiguracionComponent implements OnInit {
     this.recordatorioCuando = config.find((c: any) => c.clave === 'recordatorio_cuando')?.valor || 'dia_anterior';
     this.recordatorioHora = config.find((c: any) => c.clave === 'recordatorio_hora')?.valor || '08:00';
     this.diasCerrados = await this.supabase.getDiasCerrados();
-    this.horarios = await this.supabase.getHorarios();
+    const horariosDB = await this.supabase.getHorarios();
+    this.horarios = (horariosDB || []).map((h: any) => ({
+      ...h,
+      hora_inicio: h.hora_inicio?.slice(0, 5) || '',
+      hora_fin: h.hora_fin?.slice(0, 5) || ''
+    }));
     this.servicios = await this.supabase.getServicios();
     this.metodosPago = await this.supabase.getMetodosPago();
     this.cdr.detectChanges();
@@ -222,10 +227,25 @@ export class ConfiguracionComponent implements OnInit {
 
   // ── HORARIOS ───────────────────────────────────────────────
 
+  private aMinutos(horaStr: string): number {
+    if (!horaStr) return 0;
+    const parts = horaStr.split(':');
+    return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+  }
+
   async toggleHorario(horario: any) {
     this.mensajeErrorHorarios = '';
-    horario.activo = !horario.activo;
+    const nuevoEstado = !horario.activo;
+    if (nuevoEstado) {
+      if (this.seSuperpone({ ...horario, activo: true }, this.horarios)) {
+        this.mensajeErrorHorarios = '⚠️ No se puede activar porque se superpone con otro horario activo.';
+        this.cdr.detectChanges();
+        return;
+      }
+    }
+    horario.activo = nuevoEstado;
     await this.supabase.updateHorario(horario.id, { activo: horario.activo });
+    this.cdr.detectChanges();
   }
 
   toggleFormHorario() {
@@ -244,18 +264,23 @@ export class ConfiguracionComponent implements OnInit {
       return;
     }
     try {
-      const horarios = await this.supabase.getHorarios();
-      if (this.seSuperpone(horario, horarios)) {
-        this.mensajeErrorHorarios = '⚠️ El rango horario se superpone con otro existente.';
+      const horariosDB = await this.supabase.getHorarios();
+      if (this.seSuperpone(horario, horariosDB)) {
+        this.mensajeErrorHorarios = '⚠️ El rango horario se superpone con otro activo existente.';
         this.cdr.detectChanges();
         return;
       }
 
+      const horaInicioNorm = horario.hora_inicio.slice(0, 5);
+      const horaFinNorm = horario.hora_fin.slice(0, 5);
+
       await this.supabase.updateHorario(horario.id, {
-        hora_inicio: horario.hora_inicio,
-        hora_fin: horario.hora_fin,
+        hora_inicio: horaInicioNorm,
+        hora_fin: horaFinNorm,
         activo: horario.activo
       });
+      horario.hora_inicio = horaInicioNorm;
+      horario.hora_fin = horaFinNorm;
       horario.editando = false;
       this.mostrarMensaje('✅ Horario actualizado.', 'horarios');
     } catch (e) {
@@ -279,15 +304,23 @@ export class ConfiguracionComponent implements OnInit {
       return;
     }
     try {
-      const horarios = await this.supabase.getHorarios();
-      if (this.seSuperpone(this.nuevoHorario, horarios)) {
-        this.mensajeErrorHorarios = '⚠️ El rango horario se superpone con otro existente.';
+      const horariosDB = await this.supabase.getHorarios();
+      if (this.seSuperpone(this.nuevoHorario, horariosDB)) {
+        this.mensajeErrorHorarios = '⚠️ El rango horario se superpone con otro activo existente.';
         this.cdr.detectChanges();
         return;
       }
 
-      const nuevo = await this.supabase.createHorario(this.nuevoHorario);
-      this.horarios.push(nuevo);
+      const nuevo = await this.supabase.createHorario({
+        ...this.nuevoHorario,
+        hora_inicio: this.nuevoHorario.hora_inicio.slice(0, 5),
+        hora_fin: this.nuevoHorario.hora_fin.slice(0, 5)
+      });
+      this.horarios.push({
+        ...nuevo,
+        hora_inicio: nuevo.hora_inicio?.slice(0, 5) || this.nuevoHorario.hora_inicio.slice(0, 5),
+        hora_fin: nuevo.hora_fin?.slice(0, 5) || this.nuevoHorario.hora_fin.slice(0, 5)
+      });
       this.mostrarFormHorario = false;
       this.nuevoHorario = { dia_semana: 1, hora_inicio: '08:00', hora_fin: '12:00', activo: true };
       this.mostrarMensaje('✅ Horario agregado.', 'horarios');
@@ -303,7 +336,7 @@ export class ConfiguracionComponent implements OnInit {
 
   validarHorario(inicio: string, fin: string): boolean {
     if (!inicio || !fin) return false;
-    return inicio < fin;
+    return this.aMinutos(inicio) < this.aMinutos(fin);
   }
 
   cancelarHorario(horario: any) {
@@ -314,11 +347,15 @@ export class ConfiguracionComponent implements OnInit {
   }
 
   seSuperpone(horario: any, otros: any[]): boolean {
+    if (!horario.activo) return false;
+    const ini = this.aMinutos(horario.hora_inicio);
+    const fin = this.aMinutos(horario.hora_fin);
     return otros.some(h =>
       Number(h.dia_semana) === Number(horario.dia_semana) &&
       h.id !== horario.id &&
-      horario.hora_inicio < h.hora_fin &&
-      horario.hora_fin > h.hora_inicio
+      Boolean(h.activo) &&
+      ini < this.aMinutos(h.hora_fin) &&
+      fin > this.aMinutos(h.hora_inicio)
     );
   }
 
