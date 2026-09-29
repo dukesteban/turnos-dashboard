@@ -240,6 +240,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  toMinutos(horaStr: string): number {
+    if (!horaStr) return 0;
+    const parts = horaStr.split(':');
+    return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+  }
+
   async confirmarEditarTurno() {
     this.errorEditarTurno = '';
     if (!this.nuevaFecha || !this.nuevaHora || !this.nuevoServicioId) {
@@ -303,7 +309,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       const diaISO = new Date(this.nuevaFecha + 'T12:00:00').getDay();
       const horariosDia = this.horarios.filter((hor: any) => hor.dia_semana === diaISO && hor.activo);
       const dentroHorario = horariosDia.some((hor: any) => {
-        return this.nuevaHora >= hor.hora_inicio.slice(0,5) && horaFin <= hor.hora_fin.slice(0,5);
+        const horIni = this.toMinutos(hor.hora_inicio);
+        const horFin = this.toMinutos(hor.hora_fin);
+        return this.toMinutos(this.nuevaHora) >= horIni && this.toMinutos(horaFin) <= horFin;
       });
       if (!dentroHorario) {
         this.errorEditarTurno = 'El horario está fuera del horario de atención.';
@@ -464,9 +472,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
       // Validar horario de atención
       const diaISO = new Date(this.nuevoTurnoFecha + 'T12:00:00').getDay();
       const horariosDia = this.horarios.filter((hor: any) => hor.dia_semana === diaISO && hor.activo);
-      const dentroHorario = horariosDia.some((hor: any) =>
-        this.nuevoTurnoHora >= hor.hora_inicio.slice(0,5) && horaFin <= hor.hora_fin.slice(0,5)
-      );
+      const dentroHorario = horariosDia.some((hor: any) => {
+        const horIni = this.toMinutos(hor.hora_inicio);
+        const horFin = this.toMinutos(hor.hora_fin);
+        return this.toMinutos(this.nuevoTurnoHora) >= horIni && this.toMinutos(horaFin) <= horFin;
+      });
       if (!dentroHorario) {
         this.errorNuevoTurno = 'El horario está fuera del horario de atención.';
         this.guardandoNuevoTurno = false;

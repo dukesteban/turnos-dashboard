@@ -57,6 +57,7 @@ export class AgendaComponent implements OnInit, OnDestroy {
   mostrarPopupPostergacion = false;
   motivoPostergacion = '';
   enviandoMensajePostergacion = false;
+  private subHorarios: any;
   _nuevaFechaPostergacion = '';
   _nuevaHoraPostergacion = '';
   _nuevoServicioPostergacion = '';
@@ -72,28 +73,80 @@ export class AgendaComponent implements OnInit, OnDestroy {
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
     });
+    this.subHorarios = this.supabase.suscribirHorarios(() => {
+      this.cargarHorarios();
+    });
     this.cdr.detectChanges();
   }
 
   ngOnDestroy() {
     this.subscription?.unsubscribe();
+    this.subHorarios?.unsubscribe();
+  }
+
+  toMinutos(horaStr: string): number {
+    if (!horaStr) return 0;
+    const parts = horaStr.split(':');
+    return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
   }
 
   async cargarHorarios() {
     this.horarios = await this.supabase.getHorarios();
-    const activos = this.horarios.filter((h: any) => h.activo);
+    const activos = (this.horarios || []).filter((h: any) => h.activo);
     if (activos.length > 0) {
-      this.horaInicio = Math.min(...activos.map((h: any) => parseInt(h.hora_inicio.slice(0, 2))));
-      this.horaFin = Math.max(...activos.map((h: any) => parseInt(h.hora_fin.slice(0, 2))));
-      this.diaInicio = Math.min(...activos.map((h: any) => h.dia_semana));
-      this.diaFin = Math.max(...activos.map((h: any) => h.dia_semana));
+      const inicios = activos.map((h: any) => {
+        const parts = (h.hora_inicio || '08:00').split(':');
+        return parseInt(parts[0], 10);
+      });
+      const fines = activos.map((h: any) => {
+        const parts = (h.hora_fin || '20:00').split(':');
+        const hora = parseInt(parts[0], 10);
+        const min = parseInt(parts[1] || '0', 10);
+        return min > 0 ? hora + 1 : hora;
+      });
+
+      this.horaInicio = Math.min(...inicios);
+      this.horaFin = Math.max(...fines);
+      this.diaInicio = Math.min(...activos.map((h: any) => Number(h.dia_semana)));
+      this.diaFin = Math.max(...activos.map((h: any) => Number(h.dia_semana)));
+    } else {
+      this.horaInicio = 8;
+      this.horaFin = 20;
+      this.diaInicio = 1;
+      this.diaFin = 6;
     }
+    this.ajustarLimitesConTurnos();
     this.cdr.detectChanges();
   }
 
   async cargarTurnos() {
     this.turnos = await this.supabase.getTurnos();
+    this.ajustarLimitesConTurnos();
     this.cdr.detectChanges();
+  }
+
+  ajustarLimitesConTurnos() {
+    if (!this.turnos?.length) return;
+    this.turnos.forEach(t => {
+      if (t.estado === 'cancelado') return;
+      const hStr = t.hora_inicio || t.hora;
+      if (hStr) {
+        const h = parseInt(hStr.split(':')[0], 10);
+        if (!isNaN(h) && h < this.horaInicio) {
+          this.horaInicio = h;
+        }
+      }
+      const finStr = t.hora_fin;
+      if (finStr) {
+        const parts = finStr.split(':');
+        const h = parseInt(parts[0], 10);
+        const m = parseInt(parts[1] || '0', 10);
+        const finH = m > 0 ? h + 1 : h;
+        if (!isNaN(finH) && finH > this.horaFin) {
+          this.horaFin = finH;
+        }
+      }
+    });
   }
 
   esDiaCerrado(dia: Date): boolean {
@@ -443,7 +496,9 @@ export class AgendaComponent implements OnInit, OnDestroy {
       const diaISO = new Date(this.nuevaFecha + 'T12:00:00').getDay();
       const horariosDia = this.horarios.filter((hor: any) => hor.dia_semana === diaISO && hor.activo);
       const dentroHorario = horariosDia.some((hor: any) => {
-        return this.nuevaHora >= hor.hora_inicio.slice(0,5) && horaFin <= hor.hora_fin.slice(0,5);
+        const horIni = this.toMinutos(hor.hora_inicio);
+        const horFin = this.toMinutos(hor.hora_fin);
+        return this.toMinutos(this.nuevaHora) >= horIni && this.toMinutos(horaFin) <= horFin;
       });
       if (!dentroHorario) {
         this.errorEditarTurno = 'El horario está fuera del horario de atención.';

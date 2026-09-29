@@ -24,6 +24,16 @@ export class SupabaseService {
       )
       .subscribe();
   }
+
+  suscribirHorarios(callback: () => void) {
+    return this.supabase
+      .channel('horarios-cambios')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'horarios_atencion' },
+        () => callback()
+      )
+      .subscribe();
+  }
   
   // USUARIOS
   async verificarUsuario(usuario: string, passwordHash: string): Promise<boolean> {

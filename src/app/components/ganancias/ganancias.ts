@@ -17,11 +17,31 @@ export class GananciasComponent implements OnInit {
   cargando = false;
   @ViewChild('graficoRef') graficoRef!: ElementRef;
 
+  horaInicio = 8;
+  horaFin = 20;
+
   constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
 
   async ngOnInit() {
+    await this.cargarHorarios();
     await this.cargarDatos();
     this.cdr.detectChanges();
+  }
+
+  async cargarHorarios() {
+    const horarios = await this.supabase.getHorarios();
+    const activos = (horarios || []).filter((h: any) => h.activo);
+    if (activos.length > 0) {
+      const inicios = activos.map((h: any) => parseInt((h.hora_inicio || '08:00').split(':')[0], 10));
+      const fines = activos.map((h: any) => {
+        const parts = (h.hora_fin || '20:00').split(':');
+        const hora = parseInt(parts[0], 10);
+        const min = parseInt(parts[1] || '0', 10);
+        return min > 0 ? hora + 1 : hora;
+      });
+      this.horaInicio = Math.min(...inicios);
+      this.horaFin = Math.max(...fines);
+    }
   }
 
   async cargarDatos() {
@@ -101,11 +121,18 @@ export class GananciasComponent implements OnInit {
   get datosGrafico(): { label: string, total: number, cantidad: number }[] {
     if (this.vista === 'dia') {
       const horas: { [key: string]: { total: number, cantidad: number } } = {};
-      for (let h = 8; h <= 20; h++) {
+      let minH = this.horaInicio;
+      let maxH = this.horaFin;
+      this.turnos.forEach(t => {
+        const h = parseInt(t.hora_inicio?.slice(0, 2) || t.hora?.slice(0, 2) || '0', 10);
+        if (h && h < minH) minH = h;
+        if (h && h > maxH) maxH = h;
+      });
+      for (let h = minH; h <= maxH; h++) {
         horas[`${h}:00`] = { total: 0, cantidad: 0 };
       }
       this.turnos.forEach(t => {
-        const h = parseInt(t.hora_inicio?.slice(0, 2) || t.hora?.slice(0, 2) || '0');
+        const h = parseInt(t.hora_inicio?.slice(0, 2) || t.hora?.slice(0, 2) || '0', 10);
         const key = `${h}:00`;
         if (horas[key]) {
           horas[key].total += (t.estado === 'atendido' && t.precio_final ? t.precio_final : t.precio) || 0;
