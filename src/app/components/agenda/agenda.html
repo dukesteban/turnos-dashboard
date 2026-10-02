@@ -142,7 +142,7 @@
       <div *ngIf="!modoEditarTurno && !modoAtendido">
         <div class="popup-body">
           <div class="detalle-bloque">
-            <div class="popup-fila"><span class="popup-label">Cliente</span><span>{{ turnoSeleccionado.cliente_nombre }}<span *ngIf="!turnoSeleccionado.cliente_telefono" class="sin-telefono">(Sin teléfono registrado)</span></span></div>
+            <div class="popup-fila"><span class="popup-label">Cliente</span><span>{{ turnoSeleccionado.cliente_nombre }}<span *ngIf="!telefonoDe(turnoSeleccionado)" class="sin-telefono">(Sin teléfono registrado)</span></span></div>
             <div class="popup-fila"><span class="popup-label">Servicio</span>
               <span>{{ turnoSeleccionado.estado === 'atendido' && turnoSeleccionado.servicio_nombre_final ? turnoSeleccionado.servicio_nombre_final : turnoSeleccionado.servicio_nombre }}</span>
             </div>

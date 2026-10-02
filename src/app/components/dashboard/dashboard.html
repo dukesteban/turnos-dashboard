@@ -53,7 +53,7 @@
         <tbody>
           <tr *ngFor="let turno of turnosHoy" [class.vencido]="esVencido(turno)" (click)="abrirPopup(turno)" style="cursor:pointer">
             <td>{{ turno.hora?.slice(0,5) }}</td>
-            <td [style.color]="!turno.cliente_telefono ? '#dc2626' : ''" >{{ turno.cliente_nombre }}</td>
+            <td [style.color]="!telefonoDe(turno) ? '#dc2626' : ''" >{{ turno.cliente_nombre }}</td>
             <td class="ocultar-movil">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</td>
             <td class="celda-empleado ocultar-xs">{{ nombreEmpleadoDeTurno(turno) }}</td>
             <td class="celda-puesto">{{ nombrePuestoDeTurno(turno) }}</td>
@@ -108,7 +108,7 @@
           <tr *ngFor="let turno of turnosFiltrados" [class.vencido]="esVencido(turno)" (click)="abrirPopup(turno)" style="cursor:pointer">
             <td>{{ formatearFechaSinAnio(turno.fecha) }}</td>
             <td>{{ turno.hora?.slice(0,5) }}</td>
-            <td [style.color]="!turno.cliente_telefono ? '#dc2626' : ''" >{{ turno.cliente_nombre }}</td>
+            <td [style.color]="!telefonoDe(turno) ? '#dc2626' : ''" >{{ turno.cliente_nombre }}</td>
             <td class="ocultar-movil">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</td>
             <td class="celda-empleado ocultar-xs">{{ nombreEmpleadoDeTurno(turno) }}</td>
             <td class="celda-puesto">{{ nombrePuestoDeTurno(turno) }}</td>
@@ -139,7 +139,7 @@
       <div *ngIf="!modoEditarTurno && !modoAtendido">
         <div class="popup-body">
           <div class="detalle-bloque">
-            <div class="popup-fila"><span class="popup-label">Cliente</span><span>{{ turnoSeleccionado.cliente_nombre }}<span *ngIf="!turnoSeleccionado.cliente_telefono" class="sin-telefono">(Sin teléfono registrado)</span></span></div>
+            <div class="popup-fila"><span class="popup-label">Cliente</span><span>{{ turnoSeleccionado.cliente_nombre }}<span *ngIf="!telefonoDe(turnoSeleccionado)" class="sin-telefono">(Sin teléfono registrado)</span></span></div>
             <div class="popup-fila"><span class="popup-label">Servicio</span>
               <span>{{ turnoSeleccionado.estado === 'atendido' && turnoSeleccionado.servicio_nombre_final ? turnoSeleccionado.servicio_nombre_final : turnoSeleccionado.servicio_nombre }}</span>
             </div>

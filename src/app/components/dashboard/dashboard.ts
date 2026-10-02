@@ -38,6 +38,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   empleados: any[] = [];
   puestos: any[] = [];
   ausencias: any[] = [];
+  /** Telefono ACTUAL por cliente. El del turno es un snapshot y puede estar viejo. */
+  telefonosPorCliente: Record<number, string> = {};
+
+  /** Telefono vigente del cliente de un turno. */
+  telefonoDe(turno: any): string | null {
+    if (!turno) return null;
+    const actual = turno.cliente_id ? this.telefonosPorCliente[turno.cliente_id] : null;
+    return actual || turno.cliente_telefono || null;
+  }
   /** Lista filtrada para el form de reprogramar (no pisa this.empleados). */
   empleadosReprogramar: any[] = [];
   /** El empleado elegido NO puede trabajar esa fecha/hora (se muestra con aviso). */
@@ -121,6 +130,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.empleados = await this.supabase.getEmpleados();
     this.puestos = await this.supabase.getPuestos();
     this.ausencias = await this.supabase.getAusencias();
+    this.telefonosPorCliente = await this.supabase.getTelefonosPorCliente();
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
     });
@@ -763,7 +773,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const telefono = this.clienteSeleccionadoNuevo.telefonos?.[0]?.telefono || '';
+      // Sin teléfono = NULL (la columna ya no es NOT NULL); '' sería un 3er estado.
+      const telefono = this.clienteSeleccionadoNuevo.telefonos?.[0]?.telefono || null;
 
       await this.supabase.crearTurnoManual({
         cliente_id: this.clienteSeleccionadoNuevo.id,
@@ -817,7 +828,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   async iniciarCancelacion() {
     if (this.turnoSeleccionado) {
       await this.supabase.updateEstadoTurno(this.turnoSeleccionado.id, 'cancelado');
-      if (this.turnoSeleccionado.cliente_telefono && 
+      if (this.telefonoDe(this.turnoSeleccionado) &&
           confirm('¿Querés enviarle un mensaje de WhatsApp al cliente?')) {
         this.motivoCancelacion = '';
         this.mostrarPopupCancelacion = true;
@@ -833,7 +844,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   async enviarMensajeCancelacion() {
-    if (!this.turnoSeleccionado?.cliente_telefono) return;
+    if (!this.telefonoDe(this.turnoSeleccionado)) return;
     this.enviandoMensaje = true;
     try {
       const fecha = this.formatearFecha(this.turnoSeleccionado.fecha);
@@ -844,7 +855,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
-          to: this.turnoSeleccionado.cliente_telefono,
+          to: this.telefonoDe(this.turnoSeleccionado),
           type: 'text',
           text: { body: mensaje }
         })
@@ -865,7 +876,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   async iniciarNotificacionPostergacion(nuevaFecha: string, nuevaHora: string, nuevoServicio: string) {
-    const telefonoCliente = this.turnoSeleccionado?.cliente_telefono;
+    const telefonoCliente = this.telefonoDe(this.turnoSeleccionado);
     if (!telefonoCliente) {
       this.cerrarPopup();
       await this.cargarTurnos();
@@ -892,7 +903,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
-          to: this.turnoSeleccionado.cliente_telefono,
+          to: this.telefonoDe(this.turnoSeleccionado),
           type: 'text',
           text: { body: mensaje }
         })

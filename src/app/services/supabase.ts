@@ -743,7 +743,7 @@ export class SupabaseService {
       .update({
         cliente_id: principalId,
         cliente_nombre: clientePrincipal?.nombre,
-        cliente_telefono: telPrincipal?.telefono || ''
+        cliente_telefono: telPrincipal?.telefono || null
       })
       .eq('cliente_id', duplicadoId);
 
@@ -765,10 +765,33 @@ export class SupabaseService {
     return data;
   }
 
+  /**
+   * Mapa cliente_id -> teléfono ACTUAL (principal primero).
+   *
+   * `turnos.cliente_telefono` es un snapshot desnormalizado: si al cliente le
+   * cargan el teléfono después de tomar el turno, el snapshot queda viejo y la
+   * UI decía "Sin teléfono" / mandaba WhatsApp al número anterior.
+   * Con este mapa la pantalla siempre lee la fuente de verdad.
+   */
+  async getTelefonosPorCliente(): Promise<Record<number, string>> {
+    const { data, error } = await this.supabase
+      .from('telefonos')
+      .select('cliente_id, telefono, principal');
+    if (error) throw error;
+
+    const mapa: Record<number, string> = {};
+    for (const t of (data || []) as any[]) {
+      if (!t?.cliente_id || !t?.telefono) continue;   // ignora '' y null
+      if (!mapa[t.cliente_id] || t.principal) mapa[t.cliente_id] = t.telefono;
+    }
+    return mapa;
+  }
+
+  /** Propaga el teléfono a los turnos. Queda como respaldo del snapshot. */
   async actualizarTelefonoEnTurnos(clienteId: number, telefono: string) {
     const { error } = await this.supabase
       .from('turnos')
-      .update({ cliente_telefono: telefono })
+      .update({ cliente_telefono: telefono || null })
       .eq('cliente_id', clienteId);
     if (error) throw error;
   }

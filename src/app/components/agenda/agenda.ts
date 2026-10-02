@@ -29,6 +29,15 @@ export class AgendaComponent implements OnInit, OnDestroy {
   // Puestos de trabajo (columnas de la agenda)
   puestos: any[] = [];
   ausencias: any[] = [];
+  /** Telefono ACTUAL por cliente. El del turno es un snapshot y puede estar viejo. */
+  telefonosPorCliente: Record<number, string> = {};
+
+  /** Telefono vigente del cliente de un turno. */
+  telefonoDe(turno: any): string | null {
+    if (!turno) return null;
+    const actual = turno.cliente_id ? this.telefonosPorCliente[turno.cliente_id] : null;
+    return actual || turno.cliente_telefono || null;
+  }
   /** Cache de jornadas por empleado para no consultarla por celda de la agenda. */
   jornadas: Record<number, any> = {};
   /** Turnos sin puesto asignado -> columna gris al final */
@@ -94,6 +103,7 @@ export class AgendaComponent implements OnInit, OnDestroy {
     this.empleados = await this.supabase.getEmpleados();
     this.comisionesPorServicio = await this.supabase.getComisionesEmpleado(this.empleados.map((e: any) => e.id));
     this.ausencias = await this.supabase.getAusencias();
+    this.telefonosPorCliente = await this.supabase.getTelefonosPorCliente();
     // Cache de jornadas: la usa turnoEnRiesgo() por cada bloque de la grilla.
     this.jornadas = {};
     for (const e of this.empleados as any[]) {
@@ -820,7 +830,7 @@ claseBloque(turno: any, mini: boolean): string {
   async iniciarCancelacion() {
     if (this.turnoSeleccionado) {
       await this.supabase.updateEstadoTurno(this.turnoSeleccionado.id, 'cancelado');
-      if (this.turnoSeleccionado.cliente_telefono &&
+      if (this.telefonoDe(this.turnoSeleccionado) &&
           confirm('¿Querés enviarle un mensaje de WhatsApp al cliente?')) {
         this.motivoCancelacion = '';
         this.mostrarPopupCancelacion = true;
@@ -836,7 +846,7 @@ claseBloque(turno: any, mini: boolean): string {
   }
 
   async enviarMensajeCancelacion() {
-    if (!this.turnoSeleccionado?.cliente_telefono) return;
+    if (!this.telefonoDe(this.turnoSeleccionado)) return;
     this.enviandoMensaje = true;
     try {
       const fecha = this.formatearFechaStr(this.turnoSeleccionado.fecha);
@@ -847,7 +857,7 @@ claseBloque(turno: any, mini: boolean): string {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
-          to: this.turnoSeleccionado.cliente_telefono,
+          to: this.telefonoDe(this.turnoSeleccionado),
           type: 'text',
           text: { body: mensaje }
         })
@@ -868,7 +878,7 @@ claseBloque(turno: any, mini: boolean): string {
   }
 
   async iniciarNotificacionPostergacion(nuevaFecha: string, nuevaHora: string, nuevoServicio: string) {
-    const telefonoCliente = this.turnoSeleccionado?.cliente_telefono;
+    const telefonoCliente = this.telefonoDe(this.turnoSeleccionado);
     if (!telefonoCliente) {
       this.cerrarPopup();
       await this.cargarTurnos();
@@ -895,7 +905,7 @@ claseBloque(turno: any, mini: boolean): string {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
-          to: this.turnoSeleccionado.cliente_telefono,
+          to: this.telefonoDe(this.turnoSeleccionado),
           type: 'text',
           text: { body: mensaje }
         })
