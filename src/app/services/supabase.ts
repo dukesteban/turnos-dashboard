@@ -96,37 +96,58 @@ export class SupabaseService {
   async editarTurno(id: number, datos: any) {
     const horaInicio = datos.hora.length === 5 ? datos.hora + ':00' : datos.hora;
     const horaFin = datos.horaFin.length === 5 ? datos.horaFin + ':00' : datos.horaFin;
+    const update: any = {
+      fecha: datos.fecha,
+      hora: horaInicio,
+      hora_inicio: horaInicio,
+      hora_fin: horaFin,
+      servicio_id: datos.servicio_id,
+      servicio_nombre: datos.servicio_nombre,
+      precio: datos.precio,
+      duracion_minutos: datos.duracion_minutos
+    };
+    if ('puesto_id' in datos) update.puesto_id = datos.puesto_id;
+    if ('empleado_id' in datos) {
+      update.empleado_id = datos.empleado_id;
+      // Si vino empleado sin puesto explicito, se deriva de su columna.
+      if (!('puesto_id' in datos)) {
+        update.puesto_id = await this.puestoDeEmpleado(datos.empleado_id ?? null);
+      }
+    }
+
     const { error } = await this.supabase
       .from('turnos')
-      .update({
-        fecha: datos.fecha,
-        hora: horaInicio,
-        hora_inicio: horaInicio,
-        hora_fin: horaFin,
-        servicio_id: datos.servicio_id,
-        servicio_nombre: datos.servicio_nombre,
-        precio: datos.precio,
-        duracion_minutos: datos.duracion_minutos
-      })
+      .update(update)
       .eq('id', id);
     if (error) throw error;
   }
 
-  async getTurnosSolapados(fecha: string, horaInicio: string, horaFin: string, excludeId: number) {
-    const ini = horaInicio.length === 5 ? horaInicio + ':00' : horaInicio;
-    const fin = horaFin.length === 5 ? horaFin + ':00' : horaFin;
-    const { data, error } = await this.supabase
+  /** Asigna (o libera) el puesto de un turno ya creado. */
+  async asignarPuestoATurno(turnoId: number, puestoId: number | null, empleadoId: number | null = null) {
+    const { error } = await this.supabase
       .from('turnos')
-      .select('*')
-      .eq('fecha', fecha)
-      .neq('estado', 'cancelado')
-      .neq('id', excludeId)
-      .lt('hora_inicio', fin)
-      .gt('hora_fin', ini);
+      .update({ puesto_id: puestoId, empleado_id: empleadoId })
+      .eq('id', turnoId);
     if (error) throw error;
-    return data;
   }
-  
+
+  /**
+   * El puesto sigue al empleado: si le corresponde un puesto activo, el turno debe
+   * caer en esa columna. Sin esto, un turno queda en la columna de otro y se apila.
+   * @returns el puesto asignado, o null si el empleado no tiene puesto.
+   */
+  async puestoDeEmpleado(empleadoId: number | null): Promise<number | null> {
+    if (!empleadoId) return null;
+    const { data, error } = await this.supabase
+      .from('puestos')
+      .select('id')
+      .eq('empleado_id', empleadoId)
+      .eq('activo', true)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.id ?? null;
+  }
+
   async getTurnosCliente(clienteId: number) {
     const { data, error } = await this.supabase
       .from('turnos')
@@ -149,29 +170,44 @@ export class SupabaseService {
 
   async marcarAtendido(id: number, datos: {
     servicio_nombre_final: string,
+    servicio_id_final?: number | null,
     precio_final: number,
     metodo_pago: string,
-    observaciones: string
+    observaciones: string,
+    empleado_id?: number | null
   }) {
+    const update: any = {
+      estado: 'atendido',
+      ...datos
+    };
+    // Nunca pisar el empleado con null: si no viene, se conserva el que ya tenia.
+    // (si se escribiera null, el turno perdia la comision y quedaba sin puesto)
+    if (datos.empleado_id == null) {
+      delete update.empleado_id;
+    } else {
+      update.puesto_id = await this.puestoDeEmpleado(datos.empleado_id);
+    }
+
     const { error } = await this.supabase
       .from('turnos')
-      .update({ 
-        estado: 'atendido',
-        ...datos
-      })
+      .update(update)
       .eq('id', id);
     if (error) throw error;
   }
 
   async volverAPendiente(id: number) {
+    // Se borra solo lo de la atencion. NO se toca empleado_id / puesto_id:
+    // la asignacion es de la reserva, no del atendimento, y antes se perdia al
+    // volver a pendiente (dejando puesto_id puesto y empleado_id en null).
     const { error } = await this.supabase
       .from('turnos')
-      .update({ 
+      .update({
         estado: 'pendiente',
         metodo_pago: null,
         precio_final: null,
         observaciones: null,
-        servicio_nombre_final: null
+        servicio_nombre_final: null,
+        servicio_id_final: null
       })
       .eq('id', id);
     if (error) throw error;
@@ -201,14 +237,152 @@ export class SupabaseService {
     if (error) throw error;
   }
 
-  async getPuestosXTurno(): Promise<number> {
+  // ── PUESTOS DE TRABAJO ────────────────────────────────────
+
+  /** Trae los puestos con el nombre del empleado resuelto. */
+  async getPuestos() {
     const { data, error } = await this.supabase
-      .from('configuracion')
-      .select('valor')
-      .eq('clave', 'puestos_por_turno')
+      .from('puestos')
+      .select('*, empleados(id, nombre, activo, comision_porcentaje, dias_trabaja)')
+      .order('orden', { ascending: true })
+      .order('id', { ascending: true });
+    if (error) throw error;
+
+    return (data || []).map((p: any) => {
+      const emp = Array.isArray(p.empleados) ? p.empleados[0] : p.empleados;
+      return { ...p, empleado: emp || null };
+    });
+  }
+
+  /** Un puesto solo es agendable si esta activo y su empleado esta activo. */
+  puestoEsAgendable(puesto: any, _todos?: any[]): boolean {
+    if (!puesto?.activo) return false;
+    if (!puesto.empleado_id) return false;
+    const emp = puesto.empleado;
+    if (emp && emp.activo === false) return false;
+    return true;
+  }
+
+  async crearPuesto(puesto: Partial<{ nombre: string; empleado_id: number | null; orden: number }>) {
+    const { data, error } = await this.supabase
+      .from('puestos')
+      .insert({
+        nombre: puesto.nombre || 'Puesto',
+        empleado_id: puesto.empleado_id ?? null,
+        orden: puesto.orden ?? 0,
+      })
+      .select()
       .single();
-    if (error) return 1;
-    return parseInt(data?.valor) || 1;
+    if (error) throw error;
+    return data;
+  }
+
+  async actualizarPuesto(id: number, cambios: any) {
+    const { error } = await this.supabase
+      .from('puestos')
+      .update(cambios)
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  /** Baja logica: conserva el historial de turnos que lo referencian. */
+  async desactivarPuesto(id: number) {
+    const { error } = await this.supabase
+      .from('puestos')
+      .update({ activo: false, empleado_id: null })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  async reordenarPuestos(idsEnOrden: number[]) {
+    for (let i = 0; i < idsEnOrden.length; i++) {
+      const { error } = await this.supabase
+        .from('puestos')
+        .update({ orden: i })
+        .eq('id', idsEnOrden[i]);
+      if (error) throw error;
+    }
+  }
+
+  /**
+   * Nucleo de disponibilidad. Responde la pregunta:
+   * "para esta fecha/hora, que puestos quedan libres y quien atiende?"
+   * Es la funcion que consumira el agente de WhatsApp.
+   */
+  async getPuestosDisponibles(fecha: string, horaInicio: string, duracionMin: number) {
+    const [h, m] = (horaInicio.length === 5 ? horaInicio : horaInicio.slice(0, 5)).split(':');
+    const total = parseInt(h, 10) * 60 + parseInt(m, 10) + (duracionMin || 45);
+    const horaFin = `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+
+    const [{ data: turnosDia }, puestos] = await Promise.all([
+      this.supabase
+        .from('turnos')
+        .select('puesto_id, hora_inicio, hora_fin')
+        .eq('fecha', fecha)
+        .neq('estado', 'cancelado'),
+      this.getPuestos(),
+    ]);
+
+    const ini = horaInicio.length === 5 ? horaInicio + ':00' : horaInicio;
+    const solapados = (turnosDia || []).filter((t: any) => {
+      const ti = t.hora_inicio || '00:00:00';
+      const tf = t.hora_fin || ti;
+      return ti < horaFin && tf > ini;
+    });
+
+    const puestosOcupados = new Set(solapados.map((t: any) => t.puesto_id).filter(Boolean));
+
+    return puestos
+      .filter((p: any) => p.activo)
+      .map((p: any) => ({
+        puesto_id: p.id,
+        nombre: p.nombre,
+        empleado_id: p.empleado_id,
+        empleado: p.empleado?.nombre || null,
+        agendable: this.puestoEsAgendable(p, puestos),
+        libre: !puestosOcupados.has(p.id),
+        ocupado_por: puestosOcupados.has(p.id)
+          ? solapados.find((t: any) => t.puesto_id === p.id) || null
+          : null,
+      }));
+  }
+
+  /** "Tenes lugar con este empleado?" - para el caso de consultar por un empleado puntual. */
+  async getPuestoDisponibleDeEmpleado(empleadoId: number, fecha: string, horaInicio: string, duracionMin: number) {
+    const disponibles = await this.getPuestosDisponibles(fecha, horaInicio, duracionMin);
+    const delEmpleado = disponibles.filter((p: any) => p.empleado_id === empleadoId);
+    const libre = delEmpleado.find((p: any) => p.libre);
+    return {
+      disponible: !!libre,
+      puesto: libre || null,
+      nombre_empleado: delEmpleado[0]?.empleado || null,
+    };
+  }
+
+  /** Primer puesto agendable y libre. Base para el autoscaneo al agendar. */
+  async getPrimerPuestoLibre(fecha: string, horaInicio: string, duracionMin: number) {
+    const disponibles = await this.getPuestosDisponibles(fecha, horaInicio, duracionMin);
+    return disponibles.find((p: any) => p.agendable && p.libre) || null;
+  }
+
+  /** Confirma que el puesto no este ocupado en ese rango (doble booking). */
+  async puestoEstaOcupado(puestoId: number, fecha: string, horaInicio: string, duracionMin: number, excludeTurnoId = 0): Promise<boolean> {
+    const [h, m] = horaInicio.split(':');
+    const total = parseInt(h, 10) * 60 + parseInt(m, 10) + duracionMin;
+    const horaFin = `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+    const ini = horaInicio.length === 5 ? horaInicio + ':00' : horaInicio;
+
+    const { data, error } = await this.supabase
+      .from('turnos')
+      .select('id, hora_inicio, hora_fin')
+      .eq('fecha', fecha)
+      .eq('puesto_id', puestoId)
+      .neq('estado', 'cancelado')
+      .neq('id', excludeTurnoId)
+      .lt('hora_inicio', horaFin)
+      .gt('hora_fin', ini);
+    if (error) throw error;
+    return (data?.length || 0) > 0;
   }
 
   // METODOS DE PAGOS
@@ -535,5 +709,119 @@ export class SupabaseService {
       .order('fecha', { ascending: true });
     if (error) throw error;
     return data;
+  }
+
+  // EMPLEADOS
+  async getEmpleados() {
+    const { data, error } = await this.supabase
+      .from('empleados')
+      .select('*')
+      .eq('activo', true)
+      .order('nombre', { ascending: true });
+    if (error) throw error;
+    return data;
+  }
+
+  async crearEmpleado(empleado: any) {
+    const { data, error } = await this.supabase
+      .from('empleados')
+      .insert({ ...empleado, activo: true })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async updateEmpleado(id: number, datos: any) {
+    const { error } = await this.supabase
+      .from('empleados')
+      .update(datos)
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  async deleteEmpleado(id: number) {
+    const { error } = await this.supabase
+      .from('empleados')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  async calcularComisiones(empleadoId: number, desde: string, hasta: string) {
+    const { data, error } = await this.supabase
+      .from('turnos')
+      .select('*')
+      .eq('estado', 'atendido')
+      .eq('empleado_id', empleadoId)
+      .gte('fecha', desde)
+      .lte('fecha', hasta)
+      .order('fecha', { ascending: true });
+    if (error) throw error;
+
+    // Obtener el empleado para calcular la comisión general
+    const { data: empleado } = await this.supabase
+      .from('empleados')
+      .select('comision_porcentaje')
+      .eq('id', empleadoId)
+      .single();
+
+    const porcentajeGeneral = empleado?.comision_porcentaje || 0;
+
+    // Obtener comisiones específicas por servicio
+    const { data: comisionesServicio } = await this.supabase
+      .from('comisiones_empleado')
+      .select('*')
+      .eq('empleado_id', empleadoId);
+
+    const comisionesMap = new Map();
+    (comisionesServicio || []).forEach((c: any) => {
+      comisionesMap.set(c.servicio_id, c.porcentaje);
+    });
+
+    return (data || []).map((turno: any) => {
+      // El servicio que se cobró puede diferir del reservado (ej: pidió completo,
+      // se hizo simple). La comision se calcula sobre el REALMENTE realizado.
+      const servicioRealId = turno.servicio_id_final ?? turno.servicio_id;
+      const porcentaje = comisionesMap.get(servicioRealId) ?? porcentajeGeneral;
+      const precioReal = Number(turno.precio_final ?? turno.precio) || 0;
+      return {
+        ...turno,
+        // La plantilla muestra servicio_nombre: hay que overwrite con el realizado
+        servicio_nombre: turno.servicio_nombre_final || turno.servicio_nombre,
+        precio_final: precioReal,
+        comision: (precioReal * porcentaje) / 100
+      };
+    });
+  }
+
+  // COMISIONES POR SERVICIO
+  async getComisionesEmpleado(empleadoIds: number | number[]) {
+    const ids = Array.isArray(empleadoIds) ? empleadoIds : [empleadoIds];
+    const { data, error } = await this.supabase
+      .from('comisiones_empleado')
+      .select('*')
+      .in('empleado_id', ids);
+    if (error) throw error;
+    return data || [];
+  }
+
+  async upsertComisionEmpleado(empleadoId: number, servicioId: number, porcentaje: number) {
+    const { error } = await this.supabase
+      .from('comisiones_empleado')
+      .upsert(
+        { empleado_id: empleadoId, servicio_id: servicioId, porcentaje },
+        { onConflict: 'empleado_id,servicio_id' }
+      );
+    if (error) throw error;
+  }
+
+  async deleteComisionEmpleado(empleadoId: number, servicioId: number) {
+    const { error } = await this.supabase
+      .from('comisiones_empleado')
+      .delete()
+      .eq('empleado_id', empleadoId)
+      .eq('servicio_id', servicioId);
+    if (error) throw error;
   }
 }

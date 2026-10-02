@@ -43,8 +43,10 @@
           <tr>
             <th>Hora</th>
             <th>Cliente</th>
-            <th>Servicio</th>
-            <th>Precio</th>
+            <th class="ocultar-movil">Servicio</th>
+            <th class="ocultar-xs">Empleado</th>
+            <th>Puesto</th>
+            <th class="ocultar-movil">Precio</th>
             <th>Estado</th>
           </tr>
         </thead>
@@ -52,8 +54,10 @@
           <tr *ngFor="let turno of turnosHoy" [class.vencido]="esVencido(turno)" (click)="abrirPopup(turno)" style="cursor:pointer">
             <td>{{ turno.hora?.slice(0,5) }}</td>
             <td [style.color]="!turno.cliente_telefono ? '#dc2626' : ''" >{{ turno.cliente_nombre }}</td>
-            <td>{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</td>
-            <td>${{ (turno.estado === 'atendido' && turno.precio_final ? turno.precio_final : turno.precio) | number }}</td>
+            <td class="ocultar-movil">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</td>
+            <td class="celda-empleado ocultar-xs">{{ nombreEmpleadoDeTurno(turno) }}</td>
+            <td class="celda-puesto">{{ nombrePuestoDeTurno(turno) }}</td>
+            <td class="ocultar-movil">${{ (turno.estado === 'atendido' && turno.precio_final ? turno.precio_final : turno.precio) | number }}</td>
             <td>
               <span class="badge" [ngClass]="esVencido(turno) ? 'vencido' : turno.estado">
                 {{ esVencido(turno) ? 'vencido' : turno.estado }}
@@ -61,7 +65,7 @@
             </td>
           </tr>
           <tr *ngIf="turnosHoy.length === 0">
-            <td colspan="5" class="vacio">No hay turnos para hoy</td>
+            <td colspan="7" class="vacio">No hay turnos para hoy</td>
           </tr>
         </tbody>
       </table>
@@ -93,8 +97,10 @@
             <th>Fecha</th>
             <th>Hora</th>
             <th>Cliente</th>
-            <th>Servicio</th>
-            <th>Precio</th>
+            <th class="ocultar-movil">Servicio</th>
+            <th class="ocultar-xs">Empleado</th>
+            <th>Puesto</th>
+            <th class="ocultar-movil">Precio</th>
             <th>Estado</th>
           </tr>
         </thead>
@@ -103,8 +109,10 @@
             <td>{{ formatearFechaSinAnio(turno.fecha) }}</td>
             <td>{{ turno.hora?.slice(0,5) }}</td>
             <td [style.color]="!turno.cliente_telefono ? '#dc2626' : ''" >{{ turno.cliente_nombre }}</td>
-            <td>{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</td>
-            <td>${{ (turno.estado === 'atendido' && turno.precio_final ? turno.precio_final : turno.precio) | number }}</td>
+            <td class="ocultar-movil">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</td>
+            <td class="celda-empleado ocultar-xs">{{ nombreEmpleadoDeTurno(turno) }}</td>
+            <td class="celda-puesto">{{ nombrePuestoDeTurno(turno) }}</td>
+            <td class="ocultar-movil">${{ (turno.estado === 'atendido' && turno.precio_final ? turno.precio_final : turno.precio) | number }}</td>
             <td>
               <span class="badge" [ngClass]="esVencido(turno) ? 'vencido' : turno.estado">
                 {{ esVencido(turno) ? 'vencido' : turno.estado }}
@@ -112,7 +120,7 @@
             </td>
           </tr>
           <tr *ngIf="turnosFiltrados.length === 0">
-            <td colspan="6" class="vacio">No hay turnos para este período</td>
+            <td colspan="8" class="vacio">No hay turnos para este período</td>
           </tr>
         </tbody>
       </table>
@@ -141,6 +149,8 @@
             <div class="popup-fila"><span class="popup-label">Fecha</span><span>{{ formatearFecha(turnoSeleccionado.fecha) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Hora</span><span>{{ formatearHora(turnoSeleccionado.hora_inicio || turnoSeleccionado.hora) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Duración</span><span>{{ turnoSeleccionado.duracion_minutos || 45 }} min</span></div>
+            <div class="popup-fila"><span class="popup-label">Empleado</span><span>{{ nombreEmpleadoDeTurno(turnoSeleccionado) }}</span></div>
+            <div class="popup-fila"><span class="popup-label">Puesto</span><span>{{ nombrePuestoDeTurno(turnoSeleccionado) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Estado</span><span class="badge" [ngClass]="turnoSeleccionado.estado">{{ turnoSeleccionado.estado }}</span></div>
             <div *ngIf="turnoSeleccionado.estado === 'atendido'">
               <div class="popup-fila" *ngIf="turnoSeleccionado.metodo_pago">
@@ -171,7 +181,7 @@
         <div class="popup-body">
           <div class="campo">
             <label>Servicio realizado</label>
-            <select [(ngModel)]="atendidoServicioId" (ngModelChange)="atendidoPrecio = atendidoServicio?.precio || atendidoPrecio; errorAtendido = ''">
+            <select [(ngModel)]="atendidoServicioId" (ngModelChange)="atendidoPrecio = atendidoServicio?.precio || atendidoPrecio; onAtendidoServicioChange()">
               <option *ngFor="let s of servicios" [value]="s.id">{{ s.nombre }}</option>
             </select>
           </div>
@@ -184,6 +194,15 @@
             <select [(ngModel)]="atendidoMetodoPago">
               <option *ngFor="let m of metodosPago" [value]="m.nombre">
                 {{ m.emoji }} {{ m.nombre }}
+              </option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Empleado que atendió</label>
+            <select [(ngModel)]="atendidoEmpleadoId">
+              <option [value]="null">-- Seleccionar --</option>
+              <option *ngFor="let e of empleados" [value]="e.id">
+                {{ e.nombre }} ({{ getComisionEmpleadoAtendido(e.id) }}%)
               </option>
             </select>
           </div>
@@ -206,7 +225,7 @@
         <div class="popup-body">
           <div class="campo">
             <label>Nueva Fecha</label>
-            <input type="date" [(ngModel)]="nuevaFecha" (ngModelChange)="errorEditarTurno = ''"/>
+            <input type="date" [(ngModel)]="nuevaFecha" (ngModelChange)="onFechaReprogramarChange()"/>
           </div>
           <div class="campo">
             <label>Nueva Hora</label>
@@ -214,8 +233,17 @@
           </div>
           <div class="campo">
             <label>Nuevo Servicio</label>
-            <select [(ngModel)]="nuevoServicioId" (ngModelChange)="errorEditarTurno = ''">
+            <select [(ngModel)]="nuevoServicioId" (ngModelChange)="errorEditarTurno = ''; actualizarVista()">
               <option *ngFor="let s of servicios" [value]="s.id">{{ s.nombre }} — ${{ s.precio | number }}</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Empleado que atiende</label>
+            <select [(ngModel)]="nuevoEmpleadoId" (ngModelChange)="errorEditarTurno = ''">
+              <option [value]="null">-- Seleccionar empleado --</option>
+              <option *ngFor="let e of empleados" [value]="e.id">
+                {{ e.nombre }} ({{ getComisionEmpleadoServicioReprogramar(e.id) }}%)
+              </option>
             </select>
           </div>
           <div *ngIf="errorEditarTurno" class="error-msg">{{ errorEditarTurno }}</div>
@@ -277,7 +305,7 @@
         <div class="campo">
           <label>Servicio</label>
           <select [(ngModel)]="nuevoTurnoServicioId"
-            (ngModelChange)="errorNuevoTurno = ''">
+            (ngModelChange)="onServicioChange()">
             <option [value]="null" disabled>Seleccioná un servicio</option>
             <option *ngFor="let s of servicios" [value]="s.id">
               {{ s.nombre }} — ${{ s.precio | number }} ({{ s.duracion_minutos }} min)
@@ -289,12 +317,32 @@
         <div class="campo">
           <label>Fecha</label>
           <input type="date" [(ngModel)]="nuevoTurnoFecha"
-            (ngModelChange)="errorNuevoTurno = ''" />
+            (ngModelChange)="errorNuevoTurno = ''; actualizarEmpleadosLibres()" />
         </div>
         <div class="campo">
           <label>Hora</label>
           <input type="time" [(ngModel)]="nuevoTurnoHora"
-            (ngModelChange)="errorNuevoTurno = ''" />
+            (ngModelChange)="errorNuevoTurno = ''; actualizarEmpleadosLibres()" />
+        </div>
+
+        <!-- Empleado -->
+        <div class="campo">
+          <label>Empleado que atiende</label>
+          <select [(ngModel)]="nuevoTurnoEmpleadoId"
+            (ngModelChange)="errorNuevoTurno = ''">
+            <option [value]="null">-- Automático (primer puesto libre) --</option>
+            <option *ngFor="let e of empleadosLibres" [value]="e.id">
+              {{ e.nombre }} ({{ getComisionEmpleadoServicio(e.id) }}%)
+            </option>
+          </select>
+          <div *ngIf="nuevoTurnoFecha && nuevoTurnoHora && empleadosLibres.length === 0"
+               class="empleados-ocupados">
+            ⚠️ No hay empleados libres en este horario
+          </div>
+          <div *ngIf="nuevoTurnoFecha && nuevoTurnoHora && empleadosLibres.length > 0"
+               class="empleados-ayuda">
+            {{ empleadosLibres.length }} disponible{{ empleadosLibres.length === 1 ? '' : 's' }}
+          </div>
         </div>
 
         <div *ngIf="errorNuevoTurno" class="error-msg">{{ errorNuevoTurno }}</div>

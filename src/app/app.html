@@ -16,6 +16,9 @@
     <a routerLink="/clientes" routerLinkActive="active">
       <span class="icono">👥</span><span class="texto"> Clientes</span>
     </a>
+    <a routerLink="/empleados" routerLinkActive="active">
+      <span class="icono">🧑‍🔧</span><span class="texto"> Empleados</span>
+    </a>
     <a routerLink="/configuracion" routerLinkActive="active">
       <span class="icono">⚙️</span><span class="texto"> Config</span>
     </a>
@@ -30,8 +33,9 @@
 <footer class="version-footer">v1.0.0</footer>
 
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', sans-serif; background: #f1f5f9; }
+  /* OJO: los estilos globales (body, font-family, reset) van en src/styles.scss.
+     Acá NO funcionan: Angular le agrega [_ngcontent-xxx] a estos selectores, así
+     que `body` y `*` nunca matchean nada. */
 
   .navbar-brand {
     display: flex;

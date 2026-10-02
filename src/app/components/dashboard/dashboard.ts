@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
+import { nombreMes } from '../../utils/fechas';
 
 @Component({
   selector: 'app-dashboard',
@@ -34,10 +35,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
   mostrarPopup = false;
   horarios: any[] = [];
   servicios: any[] = [];
+  empleados: any[] = [];
+  puestos: any[] = [];
   mostrarPopupCancelacion = false;
   motivoCancelacion = '';
   enviandoMensaje = false;
   nombreNegocio = localStorage.getItem('nombre_negocio') || '';
+  atendidoEmpleadoId: number | null = null;
 
   // Editar/Postergar
   modoEditarTurno = false;
@@ -46,6 +50,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   nuevaFecha = '';
   nuevaHora = '';
   nuevoServicioId: number | null = null;
+  nuevoEmpleadoId: number | null = null;
   esperandoConfirmacion = false;
   mostrarPopupPostergacion = false;
   motivoPostergacion = '';
@@ -62,6 +67,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   nuevoTurnoFecha = '';
   nuevoTurnoHora = '';
   nuevoTurnoServicioId: number | null = null;
+  nuevoTurnoEmpleadoId: number | null = null;
+  empleadosLibres: any[] = [];
+  comisionesPorServicio: any[] = [];
   guardandoNuevoTurno = false;
   errorNuevoTurno = '';
   mostrarFormNuevoCliente = false;
@@ -71,11 +79,42 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.servicios.find(s => s.id == Number(this.nuevoServicioId)) || null;
   }
 
+  /** Nombre del puesto del turno. Si falta puesto_id, lo deriva del empleado. */
+  puestoDeTurno(turno: any): any {
+    if (!turno) return null;
+    if (turno.puesto_id) return this.puestos.find((p: any) => p.id === turno.puesto_id) || null;
+    if (turno.empleado_id) return this.puestos.find((p: any) => p.empleado_id === turno.empleado_id) || null;
+    return null;
+  }
+
+  nombrePuestoDeTurno(turno: any): string {
+    return this.puestoDeTurno(turno)?.nombre || '—';
+  }
+
+  /** Nombre del empleado del turno, con fallback al empleado del puesto. */
+  nombreEmpleadoDeTurno(turno: any): string {
+    const id = this.empleadoDeTurno(turno);
+    if (!id) return '—';
+    return this.empleados.find((e: any) => e.id === id)?.nombre || '—';
+  }
+
+  /**
+   * ID del empleado del turno. Los turnos viejos tienen puesto_id pero empleado_id
+   * en null, asi que cuando falta se deriva del puesto que ya tiene asignado.
+   */
+  empleadoDeTurno(turno: any): number | null {
+    if (!turno) return null;
+    if (turno.empleado_id) return turno.empleado_id;
+    return this.puestoDeTurno(turno)?.empleado_id || null;
+  }
+
   constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
 
   async ngOnInit() {
     await this.cargarTurnos();
     this.metodosPago = await this.supabase.getMetodosPago();
+    this.empleados = await this.supabase.getEmpleados();
+    this.puestos = await this.supabase.getPuestos();
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
     });
@@ -186,7 +225,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.atendidoMetodoPago = this.metodosPago[0]?.nombre || '';
       this.atendidoPrecio = this.turnoSeleccionado.precio;
       this.atendidoObservaciones = '';
+      this.atendidoEmpleadoId = this.empleadoDeTurno(this.turnoSeleccionado);
       this.errorAtendido = '';
+      await this.cargarComisionesPorServicio();
+      this.cdr.detectChanges();
       return;
     }
     if (estado === 'pendiente') {
@@ -213,16 +255,49 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
       return;
     }
+    const servicio = this.atendidoServicio;
+
+    // Sin empleado no se puede guardar: se perderia la comision y el puesto quedaria huerfano.
+    if (!this.atendidoEmpleadoId) {
+      this.errorAtendido = '❌ Elegí el empleado que atendió.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // El empleado elegido no puede pisar a otro turno de su mismo puesto
+    const puestoId = await this.supabase.puestoDeEmpleado(this.atendidoEmpleadoId);
+    if (!puestoId) {
+      this.errorAtendido = '❌ Ese empleado no tiene un puesto asignado.';
+      this.cdr.detectChanges();
+      return;
+    }
+    const dur = servicio?.duracion_minutos || this.turnoSeleccionado.duracion_minutos || 45;
+    const ocupado = await this.supabase.puestoEstaOcupado(
+      puestoId,
+      this.turnoSeleccionado.fecha,
+      this.turnoSeleccionado.hora_inicio?.slice(0, 5) || this.turnoSeleccionado.hora?.slice(0, 5),
+      dur,
+      this.turnoSeleccionado.id
+    );
+    if (ocupado) {
+      const nombreEmp = this.empleados.find((e: any) => e.id === this.atendidoEmpleadoId)?.nombre;
+      this.errorAtendido = `❌ ${nombreEmp || 'Ese empleado'} ya tiene otro turno en ese horario.`;
+      this.cdr.detectChanges();
+      return;
+    }
+
     this.guardandoAtendido = true;
     try {
-      const servicio = this.atendidoServicio;
       await this.supabase.marcarAtendido(this.turnoSeleccionado.id, {
         servicio_nombre_final: servicio?.nombre || this.turnoSeleccionado.servicio_nombre,
+        servicio_id_final: servicio?.id ?? null,
         precio_final: this.atendidoPrecio,
         metodo_pago: this.atendidoMetodoPago,
-        observaciones: this.atendidoObservaciones
+        observaciones: this.atendidoObservaciones,
+        empleado_id: this.atendidoEmpleadoId
       });
-      await this.cargarTurnos(); // cargarDatos() en dashboard
+      await this.cargarTurnos();
+      await this.cargarComisionesPorServicio();
       this.cerrarPopup();
     } catch (e) {
       this.errorAtendido = '❌ Error al guardar.';
@@ -236,7 +311,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.nuevaFecha = this.turnoSeleccionado.fecha;
     this.nuevaHora = this.turnoSeleccionado.hora_inicio?.slice(0,5) || this.turnoSeleccionado.hora?.slice(0,5) || '';
     this.nuevoServicioId = this.turnoSeleccionado.servicio_id;
+    this.nuevoEmpleadoId = this.empleadoDeTurno(this.turnoSeleccionado);
     this.errorEditarTurno = '';
+    this.actualizarEmpleadosReprogramar();
     this.cdr.detectChanges();
   }
 
@@ -291,15 +368,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
       fin.setMinutes(fin.getMinutes() + servicio.duracion_minutos);
       const horaFin = `${String(fin.getHours()).padStart(2,'0')}:${String(fin.getMinutes()).padStart(2,'0')}`;
 
-      // Validar solapamiento
-      const solapados = await this.supabase.getTurnosSolapados(
-        this.nuevaFecha, this.nuevaHora, horaFin, this.turnoSeleccionado.id
-      );
-      const puestos = await this.supabase.getPuestosXTurno();
-      if (solapados.length >= puestos) {
-        this.errorEditarTurno = puestos === 1
-          ? `Ya hay un turno de ${solapados[0].cliente_nombre} a esa hora.`
-          : `Ya se alcanzó el límite de ${puestos} turnos simultáneos para ese horario.`;
+      // Validar que el puesto elegido no este ocupado en ese rango
+      const puestoId = await this.supabase.puestoDeEmpleado(this.nuevoEmpleadoId);
+      if (puestoId) {
+        const ocupado = await this.supabase.puestoEstaOcupado(
+          puestoId, this.nuevaFecha, this.nuevaHora,
+          servicio.duracion_minutos, this.turnoSeleccionado.id
+        );
+        if (ocupado) {
+          const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
+          this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
+          this.editandoTurno = false;
+          this.cdr.detectChanges();
+          return;
+        }
+      } else if (this.nuevoEmpleadoId) {
+        this.errorEditarTurno = '❌ Ese empleado no tiene un puesto asignado.';
         this.editandoTurno = false;
         this.cdr.detectChanges();
         return;
@@ -333,9 +417,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
         servicio_id: servicio.id,
         servicio_nombre: servicio.nombre,
         precio: servicio.precio,
-        duracion_minutos: servicio.duracion_minutos
+        duracion_minutos: servicio.duracion_minutos,
+        empleado_id: this.nuevoEmpleadoId
       });
       await this.cargarTurnos();
+      await this.cargarComisionesPorServicio();
       await this.iniciarNotificacionPostergacion(this.nuevaFecha, this.nuevaHora, servicio.nombre);
     } catch (e) {
       console.error('Error en confirmarEditarTurno:', e);
@@ -361,8 +447,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   get tituloMesTurnos(): string {
-    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    return `${meses[this.fechaTurnos.getMonth()]} ${this.fechaTurnos.getFullYear()}`;
+    return nombreMes(this.fechaTurnos.getMonth(), this.fechaTurnos.getFullYear());
   }
 
   formatearHora(hora: string): string {
@@ -409,10 +494,110 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.nuevoTurnoFecha = '';
     this.nuevoTurnoHora = '';
     this.nuevoTurnoServicioId = null;
+    this.nuevoTurnoEmpleadoId = null;
+    this.empleadosLibres = [];
+    this.comisionesPorServicio = [];
     this.errorNuevoTurno = '';
     if (!this.servicios.length) this.supabase.getServicios().then(s => { this.servicios = s; this.cdr.detectChanges(); });
     if (!this.horarios.length) this.supabase.getHorarios().then(h => { this.horarios = h; this.cdr.detectChanges(); });
+    if (!this.empleados.length) this.supabase.getEmpleados().then(e => { this.empleados = e; this.cdr.detectChanges(); });
+    this.cargarComisionesPorServicio();
     this.cdr.detectChanges();
+  }
+
+  async cargarComisionesPorServicio() {
+    this.comisionesPorServicio = await this.supabase.getComisionesEmpleado(this.empleados.map((e: any) => e.id));
+    this.cdr.detectChanges();
+  }
+
+  async actualizarEmpleadosLibres() {
+    if (!this.nuevoTurnoFecha || !this.nuevoTurnoHora || !this.nuevoTurnoServicioId) {
+      this.empleadosLibres = [];
+      this.cdr.detectChanges();
+      return;
+    }
+    const servicio = this.servicios.find(s => s.id == this.nuevoTurnoServicioId);
+    if (!servicio) return;
+
+    const diaSemana = new Date(this.nuevoTurnoFecha + 'T12:00:00').getDay();
+
+    // Disponibilidad real por puesto (respeta turnos, puesto activo y dia laboral)
+    const disponibles = await this.supabase.getPuestosDisponibles(
+      this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos
+    );
+
+    this.empleadosLibres = this.empleados.filter((e: any) => {
+      const puesto = disponibles.find((p: any) => p.empleado_id === e.id);
+      return puesto && puesto.agendable && puesto.libre && e.dias_trabaja?.[diaSemana];
+    });
+
+    // Si el empleado elegido quedo fuera de la lista, se limpia la seleccion
+    if (this.nuevoTurnoEmpleadoId && !this.empleadosLibres.some((e: any) => e.id === this.nuevoTurnoEmpleadoId)) {
+      this.nuevoTurnoEmpleadoId = null;
+    }
+    this.cdr.detectChanges();
+  }
+
+  async onServicioChange() {
+    this.errorNuevoTurno = '';
+    await this.actualizarEmpleadosLibres();
+    this.cdr.detectChanges();
+  }
+
+  onAtendidoServicioChange() {
+    this.errorAtendido = '';
+    if (this.comisionesPorServicio.length === 0) {
+      this.cargarComisionesPorServicio();
+    }
+    this.cdr.detectChanges();
+  }
+
+  actualizarVista() {
+    this.cdr.detectChanges();
+  }
+
+  getComisionEmpleadoAtendido(empleadoId: number): number {
+    if (!this.atendidoServicioId) return 0;
+    const comision = this.comisionesPorServicio.find(
+      (c: any) => c.empleado_id === empleadoId && c.servicio_id === this.atendidoServicioId
+    );
+    if (comision) return comision.porcentaje;
+    const empleado = this.empleados.find((e: any) => e.id === empleadoId);
+    return empleado?.comision_porcentaje || 0;
+  }
+
+  actualizarEmpleadosReprogramar() {
+    if (!this.nuevaFecha || !this.nuevoServicioId) return;
+    const diaSemana = new Date(this.nuevaFecha + 'T12:00:00').getDay();
+    this.empleados = this.empleados.filter((e: any) => 
+      e.dias_trabaja?.[diaSemana]
+    );
+    this.cdr.detectChanges();
+  }
+
+  onFechaReprogramarChange() {
+    this.errorEditarTurno = '';
+    this.actualizarEmpleadosReprogramar();
+  }
+
+  getComisionEmpleadoServicio(empleadoId: number): number {
+    if (!this.nuevoTurnoServicioId) return 0;
+    const comision = this.comisionesPorServicio.find(
+      (c: any) => c.empleado_id === empleadoId && c.servicio_id === this.nuevoTurnoServicioId
+    );
+    if (comision) return comision.porcentaje;
+    const empleado = this.empleados.find((e: any) => e.id === empleadoId);
+    return empleado?.comision_porcentaje || 0;
+  }
+
+  getComisionEmpleadoServicioReprogramar(empleadoId: number): number {
+    if (!this.nuevoServicioId) return 0;
+    const comision = this.comisionesPorServicio.find(
+      (c: any) => c.empleado_id === empleadoId && c.servicio_id === this.nuevoServicioId
+    );
+    if (comision) return comision.porcentaje;
+    const empleado = this.empleados.find((e: any) => e.id === empleadoId);
+    return empleado?.comision_porcentaje || 0;
   }
 
   cerrarModalNuevoTurno() {
@@ -455,18 +640,41 @@ export class DashboardComponent implements OnInit, OnDestroy {
       fin.setMinutes(fin.getMinutes() + servicio.duracion_minutos);
       const horaFin = `${String(fin.getHours()).padStart(2,'0')}:${String(fin.getMinutes()).padStart(2,'0')}`;
 
-      // Validar solapamiento
-      const solapados = await this.supabase.getTurnosSolapados(
-        this.nuevoTurnoFecha, this.nuevoTurnoHora, horaFin, 0
-      );
-      const puestos = await this.supabase.getPuestosXTurno();
-      if (solapados.length >= puestos) {
-        this.errorNuevoTurno = puestos === 1
-          ? `Ya hay un turno de ${solapados[0].cliente_nombre} a esa hora.`
-          : `Ya se alcanzó el límite de ${puestos} turnos simultáneos para ese horario.`;
-        this.guardandoNuevoTurno = false;
-        this.cdr.detectChanges();
-        return;
+      // Determinar el puesto: el elegido, o el primero libre
+      let puestoId: number | null = null;
+      let empleadoId: number | null = this.nuevoTurnoEmpleadoId;
+
+      if (empleadoId) {
+        puestoId = await this.supabase.puestoDeEmpleado(empleadoId);
+        if (!puestoId) {
+          this.errorNuevoTurno = '❌ Ese empleado no tiene un puesto asignado.';
+          this.guardandoNuevoTurno = false;
+          this.cdr.detectChanges();
+          return;
+        }
+        const ocupado = await this.supabase.puestoEstaOcupado(
+          puestoId, this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos, 0
+        );
+        if (ocupado) {
+          const nombreEmp = this.empleados.find((e: any) => e.id === empleadoId)?.nombre;
+          this.errorNuevoTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
+          this.guardandoNuevoTurno = false;
+          this.cdr.detectChanges();
+          return;
+        }
+      } else {
+        // Sin empleado elegido -> se ocupa el primer puesto agendable y libre
+        const libre = await this.supabase.getPrimerPuestoLibre(
+          this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos
+        );
+        if (!libre) {
+          this.errorNuevoTurno = '❌ No hay puestos disponibles en ese horario.';
+          this.guardandoNuevoTurno = false;
+          this.cdr.detectChanges();
+          return;
+        }
+        puestoId = libre.puesto_id;
+        empleadoId = libre.empleado_id;
       }
 
       // Validar horario de atención
@@ -498,9 +706,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
         servicio_nombre: servicio.nombre,
         precio: servicio.precio,
         duracion_minutos: servicio.duracion_minutos,
-        estado: 'pendiente'
+        estado: 'pendiente',
+        puesto_id: puestoId,
+        empleado_id: empleadoId
       });
       await this.cargarTurnos();
+      await this.cargarComisionesPorServicio();
       this.cerrarModalNuevoTurno();
     } catch (e) {
       console.error('Error en guardarNuevoTurno:', e);

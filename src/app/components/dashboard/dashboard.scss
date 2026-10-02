@@ -493,3 +493,70 @@ tr.vencido td { background: #fff7ed; }
     }
   }
 }
+
+.empleados-ocupados {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.empleados-ayuda {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* Celdas de Empleado y Puesto en las tablas de turnos */
+.celda-empleado {
+  color: #334155;
+  font-weight: 500;
+}
+
+.celda-puesto {
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* ── RESPONSIVE ──────────────────────────────────────────────
+   En celular las tablas tienen 7-8 columnas y no entran: se ocultan
+   las menos importantes. Para cambiar la prioridad de una columna
+   alcanza con moverle la clase (th y td siempre en la misma posicion):
+     ocultar-movil  -> se oculta hasta 640px
+     ocultar-xs     -> se oculta hasta 480px
+   Prioridad actual en el celu: Puesto > Estado > Cliente > Hora.
+   Los datos ocultos siguen visibles en el popup al tocar el turno. */
+@media (max-width: 768px) {
+  .tabla {
+    font-size: 0.85em;
+
+    th, td { padding: 9px 8px; }
+    th { font-size: 0.7rem; letter-spacing: 0.3px; }
+  }
+
+  .badge { font-size: 0.7rem; padding: 2px 8px; }
+}
+
+@media (max-width: 640px) {
+  .ocultar-movil { display: none !important; }
+
+  .tabla {
+    th, td { padding: 9px 6px; }
+  }
+
+  /* La hora y el precio no deben partirse en dos lineas */
+  .tabla td:first-child,
+  .celda-puesto { white-space: nowrap; }
+}
+
+@media (max-width: 480px) {
+  .ocultar-xs { display: none !important; }
+
+  .tabla {
+    font-size: 0.8em;
+    th, td { padding: 9px 4px; }
+  }
+}

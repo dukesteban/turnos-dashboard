@@ -43,3 +43,8 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 .vercel
+
+# Agent files (local only)
+agent.md
+memory.md
+ENCODING.md

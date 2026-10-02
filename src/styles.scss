@@ -1,1 +1,24 @@
-/* You can add global styles to this file, and also import other style files */
+/* ============================================================
+   ESTILOS GLOBALES
+   ------------------------------------------------------------
+   OJO: los estilos globales van acá, NO en un <style> dentro de
+   app.html. Angular le agrega [_ngcontent-xxx] a los selectores de
+   los templates, así que un `body { ... }` puesto en app.html queda
+   como `body[_ngcontent-abc]` y nunca matchea nada: la fuente no se
+   terminaba aplicando y todo el texto caía a la tipografía por
+   defecto del navegador (Times).
+   ============================================================ */
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Los controles de formulario NO heredan font-family del body (limitación
+   de HTML), por eso el texto de un <input> se veía con otra letra que el
+   de un <span> en la misma fila. */
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+}

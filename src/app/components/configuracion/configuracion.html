@@ -18,10 +18,6 @@
         <input type="text" [(ngModel)]="descripcion" [readonly]="!editandoDatos" placeholder="Descripción" (ngModelChange)="mensajeErrorDatos = ''"/>
       </div>
       <div class="campo">
-        <label>Puestos por turno</label>
-        <input type="number" min="1" max="3" [(ngModel)]="puestosXTurno" [readonly]="!editandoDatos" (ngModelChange)="mensajeErrorDatos = ''"/>
-      </div>
-      <div class="campo">
         <label>Horas límite para cancelar turno</label>
         <input type="number" min="1" max="48" [(ngModel)]="horasLimiteCancelacion" [readonly]="!editandoDatos" (ngModelChange)="mensajeErrorDatos = ''"/>
       </div>
@@ -42,6 +38,99 @@
           {{ guardando ? 'Guardando...' : '💾 Guardar' }}
         </button>
         <button *ngIf="editandoDatos" class="btn-secondary" (click)="cancelarConfiguracion()">↩️ Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PUESTOS DE TRABAJO ── -->
+  <div class="acordeon">
+    <div class="acordeon-header" (click)="acordeonPuestos = !acordeonPuestos">
+      <span>🚿 Puestos de trabajo</span>
+      <span class="chevron" [class.abierto]="acordeonPuestos">›</span>
+    </div>
+    <div class="acordeon-body" [class.visible]="acordeonPuestos">
+      <div class="seccion-header">
+        <button class="btn-primary" (click)="mostrarFormPuesto = !mostrarFormPuesto; mensajeErrorPuestos = ''; nuevoPuesto = { nombre: '', empleado_id: null }">
+          {{ mostrarFormPuesto ? '↩️ Cancelar' : '➕ Nuevo puesto' }}
+        </button>
+      </div>
+
+      <div *ngIf="mostrarFormPuesto" class="form-nuevo-horario">
+        <div class="fila">
+          <div class="campo">
+            <label>Nombre</label>
+            <input type="text" [(ngModel)]="nuevoPuesto.nombre"
+                   (ngModelChange)="mensajeErrorPuestos = ''" placeholder="Ej: Box 1" />
+          </div>
+          <div class="campo">
+            <label>Empleado</label>
+            <select [(ngModel)]="nuevoPuesto.empleado_id" (ngModelChange)="mensajeErrorPuestos = ''">
+              <option [ngValue]="null">— Sin asignar —</option>
+              <option *ngFor="let e of empleadosActivos" [ngValue]="e.id"
+                      [disabled]="empleadoEnOtroPuesto(e.id)">
+                {{ e.nombre }}{{ empleadoEnOtroPuesto(e.id) ? ' (ya asignado)' : '' }}
+              </option>
+            </select>
+          </div>
+          <button class="btn-primary" (click)="agregarPuesto()">➕ Agregar</button>
+        </div>
+      </div>
+
+      <div *ngFor="let aviso of avisosPuestos" class="alerta aviso">{{ aviso }}</div>
+
+      <!-- Mensajes acá adentro: antes quedaban arriba del header y no se veían -->
+      <div *ngIf="mensajeErrorPuestos" class="alerta error">{{ mensajeErrorPuestos }}</div>
+      <div *ngIf="mensajePuestos" class="alerta exito">{{ mensajePuestos }}</div>
+
+      <div class="tabla-wrapper">
+        <table class="tabla-horarios tabla-puestos">
+          <thead>
+            <tr><th>Puesto</th><th>Empleado</th><th>Activo</th><th>Acciones</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of puestos" [class.inactivo]="!p.activo">
+              <td>
+                <input type="text" [(ngModel)]="p.nombre"
+                       (ngModelChange)="mensajeErrorPuestos = ''"
+                       class="input-inline input-nombre" [readonly]="!p.editando" />
+                <div *ngIf="p.editando && nombrePuestoDuplicado(p.nombre, p.id)" class="puesto-dup">
+                  ⚠️ Ya existe otro puesto con ese nombre
+                </div>
+              </td>
+              <td>
+                <span *ngIf="!p.editando" class="celda-empleado">{{ nombreEmpleadoDePuesto(p) }}</span>
+                <select *ngIf="p.editando" [(ngModel)]="p.empleado_id"
+                        (ngModelChange)="mensajeErrorPuestos = ''"
+                        class="input-inline input-empleado-puesto">
+                  <option [ngValue]="null">— Sin asignar —</option>
+                  <option *ngFor="let e of empleadosActivos" [ngValue]="e.id"
+                          [disabled]="empleadoEnOtroPuesto(e.id, p.id)">
+                    {{ e.nombre }}{{ empleadoEnOtroPuesto(e.id, p.id) ? ' (ya asignado)' : '' }}
+                  </option>
+                </select>
+              </td>
+              <td>
+                <label class="toggle">
+                  <input type="checkbox" [checked]="p.activo" [disabled]="p.guardando" (change)="togglePuesto(p)" />
+                  <span class="slider"></span>
+                </label>
+              </td>
+              <td class="acciones">
+                <button *ngIf="!p.editando && !p.guardando" class="btn-icon"
+                  (click)="p._nombreOrig = p.nombre; p._empleadoOrig = p.empleado_id; p.editando = true"
+                  title="Editar">✏️
+                </button>
+                <button *ngIf="p.editando && !p.guardando" class="btn-icon" (click)="guardarPuesto(p)" title="Guardar">💾</button>
+                <button *ngIf="p.editando && !p.guardando" class="btn-icon" (click)="cancelarPuesto(p)" title="Cancelar">↩️</button>
+                <span *ngIf="p.guardando" class="guardando-celda">⏳ Guardando…</span>
+                <button *ngIf="!p.guardando" class="btn-icon" (click)="eliminarPuesto(p)" title="Desactivar puesto">🗑️</button>
+              </td>
+            </tr>
+            <tr *ngIf="puestos.length === 0">
+              <td colspan="4" class="vacio">No hay puestos configurados</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -103,18 +192,19 @@
               </td>
               <td>
                 <label class="toggle">
-                  <input type="checkbox" [checked]="horario.activo" (change)="toggleHorario(horario)" />
+                  <input type="checkbox" [checked]="horario.activo" [disabled]="horario.guardando" (change)="toggleHorario(horario)" />
                   <span class="slider"></span>
                 </label>
               </td>
               <td class="acciones">
-                <button *ngIf="!horario.editando" class="btn-icon" 
+                <button *ngIf="!horario.editando && !horario.guardando" class="btn-icon" 
                   (click)="horario._hora_inicio_orig = horario.hora_inicio; horario._hora_fin_orig = horario.hora_fin; horario.editando = true" 
                   title="Editar">✏️
                 </button>
-                <button *ngIf="horario.editando" class="btn-icon" (click)="guardarHorario(horario)" title="Guardar">💾</button>
-                <button *ngIf="horario.editando" class="btn-icon" (click)="cancelarHorario(horario)" title="Cancelar">↩️</button>
-                <button class="btn-icon" (click)="eliminarHorario(horario.id)" title="Eliminar">🗑️</button>
+                <button *ngIf="horario.editando && !horario.guardando" class="btn-icon" (click)="guardarHorario(horario)" title="Guardar">💾</button>
+                <button *ngIf="horario.editando && !horario.guardando" class="btn-icon" (click)="cancelarHorario(horario)" title="Cancelar">↩️</button>
+                <span *ngIf="horario.guardando" class="guardando-celda">⏳ Guardando…</span>
+                <button *ngIf="!horario.guardando" class="btn-icon" (click)="eliminarHorario(horario.id)" title="Eliminar">🗑️</button>
               </td>
             </tr>
             <tr *ngIf="horarios.length === 0">
@@ -179,12 +269,13 @@
                     [readonly]="!dia.editando" placeholder="—" />
                 </td>
                 <td class="acciones">
-                  <button *ngIf="!dia.editando" class="btn-icon"
+                  <button *ngIf="!dia.editando && !dia.guardando" class="btn-icon"
                     (click)="dia._fecha_orig = dia.fecha; dia._fecha_hasta_orig = dia.fecha_hasta; dia._motivo_orig = dia.motivo; dia.editando = true"
                     title="Editar">✏️</button>
-                  <button *ngIf="dia.editando" class="btn-icon" (click)="guardarDiaCerrado(dia)" title="Guardar">💾</button>
-                  <button *ngIf="dia.editando" class="btn-icon" (click)="cancelarDiaCerrado(dia)" title="Cancelar">↩️</button>
-                  <button class="btn-icon" (click)="eliminarDiaCerrado(dia.id)" title="Eliminar">🗑️</button>
+                  <button *ngIf="dia.editando && !dia.guardando" class="btn-icon" (click)="guardarDiaCerrado(dia)" title="Guardar">💾</button>
+                  <button *ngIf="dia.editando && !dia.guardando" class="btn-icon" (click)="cancelarDiaCerrado(dia)" title="Cancelar">↩️</button>
+                  <span *ngIf="dia.guardando" class="guardando-celda">⏳ Guardando…</span>
+                  <button *ngIf="!dia.guardando" class="btn-icon" (click)="eliminarDiaCerrado(dia.id)" title="Eliminar">🗑️</button>
                 </td>
               </tr>
               <tr *ngIf="diasCerrados.length === 0">
@@ -251,17 +342,18 @@
               </td>
               <td>
                 <label class="toggle">
-                  <input type="checkbox" [checked]="servicio.activo" (change)="toggleServicio(servicio)" />
+                  <input type="checkbox" [checked]="servicio.activo" [disabled]="servicio.guardando" (change)="toggleServicio(servicio)" />
                   <span class="slider"></span>
                 </label>
               </td>
               <td class="acciones">
-                <button *ngIf="!servicio.editando" class="btn-icon" 
+                <button *ngIf="!servicio.editando && !servicio.guardando" class="btn-icon" 
                   (click)="servicio._nombre_orig = servicio.nombre; servicio._precio_orig = servicio.precio; servicio._duracion_orig = servicio.duracion_minutos; servicio.editando = true" 
                   title="Editar">✏️</button>
-                <button *ngIf="servicio.editando" class="btn-icon" (click)="guardarServicio(servicio)" title="Guardar">💾</button>
-                <button *ngIf="servicio.editando" class="btn-icon" (click)="cancelarServicio(servicio)" title="Cancelar">↩️</button>
-                <button class="btn-icon" (click)="eliminarServicio(servicio.id)" title="Eliminar">🗑️</button>
+                <button *ngIf="servicio.editando && !servicio.guardando" class="btn-icon" (click)="guardarServicio(servicio)" title="Guardar">💾</button>
+                <button *ngIf="servicio.editando && !servicio.guardando" class="btn-icon" (click)="cancelarServicio(servicio)" title="Cancelar">↩️</button>
+                <span *ngIf="servicio.guardando" class="guardando-celda">⏳ Guardando…</span>
+                <button *ngIf="!servicio.guardando" class="btn-icon" (click)="eliminarServicio(servicio.id)" title="Eliminar">🗑️</button>
               </td>
             </tr>
             <tr *ngIf="servicios.length === 0">
@@ -313,17 +405,18 @@
               <td><input type="text" [(ngModel)]="m.nombre" class="input-inline input-nombre" [readonly]="!m.editando" /></td>
               <td>
                 <label class="toggle">
-                  <input type="checkbox" [checked]="m.activo" (change)="toggleMetodoPago(m)" />
+                  <input type="checkbox" [checked]="m.activo" [disabled]="m.guardando" (change)="toggleMetodoPago(m)" />
                   <span class="slider"></span>
                 </label>
               </td>
               <td class="acciones">
-                <button *ngIf="!m.editando" class="btn-icon"
+                <button *ngIf="!m.editando && !m.guardando" class="btn-icon"
                   (click)="m._nombre_orig = m.nombre; m._emoji_orig = m.emoji; m.editando = true"
                   title="Editar">✏️</button>
-                <button *ngIf="m.editando" class="btn-icon" (click)="guardarMetodoPago(m)" title="Guardar">💾</button>
-                <button *ngIf="m.editando" class="btn-icon" (click)="cancelarMetodoPago(m)" title="Cancelar">↩️</button>
-                <button class="btn-icon" (click)="eliminarMetodoPago(m.id)" title="Eliminar">🗑️</button>
+                <button *ngIf="m.editando && !m.guardando" class="btn-icon" (click)="guardarMetodoPago(m)" title="Guardar">💾</button>
+                <button *ngIf="m.editando && !m.guardando" class="btn-icon" (click)="cancelarMetodoPago(m)" title="Cancelar">↩️</button>
+                <span *ngIf="m.guardando" class="guardando-celda">⏳ Guardando…</span>
+                <button *ngIf="!m.guardando" class="btn-icon" (click)="eliminarMetodoPago(m.id)" title="Eliminar">🗑️</button>
               </td>
             </tr>
             <tr *ngIf="metodosPago.length === 0">

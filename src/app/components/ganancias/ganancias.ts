@@ -2,6 +2,7 @@ import { Component, OnInit, ChangeDetectorRef, ViewChild, ElementRef } from '@an
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
+import { nombreMes } from '../../utils/fechas';
 
 @Component({
   selector: 'app-ganancias',
@@ -112,7 +113,8 @@ export class GananciasComponent implements OnInit {
     if (!this.turnos.length) return '-';
     const conteo: { [key: string]: number } = {};
     this.turnos.forEach(t => {
-      conteo[t.servicio_nombre] = (conteo[t.servicio_nombre] || 0) + 1;
+      const nombre = t.servicio_nombre_final || t.servicio_nombre;
+      conteo[nombre] = (conteo[nombre] || 0) + 1;
     });
     return Object.entries(conteo).sort((a, b) => b[1] - a[1])[0][0];
   }
@@ -211,8 +213,7 @@ export class GananciasComponent implements OnInit {
       const m = String(this.fechaActual.getMonth()+1).padStart(2,'0');
       return `${dias[this.fechaActual.getDay()]} ${d}/${m}`;
     } else {
-      const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-      return `${meses[this.fechaActual.getMonth()]} ${this.fechaActual.getFullYear()}`;
+      return nombreMes(this.fechaActual.getMonth(), this.fechaActual.getFullYear());
     }
   }
 

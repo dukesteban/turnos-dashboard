@@ -1,0 +1,220 @@
+<div class="empleados-page">
+
+  <div class="layout" [class.con-detalle]="empleadoSeleccionado">
+
+    <!-- LISTA -->
+    <div class="seccion lista-seccion">
+      <div class="seccion-header">
+        <span class="badge-count">Total: {{ empleadosFiltrados.length }}</span>
+        <button class="btn-primary" (click)="abrirModalNuevoEmpleado()">➕ Nuevo</button>
+      </div>
+      <input type="text" class="buscador" [(ngModel)]="busqueda" placeholder="🔍 Buscar por nombre..." />
+
+      <div class="lista">
+        <div *ngFor="let empleado of empleadosFiltrados"
+          class="item"
+          [class.activo]="empleadoSeleccionado?.id === empleado.id"
+          (click)="seleccionarEmpleado(empleado)">
+          <div class="avatar">{{ empleado.nombre?.charAt(0)?.toUpperCase() }}</div>
+          <div class="info">
+            <div class="nombre">{{ empleado.nombre }}</div>
+            <div class="sub">{{ empleado.telefono || 'Sin teléfono' }}</div>
+          </div>
+          <div class="comision-badge">{{ empleado.comision_porcentaje }}%</div>
+          <div class="arrow">›</div>
+        </div>
+        <div *ngIf="empleadosFiltrados.length === 0" class="vacio">No se encontraron empleados</div>
+      </div>
+    </div>
+
+    <!-- DETALLE -->
+    <div *ngIf="empleadoSeleccionado" class="seccion detalle-seccion">
+      <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
+      <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
+
+      <div class="seccion-header">
+        <h3>Detalle del empleado</h3>
+        <button class="btn-cerrar" (click)="cerrarDetalle()">✕</button>
+      </div>
+
+      <!-- Nombre -->
+      <div class="detalle-bloque">
+        <h4>Nombre</h4>
+        <div class="campo-editable">
+          <input type="text" [(ngModel)]="empleadoSeleccionado.nombre"
+            [readonly]="!empleadoSeleccionado.editando"
+            class="input-nombre" />
+          <button *ngIf="!empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = true">✏️</button>
+          <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarNombre()">💾</button>
+          <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = false">↩️</button>
+          <span *ngIf="empleadoSeleccionado.guardando" class="guardando-celda">⏳ Guardando…</span>
+        </div>
+      </div>
+
+      <!-- Teléfono -->
+      <div class="detalle-bloque">
+        <h4>Teléfono</h4>
+        <div class="campo-editable">
+          <input type="text" [(ngModel)]="empleadoSeleccionado.telefono"
+            [readonly]="!empleadoSeleccionado.editandoTelefono"
+            class="input-nombre" />
+          <button *ngIf="!empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = true">✏️</button>
+          <button *ngIf="empleadoSeleccionado.editandoTelefono && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarTelefono()">💾</button>
+          <button *ngIf="empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = false">↩️</button>
+        </div>
+      </div>
+
+      <!-- Días que trabaja -->
+      <div class="detalle-bloque">
+        <h4>Días que trabaja</h4>
+        <div *ngIf="!empleadoSeleccionado.editandoDias" class="dias-display">
+          <span *ngFor="let dia of diasCompletos; let i = index"
+            class="dia-badge"
+            [class.activo]="empleadoSeleccionado.dias_trabaja[i]">
+            {{ diasSemana[i] }}
+          </span>
+          <button class="btn-icon" (click)="empleadoSeleccionado.editandoDias = true">✏️</button>
+        </div>
+        <div *ngIf="empleadoSeleccionado.editandoDias" class="dias-edicion">
+          <label *ngFor="let dia of diasSemana; let i = index" class="dia-chip">
+            <input type="checkbox" [(ngModel)]="empleadoSeleccionado.dias_trabaja[i]" />
+            <span>{{ dia }}</span>
+          </label>
+          <div class="acciones">
+            <button class="btn-icon" [disabled]="empleadoSeleccionado.guardando" (click)="guardarDias()">💾</button>
+            <button class="btn-icon" (click)="empleadoSeleccionado.editandoDias = false">↩️</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comisión por servicio -->
+      <div class="detalle-bloque">
+        <h4>Comisión por servicio</h4>
+        <div class="campo-editable comision-general">
+          <span class="label-general">General</span>
+          <span *ngIf="!empleadoSeleccionado.editandoComision" class="comision-grande">{{ empleadoSeleccionado.comision_porcentaje }}%</span>
+          <input *ngIf="empleadoSeleccionado.editandoComision" type="number" [(ngModel)]="empleadoSeleccionado.comision_porcentaje"
+            min="0" max="100" class="input-num" />
+          <button *ngIf="!empleadoSeleccionado.editandoComision" class="btn-icon" (click)="empleadoSeleccionado.editandoComision = true">✏️</button>
+          <button *ngIf="empleadoSeleccionado.editandoComision && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarComision()">💾</button>
+          <button *ngIf="empleadoSeleccionado.editandoComision" class="btn-icon" (click)="empleadoSeleccionado.editandoComision = false">↩️</button>
+        </div>
+
+        <!-- Configuración por servicio -->
+        <p class="texto-ayuda">Configurá un porcentaje específico para cada servicio. Si no se configura, se usa la comisión general.</p>
+        <div class="servicios-comision-lista">
+          <div *ngFor="let servicio of servicios" class="servicio-comision-item">
+            <div class="servicio-comision-nombre">{{ servicio.nombre }}</div>
+            <div class="servicio-comision-valor">
+              <span *ngIf="editandoComisionServicio !== servicio.id" class="comision-valor">
+                {{ getComisionServicio(servicio.id) }}%
+              </span>
+              <input *ngIf="editandoComisionServicio === servicio.id" type="number" [(ngModel)]="nuevaComisionServicio" min="0" max="100" class="input-comision" />
+            </div>
+            <div class="servicio-comision-acciones">
+              <button *ngIf="editandoComisionServicio !== servicio.id" class="btn-icon" (click)="editarComisionServicio(servicio.id)">✏️</button>
+              <button *ngIf="editandoComisionServicio === servicio.id && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarComisionServicio(servicio.id)">💾</button>
+              <button *ngIf="editandoComisionServicio === servicio.id" class="btn-icon" (click)="editandoComisionServicio = null">↩️</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Resumen por período -->
+        <div class="resumen-periodo">
+          <div class="periodo-selector">
+            <button class="btn-periodo" [class.activo]="vistaComisiones === 'dia'" (click)="vistaComisiones = 'dia'; cargarComisiones()">
+              <span class="icono">📅</span> Día
+            </button>
+            <button class="btn-periodo" [class.activo]="vistaComisiones === 'semana'" (click)="vistaComisiones = 'semana'; cargarComisiones()">
+              <span class="icono">📅</span> Semana
+            </button>
+            <button class="btn-periodo" [class.activo]="vistaComisiones === 'mes'" (click)="vistaComisiones = 'mes'; cargarComisiones()">
+              <span class="icono">📅</span> Mes
+            </button>
+          </div>
+
+          <div class="navegacion-fecha">
+            <button class="btn-nav" (click)="navegarPeriodo(-1)">‹</button>
+            <button class="btn-hoy" (click)="irAHoy()">Hoy</button>
+            <button class="btn-nav" (click)="navegarPeriodo(1)">›</button>
+            <span class="fecha-periodo">{{ formatearPeriodo() }}</span>
+          </div>
+
+          <div class="resumen">
+            <div class="resumen-item">
+              <span class="resumen-label">Servicios</span>
+              <span class="resumen-valor">{{ totalServiciosAtendidos }}</span>
+            </div>
+            <div class="resumen-item">
+              <span class="resumen-label">Total a pagar</span>
+              <span class="resumen-valor">${{ totalComisiones | number:'1.2-2' }}</span>
+            </div>
+          </div>
+
+          <div class="servicios-lista">
+            <div *ngIf="cargandoComisiones" class="vacio-sm">Cargando...</div>
+            <div *ngIf="!cargandoComisiones">
+              <div *ngFor="let c of comisionesEmpleado" class="servicio-item">
+                <div class="servicio-fecha">{{ formatearFechaTurno(c.fecha) }} - {{ formatearHora(c.hora) }}</div>
+                <div class="servicio-nombre">{{ c.servicio_nombre }}</div>
+                <div class="servicio-monto">
+                  <span class="monto-total">${{ c.precio_final | number }}</span>
+                  <span class="monto-comision">+${{ c.comision | number:'1.2-2' }}</span>
+                </div>
+              </div>
+              <div *ngIf="comisionesEmpleado.length === 0" class="vacio-sm">Sin servicios en este período</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inactivar -->
+      <div class="detalle-bloque eliminar-bloque" *ngIf="empleadoSeleccionado?.activo !== false">
+        <button class="btn-eliminar" (click)="inactivarEmpleado()">🚫 Inactivar empleado</button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- POPUP NUEVO EMPLEADO -->
+  <div *ngIf="mostrarModalNuevoEmpleado" class="popup-overlay" (click)="cerrarModalNuevoEmpleado()">
+    <div class="popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <h3>Nuevo empleado</h3>
+        <button class="btn-cerrar" (click)="cerrarModalNuevoEmpleado()">✕</button>
+      </div>
+      <div class="popup-body">
+        <div class="campo">
+          <label>Nombre</label>
+          <input type="text" [(ngModel)]="nuevoNombre" placeholder="Nombre" class="input" />
+        </div>
+        <div class="campo">
+          <label>Teléfono (opcional)</label>
+          <input type="text" [(ngModel)]="nuevoTelefono" placeholder="Teléfono" class="input" />
+        </div>
+        <div class="campo">
+          <label>Comisión: <strong>{{ nuevaComision }}%</strong></label>
+          <input type="range" [(ngModel)]="nuevaComision" min="0" max="100" step="1" class="slider" />
+        </div>
+        <div class="campo">
+          <label>Días que trabaja</label>
+          <div class="dias-row">
+            <label *ngFor="let dia of diasSemana; let i = index" class="dia-chip">
+              <input type="checkbox" [(ngModel)]="diasTrabaja[i]" />
+              <span>{{ dia }}</span>
+            </label>
+          </div>
+        </div>
+        <div *ngIf="errorNuevoEmpleado" class="error-msg">{{ errorNuevoEmpleado }}</div>
+      </div>
+      <div class="popup-acciones">
+        <button class="btn-atendido" (click)="agregarEmpleado()" [disabled]="guardandoNuevoEmpleado">
+          {{ guardandoNuevoEmpleado ? 'Guardando...' : '💾 Guardar' }}
+        </button>
+        <button class="btn-cancelado" (click)="cerrarModalNuevoEmpleado()">↩️ Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+</div>

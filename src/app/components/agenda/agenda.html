@@ -27,20 +27,33 @@
     <div class="grilla-dia">
       <div class="spacer-top"></div>
       <!-- Columna de horas -->
-      <div class="col-horas-abs" [style.height.px]="alturaTotal + 24">
+      <div class="col-horas-abs" [style.height.px]="alturaTotal + offsetHeader + 24">
         <div *ngFor="let hora of horasEtiquetas"
           class="etiqueta-hora-abs"
-          [style.top.px]="topParaHora(hora)">
+          [style.top.px]="topParaHoraConHeader(hora)">
           {{ hora }}:00
         </div>
       </div>
 
-      <!-- Columna de turnos -->
-      <div class="col-turnos" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal + 24" [class.dia-cerrado]="esDiaCerrado(fechaActual)">
+      <!-- Columna de turnos: UNA sola, con el header de puestos adentro -->
+      <div class="col-turnos" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(fechaActual)">
+        <!-- Header: una columna por puesto -->
+        <div class="puestos-header">
+          <div *ngFor="let col of columnasAgenda"
+               class="puesto-header"
+               [class.sin-asignar]="col.sinAsignar"
+               [class.sin-gente]="!col.sinAsignar && !puestoAgendable(col.puesto)">
+            <span class="ph-puesto">{{ col.sinAsignar ? '—' : col.puesto.nombre }}</span>
+            <span class="ph-empleado">
+              {{ col.sinAsignar ? 'Sin asignar' : (col.puesto.empleado?.nombre || 'Sin empleado') }}
+            </span>
+          </div>
+        </div>
+
         <!-- Líneas de hora -->
         <div *ngFor="let hora of horasEtiquetas"
           class="linea-hora"
-          [style.top.px]="topParaHora(hora)">
+          [style.top.px]="topParaHoraConHeader(hora)">
         </div>
 
         <!-- Turnos -->
@@ -58,7 +71,7 @@
 
   <!-- VISTA SEMANA -->
   <div *ngIf="vista === 'semana'" class="grilla-contenedor">
-    <div class="grilla-semana">
+    <div class="grilla-semana" [style.min-width]="anchoGrillaSemana">
 
       <!-- Header -->
       <div class="header-semana">
@@ -76,20 +89,32 @@
       <!-- Cuerpo -->
       <div class="semana-cuerpo">
         <!-- Columna horas -->
-        <div class="col-horas-abs" [style.height.px]="alturaTotal + 24">
+        <div class="col-horas-abs" [style.height.px]="alturaTotal + offsetHeader + 24">
           <div *ngFor="let hora of horasEtiquetas"
             class="etiqueta-hora-abs"
-            [style.top.px]="topParaHora(hora)">
+            [style.top.px]="topParaHoraConHeader(hora)">
             {{ hora }}:00
           </div>
         </div>
 
-        <!-- Columnas por día -->
-        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
+        <!-- Columnas por día: dentro de cada día, una columna por puesto -->
+        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
+          <!-- Mini header con los empleados -->
+          <div class="puestos-header mini">
+            <div *ngFor="let col of columnasAgenda"
+                 class="puesto-header"
+                 [class.sin-asignar]="col.sinAsignar"
+                 [class.sin-gente]="!col.sinAsignar && !puestoAgendable(col.puesto)">
+              <span class="ph-empleado">
+                {{ col.sinAsignar ? 'Sin asignar' : (col.puesto.empleado?.nombre || 'Sin empleado') }}
+              </span>
+            </div>
+          </div>
+
           <!-- Líneas de hora -->
           <div *ngFor="let hora of horasEtiquetas"
             class="linea-hora"
-            [style.top.px]="topParaHora(hora)">
+            [style.top.px]="topParaHoraConHeader(hora)">
           </div>
 
           <!-- Turnos del día -->
@@ -122,6 +147,8 @@
             <div class="popup-fila"><span class="popup-label">Fecha</span><span>{{ formatearFechaTurno(turnoSeleccionado.fecha) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Hora</span><span>{{ formatearHora(turnoSeleccionado.hora_inicio || turnoSeleccionado.hora) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Duración</span><span>{{ turnoSeleccionado.duracion_minutos || 45 }} min</span></div>
+            <div class="popup-fila"><span class="popup-label">Empleado</span><span>{{ nombreEmpleadoDeTurno(turnoSeleccionado) }}</span></div>
+            <div class="popup-fila"><span class="popup-label">Puesto</span><span>{{ nombrePuestoDeTurno(turnoSeleccionado) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Estado</span><span class="badge" [ngClass]="esVencido(turnoSeleccionado) ? 'vencido' : turnoSeleccionado.estado">{{ esVencido(turnoSeleccionado) ? 'vencido' : turnoSeleccionado.estado }}</span></div>
             <div *ngIf="turnoSeleccionado.estado === 'atendido'">
               <div class="popup-fila" *ngIf="turnoSeleccionado.metodo_pago">
@@ -152,7 +179,7 @@
         <div class="popup-body">
           <div class="campo">
             <label>Servicio realizado</label>
-            <select [(ngModel)]="atendidoServicioId" (ngModelChange)="atendidoPrecio = atendidoServicio?.precio || atendidoPrecio; errorAtendido = ''">
+            <select [(ngModel)]="atendidoServicioId" (ngModelChange)="atendidoPrecio = atendidoServicio?.precio || atendidoPrecio; errorAtendido = ''; actualizarVista()">
               <option *ngFor="let s of servicios" [value]="s.id">{{ s.nombre }}</option>
             </select>
           </div>
@@ -165,6 +192,15 @@
             <select [(ngModel)]="atendidoMetodoPago">
               <option *ngFor="let m of metodosPago" [value]="m.nombre">
                 {{ m.emoji }} {{ m.nombre }}
+              </option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Empleado que atendió</label>
+            <select [(ngModel)]="atendidoEmpleadoId">
+              <option [value]="null">-- Seleccionar --</option>
+              <option *ngFor="let e of empleados" [value]="e.id">
+                {{ e.nombre }} ({{ getComisionEmpleadoServicio(e.id) }}%)
               </option>
             </select>
           </div>
@@ -199,6 +235,15 @@
               <option *ngFor="let s of servicios" [value]="s.id">{{ s.nombre }} — ${{ s.precio | number }}</option>
             </select>
           </div>
+          <div class="campo">
+            <label>Empleado que atiende</label>
+            <select [(ngModel)]="nuevoEmpleadoId" (ngModelChange)="errorEditarTurno = ''">
+              <option [value]="null">-- Sin asignar --</option>
+              <option *ngFor="let e of empleados" [value]="e.id">
+                {{ e.nombre }}{{ e.activo === false ? ' (inactivo)' : '' }}
+              </option>
+            </select>
+          </div>
           <div *ngIf="errorEditarTurno" class="error-msg">{{ errorEditarTurno }}</div>
         </div>
         <div class="popup-acciones">
@@ -218,10 +263,10 @@
         *ngFor="let turno of turnos"
         [class]="mini ? 'bloque-turno-semana' : 'bloque-turno'"
         [ngClass]="getColorTurno(turno)"
-        [style.top.px]="posicionTurno(turno, calcularColumnas(turnos), !!mini).top"
-        [style.height.px]="posicionTurno(turno, calcularColumnas(turnos), !!mini).height"
-        [style.left]="posicionTurno(turno, calcularColumnas(turnos), !!mini).left"
-        [style.width]="posicionTurno(turno, calcularColumnas(turnos), !!mini).width"
+        [style.top.px]="posicionTurno(turno, null, !!mini).top"
+        [style.height.px]="posicionTurno(turno, null, !!mini).height"
+        [style.left]="posicionTurno(turno, null, !!mini).left"
+        [style.width]="posicionTurno(turno, null, !!mini).width"
         (click)="abrirPopup(turno)">
         <div *ngIf="!mini" class="turno-header">
           <span class="turno-hora">{{ formatearHora(turno.hora_inicio || turno.hora) }}</span>

@@ -284,7 +284,17 @@
   &:focus { outline: none; border-color: #3b82f6; background: white; }
 }
 
-.input-nombre { width: 100%; min-width: 140px; }
+/* Campo de nombre (Servicios, Puestos, Días cerrados, Métodos de pago).
+   Ancho FIJO y no porcentaje: dentro de una tabla con width:100%, un width en %
+   crea una dependencia circular que el navegador resuelve distinto según cuántas
+   columnas tenga la tabla (Puestos tiene 4, Servicios 5) y los boxes quedaban
+   de tamaños distintos. Con px ambos se ven idénticos en cualquier pantalla. */
+.input-nombre,
+.input-empleado-puesto {
+  width: 175px;
+  min-width: 175px;
+  max-width: 175px;
+}
 .input-numero { width: 80px; }
 
 .input-con-prefix, .input-con-suffix {
@@ -304,6 +314,15 @@
   gap: 4px;
   align-items: center;
   height: 100%;
+}
+
+/* Fila de botones de Ediar/Guardar/Cancelar (Datos del negocio y password) */
+.botones-edicion {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 10px;
 }
 
 .btn-icon {
@@ -431,4 +450,51 @@
   padding: 8px 12px;
   border-radius: 8px;
   margin-bottom: 12px;
+}
+
+/* -- PUESTOS DE TRABAJO ----------------------------- */
+.alerta.aviso {
+  background: #fef9c3;
+  color: #854d0e;
+  margin-bottom: 10px;
+}
+
+/* ── Tabla de Puestos ──
+   Mismo min-width y mismo scroll que .tabla-servicios. Los anchos de los
+   campos están en las reglas compartidas de arriba (input-nombre /
+   input-empleado-puesto) para que sean los mismos que en Servicios. */
+.tabla-puestos {
+  width: 100%;
+  min-width: 480px;
+  max-width: 900px;
+
+  th { white-space: nowrap; }
+
+  .input-empleado-puesto { cursor: pointer; }
+}
+
+/* Texto plano del Empleado (fuera de edición).
+   Debe verse idéntico al <input> en readonly: mismo tamaño, mismo color
+   y sin negrita, así la fila no parece de dos fuentes distintas. */
+.celda-empleado {
+  font-size: 0.88rem;
+  color: inherit;
+  font-weight: inherit;
+}
+
+/* ── Estado "guardando" en las tablas editables ── */
+.guardando-celda {
+  font-size: 0.75rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.puesto-dup {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 4px;
+  padding: 2px 6px;
 }

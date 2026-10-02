@@ -4,6 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
 
 const PX_POR_MINUTO = 1.2;
+/** Alto del header de puestos (vista dia). Los turnos se corren esta cantidad. */
+const H_HEADER_PUESTOS = 44;
+/** Alto del header de puestos compactado (vista semana). */
+const H_HEADER_MINI = 20;
+/** Gutter horizontal entre columnas: debe coincidir con el margen del header. */
+const GAP_COLUMNA = 3;
 
 @Component({
   selector: 'app-agenda',
@@ -19,6 +25,11 @@ export class AgendaComponent implements OnInit, OnDestroy {
   fechaActual: Date = new Date();
   turnos: any[] = [];
 
+  // Puestos de trabajo (columnas de la agenda)
+  puestos: any[] = [];
+  /** Turnos sin puesto asignado -> columna gris al final */
+  mostrarColumnaSinAsignar = false;
+
   horaInicio = 8;
   horaFin = 20;
   diaInicio = 1;
@@ -29,7 +40,6 @@ export class AgendaComponent implements OnInit, OnDestroy {
 
   turnoSeleccionado: any = null;
   mostrarPopup = false;
-  puestosXTurno = 1;
   diasCerrados: any[] = [];
   metodosPago: any[] = [];
   modoAtendido = false;
@@ -43,11 +53,14 @@ export class AgendaComponent implements OnInit, OnDestroy {
   // Editar/Postergar
   modoEditarTurno = false;
   servicios: any[] = [];
+  empleados: any[] = [];
+  comisionesPorServicio: any[] = [];
   editandoTurno = false;
   errorEditarTurno = '';
   nuevaFecha = '';
   nuevaHora = '';
   nuevoServicioId: number | null = null;
+  nuevoEmpleadoId: number | null = null;
   horarios: any[] = [];
   esperandoConfirmacion = false;
   mostrarPopupCancelacion = false;
@@ -61,14 +74,17 @@ export class AgendaComponent implements OnInit, OnDestroy {
   _nuevaFechaPostergacion = '';
   _nuevaHoraPostergacion = '';
   _nuevoServicioPostergacion = '';
+  atendidoEmpleadoId: number | null = null;
 
   constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
 
   async ngOnInit() {
     await this.cargarHorarios();
+    await this.cargarPuestos();
     await this.cargarTurnos();
     this.metodosPago = await this.supabase.getMetodosPago();
-    this.puestosXTurno = await this.supabase.getPuestosXTurno();
+    this.empleados = await this.supabase.getEmpleados();
+    this.comisionesPorServicio = await this.supabase.getComisionesEmpleado(this.empleados.map((e: any) => e.id));
     this.diasCerrados = await this.supabase.getDiasCerrados();
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
@@ -76,6 +92,50 @@ export class AgendaComponent implements OnInit, OnDestroy {
     this.subHorarios = this.supabase.suscribirHorarios(() => {
       this.cargarHorarios();
     });
+    this.cdr.detectChanges();
+  }
+
+  getComisionEmpleadoServicio(empleadoId: number): number {
+    if (!this.atendidoServicioId) return 0;
+    const comision = this.comisionesPorServicio.find(
+      (c: any) => c.empleado_id === empleadoId && c.servicio_id === this.atendidoServicioId
+    );
+    if (comision) return comision.porcentaje;
+    const empleado = this.empleados.find((e: any) => e.id === empleadoId);
+    return empleado?.comision_porcentaje || 0;
+  }
+
+  /**
+   * Empleado real del turno. Los turnos viejos tienen puesto_id pero empleado_id
+   * en null (se guardaban antes de que existieran los puestos), asi que cuando
+   * falta se deriva del puesto que ya tiene asignado.
+   */
+  empleadoDeTurno(turno: any): number | null {
+    if (!turno) return null;
+    if (turno.empleado_id) return turno.empleado_id;
+    const puesto = this.puestos.find((p: any) => p.id === turno.puesto_id);
+    return puesto?.empleado_id || null;
+  }
+
+  /** Nombre del puesto del turno. Si falta puesto_id, lo deriva del empleado. */
+  puestoDeTurno(turno: any): any {
+    if (!turno) return null;
+    if (turno.puesto_id) return this.puestos.find((p: any) => p.id === turno.puesto_id) || null;
+    if (turno.empleado_id) return this.puestos.find((p: any) => p.empleado_id === turno.empleado_id) || null;
+    return null;
+  }
+
+  nombrePuestoDeTurno(turno: any): string {
+    return this.puestoDeTurno(turno)?.nombre || '—';
+  }
+
+  nombreEmpleadoDeTurno(turno: any): string {
+    const id = this.empleadoDeTurno(turno);
+    if (!id) return '—';
+    return this.empleados.find((e: any) => e.id === id)?.nombre || '—';
+  }
+
+  actualizarVista() {
     this.cdr.detectChanges();
   }
 
@@ -121,7 +181,13 @@ export class AgendaComponent implements OnInit, OnDestroy {
 
   async cargarTurnos() {
     this.turnos = await this.supabase.getTurnos();
+    this.actualizarColumnaSinAsignar(this.turnos.filter((t: any) => t.fecha === this.fechaISO && t.estado !== 'cancelado'));
     this.ajustarLimitesConTurnos();
+    this.cdr.detectChanges();
+  }
+
+  async cargarPuestos() {
+    this.puestos = await this.supabase.getPuestos();
     this.cdr.detectChanges();
   }
 
@@ -173,84 +239,88 @@ export class AgendaComponent implements OnInit, OnDestroy {
     return (hora - this.horaInicio) * 60 * PX_POR_MINUTO + 8;
   }
 
-  calcularColumnas(turnos: any[]): Map<number, { col: number, total: number }> {
-    const resultado = new Map<number, { col: number, total: number }>();
-
-    const toMin = (t: any) => {
-      const h = t.hora_inicio || t.hora || '00:00';
-      return parseInt(h.slice(0,2)) * 60 + parseInt(h.slice(3,5));
-    };
-    const toFin = (t: any) => toMin(t) + (t.duracion_minutos || 45);
-
-    // Ordenar por hora de inicio para que el más temprano tome col 0
-    const ordenados = [...turnos].sort((a, b) => toMin(a) - toMin(b));
-
-    ordenados.forEach((t) => {
-      const ini = toMin(t);
-      const fin = toFin(t);
-      const solapados = turnos.filter(u => {
-        if (u.id === t.id) return false;
-        return toMin(u) < fin && toFin(u) > ini;
-      });
-
-      const total = solapados.length + 1;
-
-      // Asignar la primera columna libre
-      const colsUsadas = solapados
-        .filter(u => resultado.has(u.id))
-        .map(u => resultado.get(u.id)!.col);
-      let col = 0;
-      while (colsUsadas.includes(col)) col++;
-
-      resultado.set(t.id, { col, total });
-    });
-
-    // Normalizar total al máximo real del grupo
-    resultado.forEach((val, id) => {
-      const t = turnos.find(x => x.id === id)!;
-      const ini = toMin(t);
-      const fin = toFin(t);
-      const maxTotal = Math.max(...turnos
-        .filter(u => toMin(u) < fin && toFin(u) > ini)
-        .map(u => resultado.get(u.id)?.total || 1), val.total);
-      resultado.set(id, { ...val, total: maxTotal });
-    });
-
-    return resultado;
+  /** Puestos activos en orden. Si hay turnos huerfanos, suma la columna "Sin asignar". */
+  get columnasAgenda(): any[] {
+    const cols = this.puestos.filter((p: any) => p.activo).map((p: any) => ({ puesto: p, sinAsignar: false }));
+    if (this.mostrarColumnaSinAsignar) cols.push({ puesto: null, sinAsignar: true });
+    return cols;
   }
 
-  posicionTurno(turno: any, columnas?: Map<number, { col: number, total: number }>, mini = false): { top: number, height: number, left: string, width: string } {
+  puestoAgendable(p: any): boolean {
+    if (!p?.activo) return false;
+    if (!p.empleado_id) return false;
+    if (p.empleado && p.empleado.activo === false) return false;
+    return true;
+  }
+
+  /** Actualiza la visibilidad de la columna gris segun si hay turnos sin puesto. */
+  actualizarColumnaSinAsignar(turnosVisibles: any[]) {
+    this.mostrarColumnaSinAsignar = turnosVisibles.some((t: any) => !t.puesto_id);
+  }
+
+  /** Indice de columna de un turno: la de su puesto, o la de "Sin asignar". */
+  columnaDeTurno(turno: any): number {
+    const cols = this.columnasAgenda;
+    if (!cols.length) return 0;
+    if (!turno?.puesto_id) return cols.length - 1;
+    const idx = cols.findIndex((c: any) => !c.sinAsignar && c.puesto.id === turno.puesto_id);
+    return idx >= 0 ? idx : cols.length - 1;
+  }
+
+  posicionTurno(turno: any, _columnas?: any, mini = false): { top: number, height: number, left: string, width: string } {
     const inicio = turno.hora_inicio || turno.hora || '00:00';
     const h = parseInt(inicio.slice(0, 2));
     const m = parseInt(inicio.slice(3, 5));
     const duracion = turno.duracion_minutos || 45;
     const minutosDesdeInicio = (h - this.horaInicio) * 60 + m;
+    const offset = mini ? H_HEADER_MINI : H_HEADER_PUESTOS;
 
-    let left = '0%';
-    let width = '100%';
-    if (columnas?.has(turno.id)) {
-      const { col, total } = columnas.get(turno.id)!;
-      const esMobile = window.innerWidth <= 640;
-      if (total === 1) {
-        width = mini ? 'calc(100% - 13.5px)' : (esMobile ? 'calc(100% - 18.5px)' : 'calc(100% - 18.5px)');
-        left = '0px';
-      } else {
-          const pct = 100 / total;
-          width = mini ? `calc(${pct}% - 12.5px)` : `calc(${pct}% - 18.5px)`
-          left = `calc(${pct * col}% + 0px)`;
-        }
-    }
+    const total = Math.max(this.columnasAgenda.length, 1);
+    const col = Math.min(this.columnaDeTurno(turno), total - 1);
+    const pct = 100 / total;
 
     return {
-      top: minutosDesdeInicio * PX_POR_MINUTO + 8,
-      height: Math.max(duracion * PX_POR_MINUTO, 24) + (mini ? -7 : -9),
-      left,
-      width
+      // El +8 replica el margen de topParaHora: sin esto el bloque cae arriba de la linea.
+      top: minutosDesdeInicio * PX_POR_MINUTO + offset + 8,
+      height: Math.max(duracion * PX_POR_MINUTO - 6, 22),
+      // El header usa flex:1 1 0 + margin 0 2px => misma geometria exacta que esto.
+      left: `calc(${pct * col}% + ${GAP_COLUMNA}px)`,
+      width: `calc(${pct}% - ${GAP_COLUMNA * 2}px)`
     };
   }
 
+  /** Ancho de UNA columna de puesto, en px. Base de todo el layout. */
+  get anchoColPuesto(): number {
+    return this.vista === 'dia' ? 240 : 92;
+  }
+
+  get gapColumna(): number {
+    return 4;
+  }
+
   get anchoPuestos(): string {
-    return `${this.puestosXTurno * 80}px`;
+    const n = Math.max(this.columnasAgenda.length, 1);
+    return `${n * (this.anchoColPuesto + this.gapColumna)}px`;
+  }
+
+  /**
+   * Ancho total de la grilla semanal. Se fija explicitamente para que el header
+   * y el cuerpo midan EXACTAMENTE lo mismo (si no, los turnos se salen del dia).
+   */
+  get anchoGrillaSemana(): string {
+    const nDias = this.diasDeSemana.length || 1;
+    const nCols = Math.max(this.columnasAgenda.length, 1);
+    return `${40 + nDias * nCols * (this.anchoColPuesto + this.gapColumna)}px`;
+  }
+
+  /** Offset vertical que dejan los headers de puestos. */
+  get offsetHeader(): number {
+    return this.vista === 'dia' ? H_HEADER_PUESTOS : H_HEADER_MINI;
+  }
+
+  /** Top de una linea de hora, ya descontado el alto del header. */
+  topParaHoraConHeader(hora: number): number {
+    return this.topParaHora(hora) + this.offsetHeader;
   }
 
   // VISTA DÍA
@@ -359,6 +429,7 @@ export class AgendaComponent implements OnInit, OnDestroy {
       this.atendidoMetodoPago = this.metodosPago[0]?.nombre || '';
       this.atendidoPrecio = this.turnoSeleccionado.precio;
       this.atendidoObservaciones = '';
+      this.atendidoEmpleadoId = this.empleadoDeTurno(this.turnoSeleccionado);
       this.errorAtendido = '';
       return;
     }
@@ -386,16 +457,49 @@ export class AgendaComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
       return;
     }
+    const servicio = this.atendidoServicio;
+
+    // Sin empleado no se puede guardar: se perderia la comision y el puesto quedaria huerfano.
+    if (!this.atendidoEmpleadoId) {
+      this.errorAtendido = '❌ Elegí el empleado que atendió.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // El empleado elegido no puede pisar a otro turno de su mismo puesto
+    const puestoId = await this.supabase.puestoDeEmpleado(this.atendidoEmpleadoId);
+    if (!puestoId) {
+      this.errorAtendido = '❌ Ese empleado no tiene un puesto asignado.';
+      this.cdr.detectChanges();
+      return;
+    }
+    const dur = servicio?.duracion_minutos || this.turnoSeleccionado.duracion_minutos || 45;
+    const ocupado = await this.supabase.puestoEstaOcupado(
+      puestoId,
+      this.turnoSeleccionado.fecha,
+      this.turnoSeleccionado.hora_inicio?.slice(0, 5) || this.turnoSeleccionado.hora?.slice(0, 5),
+      dur,
+      this.turnoSeleccionado.id
+    );
+    if (ocupado) {
+      const nombreEmp = this.empleados.find((e: any) => e.id === this.atendidoEmpleadoId)?.nombre;
+      this.errorAtendido = `❌ ${nombreEmp || 'Ese empleado'} ya tiene otro turno en ese horario.`;
+      this.cdr.detectChanges();
+      return;
+    }
+
     this.guardandoAtendido = true;
     try {
-      const servicio = this.atendidoServicio;
       await this.supabase.marcarAtendido(this.turnoSeleccionado.id, {
         servicio_nombre_final: servicio?.nombre || this.turnoSeleccionado.servicio_nombre,
+        servicio_id_final: servicio?.id ?? null,
         precio_final: this.atendidoPrecio,
         metodo_pago: this.atendidoMetodoPago,
-        observaciones: this.atendidoObservaciones
+        observaciones: this.atendidoObservaciones,
+        empleado_id: this.atendidoEmpleadoId
       });
-      await this.cargarTurnos(); // cargarDatos() en dashboard
+      await this.cargarTurnos();
+      this.comisionesPorServicio = await this.supabase.getComisionesEmpleado(this.empleados.map((e: any) => e.id));
       this.cerrarPopup();
     } catch (e) {
       this.errorAtendido = '❌ Error al guardar.';
@@ -429,6 +533,7 @@ export class AgendaComponent implements OnInit, OnDestroy {
     this.nuevaFecha = this.turnoSeleccionado.fecha;
     this.nuevaHora = this.turnoSeleccionado.hora_inicio?.slice(0,5) || this.turnoSeleccionado.hora?.slice(0,5) || '';
     this.nuevoServicioId = this.turnoSeleccionado.servicio_id;
+    this.nuevoEmpleadoId = this.empleadoDeTurno(this.turnoSeleccionado);
     this.errorEditarTurno = '';
     this.cdr.detectChanges();
   }
@@ -478,15 +583,22 @@ export class AgendaComponent implements OnInit, OnDestroy {
       fin.setMinutes(fin.getMinutes() + servicio.duracion_minutos);
       const horaFin = `${String(fin.getHours()).padStart(2,'0')}:${String(fin.getMinutes()).padStart(2,'0')}`;
 
-      // Validar solapamiento
-      const solapados = await this.supabase.getTurnosSolapados(
-        this.nuevaFecha, this.nuevaHora, horaFin, this.turnoSeleccionado.id
-      );
-      const puestos = await this.supabase.getPuestosXTurno();
-      if (solapados.length >= puestos) {
-        this.errorEditarTurno = puestos === 1
-          ? `Ya hay un turno de ${solapados[0].cliente_nombre} a esa hora.`
-          : `Ya se alcanzó el límite de ${puestos} turnos simultáneos para ese horario.`;
+      // Validar que el puesto elegido no este ocupado en ese rango
+      const puestoId = await this.supabase.puestoDeEmpleado(this.nuevoEmpleadoId);
+      if (puestoId) {
+        const ocupado = await this.supabase.puestoEstaOcupado(
+          puestoId, this.nuevaFecha, this.nuevaHora,
+          servicio.duracion_minutos, this.turnoSeleccionado.id
+        );
+        if (ocupado) {
+          const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
+          this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
+          this.editandoTurno = false;
+          this.cdr.detectChanges();
+          return;
+        }
+      } else if (this.nuevoEmpleadoId) {
+        this.errorEditarTurno = '❌ Ese empleado no tiene un puesto asignado.';
         this.editandoTurno = false;
         this.cdr.detectChanges();
         return;
