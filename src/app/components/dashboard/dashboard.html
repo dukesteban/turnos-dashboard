@@ -229,22 +229,28 @@
           </div>
           <div class="campo">
             <label>Nueva Hora</label>
-            <input type="time" [(ngModel)]="nuevaHora" (ngModelChange)="errorEditarTurno = ''"/>
+            <input type="time" [(ngModel)]="nuevaHora"
+                   (ngModelChange)="errorEditarTurno = ''; actualizarEmpleadosReprogramar()"/>
           </div>
           <div class="campo">
             <label>Nuevo Servicio</label>
-            <select [(ngModel)]="nuevoServicioId" (ngModelChange)="errorEditarTurno = ''; actualizarVista()">
+            <select [(ngModel)]="nuevoServicioId"
+                    (ngModelChange)="errorEditarTurno = ''; actualizarEmpleadosReprogramar()">
               <option *ngFor="let s of servicios" [value]="s.id">{{ s.nombre }} — ${{ s.precio | number }}</option>
             </select>
           </div>
           <div class="campo">
             <label>Empleado que atiende</label>
-            <select [(ngModel)]="nuevoEmpleadoId" (ngModelChange)="errorEditarTurno = ''">
-              <option [value]="null">-- Seleccionar empleado --</option>
-              <option *ngFor="let e of empleados" [value]="e.id">
+            <select [(ngModel)]="nuevoEmpleadoId"
+                    (ngModelChange)="errorEditarTurno = ''; actualizarEmpleadosReprogramar()">
+              <option [value]="null">-- Sin asignar --</option>
+              <option *ngFor="let e of empleadosReprogramar" [value]="e.id">
                 {{ e.nombre }} ({{ getComisionEmpleadoServicioReprogramar(e.id) }}%)
               </option>
             </select>
+            <div *ngIf="empleadoReprogramarNoPuede" class="aviso-empleado">
+              ⚠️ Ese empleado no puede trabajar en esa fecha/hora. Elegí otro.
+            </div>
           </div>
           <div *ngIf="errorEditarTurno" class="error-msg">{{ errorEditarTurno }}</div>
         </div>
@@ -252,7 +258,7 @@
           <button class="btn-atendido" (click)="confirmarEditarTurno()" [disabled]="editandoTurno">
             {{ editandoTurno ? 'Guardando...' : '💾 Confirmar' }}
           </button>
-          <button class="btn-cancelado" (click)="modoEditarTurno = false">↩️ Volver</button>
+          <button class="btn-cancelado" (click)="salirDeEditarTurno()">↩️ Volver</button>
         </div>
       </div>
 

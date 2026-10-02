@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { environment } from '../../environments/environment';
+import { jornadaCubre, turnoTocadoPorAusencia, textoAusencia } from '../utils/fechas';
 
 @Injectable({
   providedIn: 'root'
@@ -243,7 +244,7 @@ export class SupabaseService {
   async getPuestos() {
     const { data, error } = await this.supabase
       .from('puestos')
-      .select('*, empleados(id, nombre, activo, comision_porcentaje, dias_trabaja)')
+      .select('*, empleados(id, nombre, activo, comision_porcentaje, jornada)')
       .order('orden', { ascending: true })
       .order('id', { ascending: true });
     if (error) throw error;
@@ -254,13 +255,123 @@ export class SupabaseService {
     });
   }
 
-  /** Un puesto solo es agendable si esta activo y su empleado esta activo. */
-  puestoEsAgendable(puesto: any, _todos?: any[]): boolean {
-    if (!puesto?.activo) return false;
-    if (!puesto.empleado_id) return false;
-    const emp = puesto.empleado;
-    if (emp && emp.activo === false) return false;
-    return true;
+  /**
+   * Un puesto solo es agendable si:
+   *   - esta activo, tiene empleado, y el empleado esta activo
+   *   - la JORNADA del empleado cubre ese dia/hora   (patron recurrente)
+   *   - el empleado no tiene una AUSENCIA que lo tape  (excepcion con fecha)
+   *
+   * Si se pasa `fecha`, la respuesta incluye el motivo del rechazo para poder
+   * mostrarlo ("No trabaja ese día", "Sale a las 13:00", "Vacaciones").
+   * Sin `fecha` devuelve solo el boolean (usolegacy).
+   */
+  puestoEsAgendable(
+    puesto: any,
+    fecha?: string,
+    horaInicio?: string,
+    duracionMin?: number,
+    ausencias: any[] = []
+  ): boolean | { agendable: boolean; motivo?: string } {
+    let motivo: string | undefined;
+    if (!puesto?.activo) motivo = 'Puesto desactivado';
+    else if (!puesto.empleado_id) motivo = 'Sin empleado asignado';
+    else {
+      const emp = puesto.empleado;
+      if (emp && emp.activo === false) motivo = 'Empleado inactivo';
+      else if (fecha) {
+        const dur = duracionMin || 45;
+        const j = jornadaCubre(emp?.jornada, fecha, horaInicio || '00:00', dur);
+        if (!j.ok) motivo = j.motivo;
+        else {
+          const a = turnoTocadoPorAusencia(ausencias, fecha, horaInicio || '00:00', dur);
+          if (a) motivo = textoAusencia(a);
+        }
+      }
+    }
+    return fecha ? { agendable: !motivo, motivo } : !motivo;
+  }
+
+  /** Mismo chequeo pero siempre devuelve el objeto con motivo. */
+  motivoDeNoAgendable(
+    puesto: any, fecha: string, horaInicio: string, duracionMin: number, ausencias: any[] = []
+  ): string | null {
+    const r = this.puestoEsAgendable(puesto, fecha, horaInicio, duracionMin, ausencias) as any;
+    return r.agendable ? null : (r.motivo || 'No disponible');
+  }
+
+  /**
+   * Un empleado puntual puede atender este turno?
+   * Capa 1 (jornada semanal) + capa 2 (ausencias). Es el chequeo que hay que
+   * hacer cuando el usuario elige a mano, porque `puestoEstaOcupado` solo mira
+   * los turnos y nowho puede trabajar.
+   */
+  async empleadoPuedeAtender(
+    empleadoId: number, fecha: string, horaInicio: string,
+    duracionMin: number, ausencias?: any[]
+  ): Promise<{ ok: boolean; motivo?: string }> {
+    const aus = ausencias ?? (await this.getAusencias(empleadoId));
+    const { data, error } = await this.supabase
+      .from('empleados')
+      .select('id, nombre, activo, jornada')
+      .eq('id', empleadoId)
+      .single();
+    if (error || !data) return { ok: false, motivo: 'Empleado inexistente' };
+    if (data.activo === false) return { ok: false, motivo: 'Empleado inactivo' };
+
+    const j = jornadaCubre(data.jornada, fecha, horaInicio, duracionMin);
+    if (!j.ok) return j;
+
+    const a = turnoTocadoPorAusencia(aus, fecha, horaInicio, duracionMin);
+    return a ? { ok: false, motivo: textoAusencia(a) } : { ok: true };
+  }
+
+  // ── AUSENCIAS ────────────────────────────────────────────────
+
+  async getAusencias(empleadoIds?: number | number[], desde?: string, hasta?: string) {
+    let q = this.supabase.from('ausencias').select('*').order('desde', { ascending: true });
+    const ids = Array.isArray(empleadoIds) ? empleadoIds : empleadoIds ? [empleadoIds] : null;
+    if (ids?.length) q = q.in('empleado_id', ids);
+    if (desde) q = q.gte('desde', desde);
+    if (hasta) q = q.lte('hasta', hasta);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data || [];
+  }
+
+  async crearAusencia(a: Partial<{
+    empleado_id: number; desde: string; hasta: string | null;
+    hora_inicio: string | null; hora_fin: string | null; tipo: string; motivo: string | null;
+  }>) {
+    const { data, error } = await this.supabase
+      .from('ausencias')
+      .insert({ ...a, tipo: a.tipo || 'ausencia' })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async actualizarAusencia(id: number, cambios: any) {
+    const { error } = await this.supabase.from('ausencias').update(cambios).eq('id', id);
+    if (error) throw error;
+  }
+
+  async eliminarAusencia(id: number) {
+    const { error } = await this.supabase.from('ausencias').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  /** Turnos pendientes de un empleado en un rango de fechas (para avisar al guardar una ausencia). */
+  async getTurnosPendientesDe(empleadoId: number, desde: string, hasta: string) {
+    const { data, error } = await this.supabase
+      .from('turnos')
+      .select('id, fecha, hora_inicio, hora, duracion_minutos, cliente_nombre, estado')
+      .eq('empleado_id', empleadoId)
+      .eq('estado', 'pendiente')
+      .gte('fecha', desde)
+      .lte('fecha', hasta);
+    if (error) throw error;
+    return data || [];
   }
 
   async crearPuesto(puesto: Partial<{ nombre: string; empleado_id: number | null; orden: number }>) {
@@ -309,7 +420,9 @@ export class SupabaseService {
    * "para esta fecha/hora, que puestos quedan libres y quien atiende?"
    * Es la funcion que consumira el agente de WhatsApp.
    */
-  async getPuestosDisponibles(fecha: string, horaInicio: string, duracionMin: number) {
+  async getPuestosDisponibles(
+    fecha: string, horaInicio: string, duracionMin: number, ausencias: any[] = []
+  ) {
     const [h, m] = (horaInicio.length === 5 ? horaInicio : horaInicio.slice(0, 5)).split(':');
     const total = parseInt(h, 10) * 60 + parseInt(m, 10) + (duracionMin || 45);
     const horaFin = `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
@@ -334,35 +447,49 @@ export class SupabaseService {
 
     return puestos
       .filter((p: any) => p.activo)
-      .map((p: any) => ({
-        puesto_id: p.id,
-        nombre: p.nombre,
-        empleado_id: p.empleado_id,
-        empleado: p.empleado?.nombre || null,
-        agendable: this.puestoEsAgendable(p, puestos),
-        libre: !puestosOcupados.has(p.id),
-        ocupado_por: puestosOcupados.has(p.id)
-          ? solapados.find((t: any) => t.puesto_id === p.id) || null
-          : null,
-      }));
+      .map((p: any) => {
+        const { agendable, motivo } = this.puestoEsAgendable(
+          p, fecha, horaInicio, duracionMin, ausencias
+        ) as { agendable: boolean; motivo?: string };
+        return {
+          puesto_id: p.id,
+          nombre: p.nombre,
+          empleado_id: p.empleado_id,
+          empleado: p.empleado?.nombre || null,
+          jornada: p.empleado?.jornada || null,
+          // Que el empleado pueda o no, y el motivo si no puede.
+          puede_atender: agendable,
+          motivo_bloqueo: agendable ? null : (motivo || 'No disponible'),
+          // Solo agenda si ademas esta LIBRE en ese horario.
+          agendable: agendable && !puestosOcupados.has(p.id),
+          libre: !puestosOcupados.has(p.id),
+          ocupado_por: puestosOcupados.has(p.id)
+            ? solapados.find((t: any) => t.puesto_id === p.id) || null
+            : null,
+        };
+      });
   }
 
   /** "Tenes lugar con este empleado?" - para el caso de consultar por un empleado puntual. */
-  async getPuestoDisponibleDeEmpleado(empleadoId: number, fecha: string, horaInicio: string, duracionMin: number) {
-    const disponibles = await this.getPuestosDisponibles(fecha, horaInicio, duracionMin);
+  async getPuestoDisponibleDeEmpleado(
+    empleadoId: number, fecha: string, horaInicio: string, duracionMin: number, ausencias: any[] = []
+  ) {
+    const disponibles = await this.getPuestosDisponibles(fecha, horaInicio, duracionMin, ausencias);
     const delEmpleado = disponibles.filter((p: any) => p.empleado_id === empleadoId);
-    const libre = delEmpleado.find((p: any) => p.libre);
+    const libre = delEmpleado.find((p: any) => p.libre && p.puede_atender);
     return {
       disponible: !!libre,
       puesto: libre || null,
       nombre_empleado: delEmpleado[0]?.empleado || null,
+      // Si esta libre pero no puede, el motivo (jornada / ausencia).
+      motivo: libre ? null : (delEmpleado[0]?.motivo_bloqueo || 'No disponible'),
     };
   }
 
   /** Primer puesto agendable y libre. Base para el autoscaneo al agendar. */
-  async getPrimerPuestoLibre(fecha: string, horaInicio: string, duracionMin: number) {
-    const disponibles = await this.getPuestosDisponibles(fecha, horaInicio, duracionMin);
-    return disponibles.find((p: any) => p.agendable && p.libre) || null;
+  async getPrimerPuestoLibre(fecha: string, horaInicio: string, duracionMin: number, ausencias: any[] = []) {
+    const disponibles = await this.getPuestosDisponibles(fecha, horaInicio, duracionMin, ausencias);
+    return disponibles.find((p: any) => p.agendable) || null;
   }
 
   /** Confirma que el puesto no este ocupado en ese rango (doble booking). */

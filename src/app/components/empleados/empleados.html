@@ -64,26 +64,116 @@
         </div>
       </div>
 
-      <!-- Días que trabaja -->
+      <!-- Jornada -->
       <div class="detalle-bloque">
-        <h4>Días que trabaja</h4>
-        <div *ngIf="!empleadoSeleccionado.editandoDias" class="dias-display">
+        <h4>Jornada</h4>
+        <div *ngIf="!empleadoSeleccionado.editandoJornada" class="dias-display">
           <span *ngFor="let dia of diasCompletos; let i = index"
             class="dia-badge"
-            [class.activo]="empleadoSeleccionado.dias_trabaja[i]">
+            [class.activo]="empleadoSeleccionado.jornada[i].activo"
+            [class.parcial]="empleadoSeleccionado.jornada[i].activo && empleadoSeleccionado.jornada[i].hora_fin"
+            [title]="!empleadoSeleccionado.jornada[i].activo ? 'No trabaja'
+              : (empleadoSeleccionado.jornada[i].hora_fin
+                  ? (empleadoSeleccionado.jornada[i].hora_inicio + ' - ' + empleadoSeleccionado.jornada[i].hora_fin)
+                  : 'Jornada completa')">
             {{ diasSemana[i] }}
           </span>
-          <button class="btn-icon" (click)="empleadoSeleccionado.editandoDias = true">✏️</button>
+          <button class="btn-icon" (click)="empleadoSeleccionado.editandoJornada = true">✏️</button>
         </div>
-        <div *ngIf="empleadoSeleccionado.editandoDias" class="dias-edicion">
-          <label *ngFor="let dia of diasSemana; let i = index" class="dia-chip">
-            <input type="checkbox" [(ngModel)]="empleadoSeleccionado.dias_trabaja[i]" />
-            <span>{{ dia }}</span>
-          </label>
-          <div class="acciones">
-            <button class="btn-icon" [disabled]="empleadoSeleccionado.guardando" (click)="guardarDias()">💾</button>
-            <button class="btn-icon" (click)="empleadoSeleccionado.editandoDias = false">↩️</button>
+        <div *ngIf="!empleadoSeleccionado.editandoJornada" class="jornada-resumen">
+          {{ resumenJornada }}
+        </div>
+
+        <div *ngIf="empleadoSeleccionado.editandoJornada" class="jornada-edicion">
+          <div *ngFor="let dia of diasSemana; let i = index" class="jornada-fila"
+               [class.inactivo]="!empleadoSeleccionado.jornada[i].activo">
+            <label class="dia-chip">
+              <input type="checkbox"
+                     [ngModel]="empleadoSeleccionado.jornada[i].activo"
+                     (ngModelChange)="$event ? activarDia(i) : desactivarDia(i)" />
+              <span>{{ dia }}</span>
+            </label>
+            <div class="jornada-horario" *ngIf="empleadoSeleccionado.jornada[i].activo">
+              <input type="time" [(ngModel)]="empleadoSeleccionado.jornada[i].hora_inicio" />
+              <span class="guion">→</span>
+              <input type="time" [(ngModel)]="empleadoSeleccionado.jornada[i].hora_fin" />
+              <button class="btn-mini" (click)="limpiarHorario(i)" title="Jornada completa (sin tope)">∞</button>
+            </div>
           </div>
+          <p class="ayuda-jornada">
+            Sin horario = jornada completa. Con horario, el servicio tiene que
+            terminar antes de la hora de fin.
+          </p>
+          <div class="acciones">
+            <button class="btn-icon" [disabled]="empleadoSeleccionado.guardando" (click)="guardarJornada()">💾</button>
+            <button class="btn-icon" (click)="cancelarJornada()">↩️</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ausencias -->
+      <div class="detalle-bloque">
+        <div class="bloque-header">
+          <h4>Ausencias</h4>
+          <button class="btn-icon" (click)="mostrarFormAusencia ? mostrarFormAusencia = false : abrirFormAusencia()">
+            {{ mostrarFormAusencia ? '↩️' : '➕' }}
+          </button>
+        </div>
+        <p class="ayuda-jornada">
+          Fechas donde no atiende. Con horario, bloquea solo esa franja del día.
+        </p>
+
+        <div *ngIf="mostrarFormAusencia" class="ausencia-form">
+          <div class="fila">
+            <div class="campo">
+              <label>Desde</label>
+              <input type="date" [(ngModel)]="nuevaAusencia.desde" (ngModelChange)="mostrarError('')" />
+            </div>
+            <div class="campo">
+              <label>Hasta <span class="opcional">(opcional)</span></label>
+              <input type="date" [(ngModel)]="nuevaAusencia.hasta" (ngModelChange)="mostrarError('')" />
+            </div>
+            <div class="campo">
+              <label>Tipo</label>
+              <select [(ngModel)]="nuevaAusencia.tipo">
+                <option value="vacaciones">🏖 Vacaciones</option>
+                <option value="medio_jornada">🕐 Medio día</option>
+                <option value="baja">🤒 Baja</option>
+                <option value="capacitacion">🎓 Capacitación</option>
+                <option value="ausencia">📋 Otro</option>
+              </select>
+            </div>
+          </div>
+          <div class="fila">
+            <div class="campo">
+              <label>Desde <span class="opcional">(opcional)</span></label>
+              <input type="time" [(ngModel)]="nuevaAusencia.hora_inicio" (ngModelChange)="mostrarError('')" />
+            </div>
+            <div class="campo">
+              <label>Hasta <span class="opcional">(opcional)</span></label>
+              <input type="time" [(ngModel)]="nuevaAusencia.hora_fin" (ngModelChange)="mostrarError('')" />
+            </div>
+            <div class="campo">
+              <label>Motivo</label>
+              <input type="text" [(ngModel)]="nuevaAusencia.motivo" placeholder="Ej: vacaciones" />
+            </div>
+          </div>
+          <p class="ayuda-jornada">Sin horas = todo el día. Con las dos = solo esa franja.</p>
+          <div class="acciones">
+            <button class="btn-primario" [disabled]="guardandoAusencia" (click)="agregarAusencia()">
+              {{ guardandoAusencia ? 'Guardando...' : '💾 Guardar ausencia' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="ausencia-lista">
+          <div *ngFor="let a of ausencias" class="ausencia-item">
+            <span class="ausencia-rango">{{ a.desde | date:'dd/MM' }}<span *ngIf="a.hasta"> – {{ a.hasta | date:'dd/MM' }}</span></span>
+            <span class="ausencia-tipo" [ngClass]="'tipo-' + a.tipo">{{ textoAusencia(a) }}</span>
+            <span class="ausencia-motivo" *ngIf="a.motivo">{{ a.motivo }}</span>
+            <button class="btn-icon" (click)="eliminarAusencia(a)" title="Eliminar">🗑️</button>
+          </div>
+          <div *ngIf="ausencias.length === 0" class="vacio-sm">Sin ausencias cargadas</div>
         </div>
       </div>
 
@@ -198,12 +288,23 @@
           <input type="range" [(ngModel)]="nuevaComision" min="0" max="100" step="1" class="slider" />
         </div>
         <div class="campo">
-          <label>Días que trabaja</label>
-          <div class="dias-row">
-            <label *ngFor="let dia of diasSemana; let i = index" class="dia-chip">
-              <input type="checkbox" [(ngModel)]="diasTrabaja[i]" />
-              <span>{{ dia }}</span>
-            </label>
+          <label>Jornada</label>
+          <div class="jornada-edicion nueva">
+            <div *ngFor="let dia of diasSemana; let i = index" class="jornada-fila"
+                 [class.inactivo]="!jornadaNueva[i].activo">
+              <label class="dia-chip">
+                <input type="checkbox"
+                       [ngModel]="jornadaNueva[i].activo"
+                       (ngModelChange)="$event ? activarDiaNueva(i) : desactivarDiaNueva(i)" />
+                <span>{{ dia }}</span>
+              </label>
+              <div class="jornada-horario" *ngIf="jornadaNueva[i].activo">
+                <input type="time" [(ngModel)]="jornadaNueva[i].hora_inicio" />
+                <span class="guion">→</span>
+                <input type="time" [(ngModel)]="jornadaNueva[i].hora_fin" />
+                <button class="btn-mini" (click)="limpiarHorarioNueva(i)" title="Jornada completa">∞</button>
+              </div>
+            </div>
           </div>
         </div>
         <div *ngIf="errorNuevoEmpleado" class="error-msg">{{ errorNuevoEmpleado }}</div>

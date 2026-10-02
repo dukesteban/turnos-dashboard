@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
+import { jornadaCubre, turnoTocadoPorAusencia, textoAusencia, normalizarJornada } from '../../utils/fechas';
 
 const PX_POR_MINUTO = 1.2;
 /** Alto del header de puestos (vista dia). Los turnos se corren esta cantidad. */
@@ -27,6 +28,9 @@ export class AgendaComponent implements OnInit, OnDestroy {
 
   // Puestos de trabajo (columnas de la agenda)
   puestos: any[] = [];
+  ausencias: any[] = [];
+  /** Cache de jornadas por empleado para no consultarla por celda de la agenda. */
+  jornadas: Record<number, any> = {};
   /** Turnos sin puesto asignado -> columna gris al final */
   mostrarColumnaSinAsignar = false;
 
@@ -54,6 +58,10 @@ export class AgendaComponent implements OnInit, OnDestroy {
   modoEditarTurno = false;
   servicios: any[] = [];
   empleados: any[] = [];
+  /** Solo los que pueden atender en la fecha/hora del form de reprogramar. */
+  empleadosReprogramar: any[] = [];
+  /** El empleado elegido NO puede trabajar ese día (se muestra con aviso). */
+  empleadoReprogramarNoPuede = false;
   comisionesPorServicio: any[] = [];
   editandoTurno = false;
   errorEditarTurno = '';
@@ -85,6 +93,12 @@ export class AgendaComponent implements OnInit, OnDestroy {
     this.metodosPago = await this.supabase.getMetodosPago();
     this.empleados = await this.supabase.getEmpleados();
     this.comisionesPorServicio = await this.supabase.getComisionesEmpleado(this.empleados.map((e: any) => e.id));
+    this.ausencias = await this.supabase.getAusencias();
+    // Cache de jornadas: la usa turnoEnRiesgo() por cada bloque de la grilla.
+    this.jornadas = {};
+    for (const e of this.empleados as any[]) {
+      this.jornadas[e.id] = normalizarJornada(e.jornada);
+    }
     this.diasCerrados = await this.supabase.getDiasCerrados();
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
@@ -215,6 +229,11 @@ export class AgendaComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** El día que se está mirando, en formato YYYY-MM-DD (el que espera la validacion). */
+  get fechaActualISO(): string {
+    return this.fechaActual.toLocaleDateString('en-CA');
+  }
+
   esDiaCerrado(dia: Date): boolean {
     const fechaStr = dia.toLocaleDateString('en-CA');
     return this.diasCerrados.some(d => {
@@ -246,11 +265,54 @@ export class AgendaComponent implements OnInit, OnDestroy {
     return cols;
   }
 
-  puestoAgendable(p: any): boolean {
-    if (!p?.activo) return false;
-    if (!p.empleado_id) return false;
-    if (p.empleado && p.empleado.activo === false) return false;
-    return true;
+  /**
+   * Delega en el servicio: antes la Agenda tenia su PROPIA copia de esta
+   * funcion y por eso no se enteraba de las reglas nuevas.
+   * `fecha` es opcional: sin ella solo chequea puesto + empleado activo
+   * (para pintar la columna), con ella aplica jornada + ausencias.
+   */
+  puestoAgendable(p: any, fecha?: string, hora?: string, dur?: number): boolean {
+    return this.supabase.puestoEsAgendable(
+      p, fecha, hora, dur, this.ausencias
+    ) as boolean;
+  }
+
+  /** Motivo por el que una columna no se puede agendar en esa fecha (o null). */
+  motivoColumna(p: any, fecha: string, hora = '09:00', dur = 45): string | null {
+    return this.supabase.motivoDeNoAgendable(p, fecha, hora, dur, this.ausencias);
+  }
+
+  /**
+   * Motivo "de persona ausente" para pintar la columna rayada.
+   * Solo cuenta ausencias y dias que no trabaja: si lo que falla es que el
+   * puesto esta desactivado, eso ya lo muestra el estado .sin-gente.
+   */
+  motivoColumnaAusente(col: any, fecha: string): string | null {
+    if (col?.sinAsignar || !col?.puesto?.empleado_id) return null;
+    const empId = col.puesto.empleado_id;
+    const suyas = this.ausencias.filter((a: any) => a.empleado_id === empId);
+    // Se evalua a las 09:00 como referencia: alcanza para marcar la columna.
+    const a = turnoTocadoPorAusencia(suyas, fecha, '09:00', 45);
+    if (a) return textoAusencia(a);
+    const j = jornadaCubre(this.jornadaDe(empId), fecha, '09:00', 45);
+    return j.ok ? null : (j.motivo || null);
+  }
+
+  /** ¿Este turno se queda sin cobertura por una ausencia? (no se mueve solo) */
+  turnoEnRiesgo(t: any): boolean {
+    if (!t?.empleado_id) return false;
+    const fecha = t.fecha;
+    const hora = (t.hora_inicio || t.hora || '09:00').slice(0, 5);
+    const dur = t.duracion_minutos || 45;
+    if (!jornadaCubre(this.jornadaDe(t.empleado_id), fecha, hora, dur).ok) return true;
+    // this.ausencias trae las de TODOS: hay que quedarse con las de este.
+    const suyas = this.ausencias.filter((a: any) => a.empleado_id === t.empleado_id);
+    return !!turnoTocadoPorAusencia(suyas, fecha, hora, dur);
+  }
+
+  /** Jornada del empleado (lo cacheamos al cargar para no consultarla por celda). */
+  jornadaDe(empleadoId: number): any {
+    return this.jornadas[empleadoId] || null;
   }
 
   /** Actualiza la visibilidad de la columna gris segun si hay turnos sin puesto. */
@@ -289,7 +351,33 @@ export class AgendaComponent implements OnInit, OnDestroy {
     };
   }
 
-  /** Ancho de UNA columna de puesto, en px. Base de todo el layout. */
+  /**
+ * Cuanto contenido cabe segun la duracion del turno.
+ * A 1.2 px por minuto un turno de 45 min mide 48px, y las 3 lineas
+ * (hora+cliente / servicio / precio) necesitan ~55px: el precio quedaba
+ * cortado. Con esto se ocultan de abajo hacia arriba.
+ *   2 = header + servicio + precio   (>= 50 min)
+ *   1 = header + servicio             (>= 40 min)
+ *   0 = solo header                   (< 40 min)
+ */
+nivelContenido(turno: any): number {
+  const dur = Number(turno?.duracion_minutos) || 45;
+  if (dur >= 50) return 2;
+  if (dur >= 40) return 1;
+  return 0;
+}
+
+claseBloque(turno: any, mini: boolean): string {
+  if (mini) {
+    // Vista semana: 2 filas (cliente + servicio) ≈ 34px. Con menos de 35 min
+    // el bloque mide menos que eso y hay que sacar la fila del servicio.
+    const dur = Number(turno?.duracion_minutos) || 45;
+    return `bloque-turno-semana mini-nivel-${dur >= 35 ? 1 : 0}`;
+  }
+  return `bloque-turno nivel-${this.nivelContenido(turno)}`;
+}
+
+/** Ancho de UNA columna de puesto, en px. Base de todo el layout. */
   get anchoColPuesto(): number {
     return this.vista === 'dia' ? 240 : 92;
   }
@@ -418,6 +506,12 @@ export class AgendaComponent implements OnInit, OnDestroy {
     this.mostrarPopup = false;
     this.turnoSeleccionado = null;
     this.modoAtendido = false;
+    // Limpiar tambien los carteles del form de reprogramar: si no, reaparecen
+    // al abrir el siguiente turno.
+    this.modoEditarTurno = false;
+    this.errorEditarTurno = '';
+    this.empleadoReprogramarNoPuede = false;
+    this.empleadosReprogramar = this.empleados;
     this.cdr.detectChanges();
   }
 
@@ -468,6 +562,20 @@ export class AgendaComponent implements OnInit, OnDestroy {
 
     // El empleado elegido no puede pisar a otro turno de su mismo puesto
     const puestoId = await this.supabase.puestoDeEmpleado(this.atendidoEmpleadoId);
+    // Jornada + ausencias del empleado que se esta anotando
+    const puede = await this.supabase.empleadoPuedeAtender(
+      this.atendidoEmpleadoId,
+      this.turnoSeleccionado.fecha,
+      (this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora || '00:00').slice(0, 5),
+      this.atendidoServicio?.duracion_minutos || this.turnoSeleccionado.duracion_minutos || 45,
+      this.ausencias
+    );
+    if (!puede.ok) {
+      const nombreEmp = this.empleados.find((e: any) => e.id === this.atendidoEmpleadoId)?.nombre;
+      this.errorAtendido = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
+      this.cdr.detectChanges();
+      return;
+    }
     if (!puestoId) {
       this.errorAtendido = '❌ Ese empleado no tiene un puesto asignado.';
       this.cdr.detectChanges();
@@ -528,6 +636,55 @@ export class AgendaComponent implements OnInit, OnDestroy {
     return this.servicios.find(s => s.id == Number(this.nuevoServicioId)) || null;
   }
 
+  /** Comisión del empleado para el servicio elegido en el form de reprogramar. */
+  getComisionEmpleadoServicioReprogramar(empleadoId: number): number {
+    if (!this.nuevoServicioId) return 0;
+    const comision = this.comisionesPorServicio.find(
+      (c: any) => c.empleado_id === empleadoId && c.servicio_id == this.nuevoServicioId
+    );
+    if (comision) return comision.porcentaje;
+    const emp = this.empleados.find((e: any) => e.id === empleadoId);
+    return emp?.comision_porcentaje || 0;
+  }
+
+  /**
+   * Filtra el selector de "Empleado que atiende" del form de reprogramar.
+   * Se quedan los que pueden trabajar esa fecha/hora, MAS el que ya está
+   * asignado: si no, al guardar un turno que no se tocó se perdería el empleado.
+   */
+  async actualizarEmpleadosReprogramar() {
+    if (!this.nuevaFecha) {
+      this.empleadosReprogramar = this.empleados;
+      this.empleadoReprogramarNoPuede = false;
+      return;
+    }
+    const servicio = this.servicios.find((s: any) => s.id == Number(this.nuevoServicioId));
+    const dur = servicio?.duracion_minutos || 45;
+    const disponibles = await this.supabase.getPuestosDisponibles(
+      this.nuevaFecha, this.nuevaHora || '00:00', dur, this.ausencias
+    );
+    const puede = (e: any) =>
+      !!disponibles.some((p: any) => p.empleado_id === e.id && p.puede_atender);
+
+    this.empleadosReprogramar = this.empleados.filter(
+      (e: any) => puede(e) || e.id === this.nuevoEmpleadoId
+    );
+    const elegido = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId);
+    this.empleadoReprogramarNoPuede = !!elegido && !puede(elegido);
+    // Sin esto el cartel queda pegado: el metodo es async y el cambio de
+    // estado pasa despues del await, fuera del ciclo de deteccion.
+    this.cdr.detectChanges();
+  }
+
+  /** Sale del form de reprogramar limpiando todos los carteles. */
+  salirDeEditarTurno() {
+    this.modoEditarTurno = false;
+    this.errorEditarTurno = '';
+    this.empleadoReprogramarNoPuede = false;
+    this.empleadosReprogramar = this.empleados;
+    this.cdr.detectChanges();
+  }
+
   activarEditarTurno() {
     this.modoEditarTurno = true;
     this.nuevaFecha = this.turnoSeleccionado.fecha;
@@ -535,6 +692,7 @@ export class AgendaComponent implements OnInit, OnDestroy {
     this.nuevoServicioId = this.turnoSeleccionado.servicio_id;
     this.nuevoEmpleadoId = this.empleadoDeTurno(this.turnoSeleccionado);
     this.errorEditarTurno = '';
+    this.actualizarEmpleadosReprogramar();
     this.cdr.detectChanges();
   }
 
@@ -584,6 +742,19 @@ export class AgendaComponent implements OnInit, OnDestroy {
       const horaFin = `${String(fin.getHours()).padStart(2,'0')}:${String(fin.getMinutes()).padStart(2,'0')}`;
 
       // Validar que el puesto elegido no este ocupado en ese rango
+      // Jornada + ausencias del empleado elegido
+      if (this.nuevoEmpleadoId) {
+        const puede = await this.supabase.empleadoPuedeAtender(
+          this.nuevoEmpleadoId, this.nuevaFecha, this.nuevaHora,
+          this.nuevoServicio?.duracion_minutos || 45, this.ausencias
+        );
+        if (!puede.ok) {
+          const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
+          this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
+          return;
+        }
+      }
+
       const puestoId = await this.supabase.puestoDeEmpleado(this.nuevoEmpleadoId);
       if (puestoId) {
         const ocupado = await this.supabase.puestoEstaOcupado(
@@ -593,14 +764,10 @@ export class AgendaComponent implements OnInit, OnDestroy {
         if (ocupado) {
           const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
           this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
-          this.editandoTurno = false;
-          this.cdr.detectChanges();
           return;
         }
       } else if (this.nuevoEmpleadoId) {
         this.errorEditarTurno = '❌ Ese empleado no tiene un puesto asignado.';
-        this.editandoTurno = false;
-        this.cdr.detectChanges();
         return;
       }
 
@@ -614,8 +781,6 @@ export class AgendaComponent implements OnInit, OnDestroy {
       });
       if (!dentroHorario) {
         this.errorEditarTurno = 'El horario está fuera del horario de atención.';
-        this.editandoTurno = false;
-        this.cdr.detectChanges();
         return;
       }
 
@@ -632,16 +797,24 @@ export class AgendaComponent implements OnInit, OnDestroy {
         servicio_id: servicio.id,
         servicio_nombre: servicio.nombre,
         precio: servicio.precio,
-        duracion_minutos: servicio.duracion_minutos
+        duracion_minutos: servicio.duracion_minutos,
+        // Sin esto el selector de empleado era decorativo: el turno se
+        // reprogramaba pero se mantenía el empleado anterior.
+        // El servicio deriva el puesto_id a partir del empleado.
+        empleado_id: this.nuevoEmpleadoId
       });
       await this.cargarTurnos();
       await this.iniciarNotificacionPostergacion(this.nuevaFecha, this.nuevaHora, servicio.nombre);
     } catch (e) {
       console.error('Error en confirmarEditarTurno:', e);
       this.errorEditarTurno = '❌ Error al guardar. Intentá de nuevo.';
+    } finally {
+      // El reset va acá y no en cada return: con 4 caminos de salida
+      // 'editandoTurno = false' es facil olvidarse y el boton queda en
+      // "Guardando..." para siempre.
+      this.editandoTurno = false;
+      this.cdr.detectChanges();
     }
-
-    this.editandoTurno = false;
   }
 
   async iniciarCancelacion() {

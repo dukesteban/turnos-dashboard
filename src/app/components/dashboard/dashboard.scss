@@ -510,6 +510,18 @@ tr.vencido td { background: #fff7ed; }
   color: #64748b;
 }
 
+/* Aviso cuando el empleado elegido no puede trabajar esa fecha/hora */
+.aviso-empleado {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 6px 8px;
+  line-height: 1.4;
+}
+
 /* Celdas de Empleado y Puesto en las tablas de turnos */
 .celda-empleado {
   color: #334155;

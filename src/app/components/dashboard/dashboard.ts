@@ -37,6 +37,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   servicios: any[] = [];
   empleados: any[] = [];
   puestos: any[] = [];
+  ausencias: any[] = [];
+  /** Lista filtrada para el form de reprogramar (no pisa this.empleados). */
+  empleadosReprogramar: any[] = [];
+  /** El empleado elegido NO puede trabajar esa fecha/hora (se muestra con aviso). */
+  empleadoReprogramarNoPuede = false;
   mostrarPopupCancelacion = false;
   motivoCancelacion = '';
   enviandoMensaje = false;
@@ -115,6 +120,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.metodosPago = await this.supabase.getMetodosPago();
     this.empleados = await this.supabase.getEmpleados();
     this.puestos = await this.supabase.getPuestos();
+    this.ausencias = await this.supabase.getAusencias();
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
     });
@@ -214,6 +220,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.turnoSeleccionado = null;
     this.modoEditarTurno = false;
     this.modoAtendido = false;
+    // Limpiar tambien los carteles del form de reprogramar: si no, reaparecen
+    // al abrir el siguiente turno.
+    this.editandoTurno = false;
+    this.errorEditarTurno = '';
+    this.empleadoReprogramarNoPuede = false;
+    this.empleadosReprogramar = this.empleados;
     this.cdr.detectChanges();
   }
 
@@ -260,6 +272,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Sin empleado no se puede guardar: se perderia la comision y el puesto quedaria huerfano.
     if (!this.atendidoEmpleadoId) {
       this.errorAtendido = '❌ Elegí el empleado que atendió.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // Jornada semanal + ausencias del empleado que se esta anotando
+    const puede = await this.supabase.empleadoPuedeAtender(
+      this.atendidoEmpleadoId,
+      this.turnoSeleccionado.fecha,
+      (this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora || '00:00').slice(0, 5),
+      servicio?.duracion_minutos || this.turnoSeleccionado.duracion_minutos || 45,
+      this.ausencias
+    );
+    if (!puede.ok) {
+      const nombreEmp = this.empleados.find((e: any) => e.id === this.atendidoEmpleadoId)?.nombre;
+      this.errorAtendido = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
       this.cdr.detectChanges();
       return;
     }
@@ -368,6 +395,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
       fin.setMinutes(fin.getMinutes() + servicio.duracion_minutos);
       const horaFin = `${String(fin.getHours()).padStart(2,'0')}:${String(fin.getMinutes()).padStart(2,'0')}`;
 
+      // Validar que el empleado pueda trabajar ese dia (jornada + ausencias)
+      if (this.nuevoEmpleadoId) {
+        const puede = await this.supabase.empleadoPuedeAtender(
+          this.nuevoEmpleadoId, this.nuevaFecha, this.nuevaHora,
+          servicio.duracion_minutos, this.ausencias
+        );
+        if (!puede.ok) {
+          const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
+          this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
+          return;
+        }
+      }
+
       // Validar que el puesto elegido no este ocupado en ese rango
       const puestoId = await this.supabase.puestoDeEmpleado(this.nuevoEmpleadoId);
       if (puestoId) {
@@ -378,14 +418,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
         if (ocupado) {
           const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
           this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
-          this.editandoTurno = false;
-          this.cdr.detectChanges();
           return;
         }
       } else if (this.nuevoEmpleadoId) {
         this.errorEditarTurno = '❌ Ese empleado no tiene un puesto asignado.';
-        this.editandoTurno = false;
-        this.cdr.detectChanges();
         return;
       }
 
@@ -399,17 +435,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
       if (!dentroHorario) {
         this.errorEditarTurno = 'El horario está fuera del horario de atención.';
-        this.editandoTurno = false;
-        this.cdr.detectChanges();
         return;
       }
 
-      // Confirm DESPUÉS de validar
-      //this.editandoTurno = false;
-      //if (!confirm('¿Confirmar cambio de turno?')) return;
-      //this.editandoTurno = true; 
-
-      this.editandoTurno = false;
       await this.supabase.editarTurno(this.turnoSeleccionado.id, {
         fecha: this.nuevaFecha,
         hora: this.nuevaHora,
@@ -426,9 +454,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     } catch (e) {
       console.error('Error en confirmarEditarTurno:', e);
       this.errorEditarTurno = '❌ Error al guardar. Intentá de nuevo.';
+    } finally {
+      // El reset va en finally y no en cada return: con 4 caminos de salida
+      // es facil olvidarse y el boton queda en "Guardando..." para siempre.
+      this.editandoTurno = false;
+      this.cdr.detectChanges();
     }
-
-    this.editandoTurno = false;
   }
 
   private formatearFechaCorta(fecha: Date): string {
@@ -519,16 +550,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const servicio = this.servicios.find(s => s.id == this.nuevoTurnoServicioId);
     if (!servicio) return;
 
-    const diaSemana = new Date(this.nuevoTurnoFecha + 'T12:00:00').getDay();
-
-    // Disponibilidad real por puesto (respeta turnos, puesto activo y dia laboral)
+    // Disponibilidad real por puesto. getPuestosDisponibles ya aplica jornada
+    // semanal y ausencias, asi que alcanza con mirar `puede_atender`.
     const disponibles = await this.supabase.getPuestosDisponibles(
-      this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos
+      this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos, this.ausencias
     );
 
     this.empleadosLibres = this.empleados.filter((e: any) => {
       const puesto = disponibles.find((p: any) => p.empleado_id === e.id);
-      return puesto && puesto.agendable && puesto.libre && e.dias_trabaja?.[diaSemana];
+      return puesto && puesto.puede_atender && puesto.libre;
     });
 
     // Si el empleado elegido quedo fuera de la lista, se limpia la seleccion
@@ -566,12 +596,40 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return empleado?.comision_porcentaje || 0;
   }
 
-  actualizarEmpleadosReprogramar() {
-    if (!this.nuevaFecha || !this.nuevoServicioId) return;
-    const diaSemana = new Date(this.nuevaFecha + 'T12:00:00').getDay();
-    this.empleados = this.empleados.filter((e: any) => 
-      e.dias_trabaja?.[diaSemana]
+  async actualizarEmpleadosReprogramar() {
+    if (!this.nuevaFecha) {
+      this.empleadosReprogramar = this.empleados;
+      this.empleadoReprogramarNoPuede = false;
+      return;
+    }
+    const servicio = this.servicios.find((s: any) => s.id == this.nuevoServicioId);
+    const dur = servicio?.duracion_minutos || 45;
+
+    // Lista APARTE: antes se reasignaba this.empleados con un filter y la
+    // lista original se perdia para siempre.
+    const disponibles = await this.supabase.getPuestosDisponibles(
+      this.nuevaFecha, this.nuevaHora || '00:00', dur, this.ausencias
     );
+    const puede = (e: any) =>
+      !!disponibles.some((p: any) => p.empleado_id === e.id && p.puede_atender);
+
+    // Se incluye igual al que ya esta asignado: si no, al guardar un turno que
+    // no se toco se perderia el empleado.
+    this.empleadosReprogramar = this.empleados.filter(
+      (e: any) => puede(e) || e.id === this.nuevoEmpleadoId
+    );
+    const elegido = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId);
+    this.empleadoReprogramarNoPuede = !!elegido && !puede(elegido);
+    this.cdr.detectChanges();
+  }
+
+  /** Sale del form de reprogramar limpiando todos los carteles. */
+  salirDeEditarTurno() {
+    this.modoEditarTurno = false;
+    this.editandoTurno = false;
+    this.errorEditarTurno = '';
+    this.empleadoReprogramarNoPuede = false;
+    this.empleadosReprogramar = this.empleados;
     this.cdr.detectChanges();
   }
 
@@ -645,6 +703,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
       let empleadoId: number | null = this.nuevoTurnoEmpleadoId;
 
       if (empleadoId) {
+        const nombreEmp = this.empleados.find((e: any) => e.id === empleadoId)?.nombre;
+
+        // Jornada semanal + ausencias (antes solo se miraba si el puesto estaba libre)
+        const puede = await this.supabase.empleadoPuedeAtender(
+          empleadoId, this.nuevoTurnoFecha, this.nuevoTurnoHora,
+          servicio.duracion_minutos, this.ausencias
+        );
+        if (!puede.ok) {
+          this.errorNuevoTurno = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
+          this.guardandoNuevoTurno = false;
+          this.cdr.detectChanges();
+          return;
+        }
+
         puestoId = await this.supabase.puestoDeEmpleado(empleadoId);
         if (!puestoId) {
           this.errorNuevoTurno = '❌ Ese empleado no tiene un puesto asignado.';
@@ -656,7 +728,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
           puestoId, this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos, 0
         );
         if (ocupado) {
-          const nombreEmp = this.empleados.find((e: any) => e.id === empleadoId)?.nombre;
           this.errorNuevoTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
           this.guardandoNuevoTurno = false;
           this.cdr.detectChanges();
@@ -665,7 +736,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       } else {
         // Sin empleado elegido -> se ocupa el primer puesto agendable y libre
         const libre = await this.supabase.getPrimerPuestoLibre(
-          this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos
+          this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos, this.ausencias
         );
         if (!libre) {
           this.errorNuevoTurno = '❌ No hay puestos disponibles en ese horario.';

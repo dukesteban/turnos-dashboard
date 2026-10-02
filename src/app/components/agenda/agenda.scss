@@ -172,6 +172,20 @@
   .turno-servicio { font-size: 0.78rem; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .turno-precio { font-size: 0.75rem; color: #64748b; margin-top: 2px; }
+
+  /* ── Turnos cortos: el bloque no entra y el contenido queda cortado.
+     Se ocultan las lineas de abajo hacia arriba (ver nivelContenido).
+     nivel 2 = las 3 lineas | nivel 1 = sin precio | nivel 0 = solo header */
+  &.nivel-1 {
+    .turno-precio { display: none; }
+  }
+
+  &.nivel-0 {
+    .turno-servicio,
+    .turno-precio { display: none; }
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
 }
 
 .sin-turnos {
@@ -250,6 +264,9 @@
   cursor: pointer;
   overflow: hidden;
   font-size: 0.72rem;
+
+  /* Turnos muy cortos en la vista semana: sobra la fila del servicio */
+  &.mini-nivel-0 .turno-servicio-sm { display: none; }
   transition: filter 0.15s;
   z-index: 1;
 
@@ -388,6 +405,18 @@
   .btn-editar { background: #fef9c3; color: #334155; &:hover { background: #feefc3; } }
 }
 
+/* Aviso cuando el empleado elegido no puede trabajar esa fecha/hora */
+.aviso-empleado {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 6px 8px;
+  line-height: 1.4;
+}
+
 .error-msg {
   color: #991b1b;
   font-size: 0.85rem;
@@ -486,10 +515,36 @@ textarea {
   &.sin-asignar .ph-empleado { color: #94a3b8; font-style: italic; }
   &.sin-gente .ph-empleado { color: #b45309; }
 
+  /* Columna del empleado ausente: se sigue viendo (no se borra el historico)
+     pero rayada para que se lea que ahi no se puede agendar. */
+  &.ausente {
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(148, 163, 184, 0.13) 0 7px,
+      rgba(148, 163, 184, 0.03) 7px 14px
+    );
+    border-left: 1px dashed #94a3b8;
+
+    /* El nombre se apaga: se lee que no atiende sin tapar nada */
+    .ph-empleado { color: #94a3b8; }
+    .ph-puesto { color: #94a3b8; }
+  }
+
   .mini & {
     padding: 0 2px;
     justify-content: center;
   }
+}
+
+/* Indicador inline de "no disponible". NO es una fila extra: el header tiene
+   altura fija con overflow:hidden y una 3ra linea cortaba el nombre. */
+.ph-lock {
+  display: inline-block;
+  margin-right: 3px;
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #b45309;
+  vertical-align: 1px;
 }
 
 /*Replica .dia-nombre / .dia-fecha del header de dias*/

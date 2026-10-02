@@ -2,7 +2,23 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
-import { nombreMes } from '../../utils/fechas';
+import {
+  nombreMes, normalizarJornada, DIAS, SlotJornada,
+  turnoTocadoPorAusencia, textoAusencia,
+} from '../../utils/fechas';
+
+/** Jornada por defecto: lunes a viernes, sin tope horario. */
+function jornadaVaciaPorDefecto(): SlotJornada[] {
+  return normalizarJornada([false, true, true, true, true, true, false]);
+}
+
+function AusenciaVacia() {
+  return {
+    desde: '', hasta: '',
+    hora_inicio: '', hora_fin: '',
+    tipo: 'vacaciones', motivo: '',
+  };
+}
 
 @Component({
   selector: 'app-empleados',
@@ -24,13 +40,15 @@ export class EmpleadosComponent implements OnInit {
   nuevoNombre = '';
   nuevoTelefono = '';
   nuevaComision = 10;
-  diasTrabaja: boolean[] = [false, true, true, true, true, true, false]; // Dom-Lun-Mar-Mié-Jue-Vie-Sáb
+  /** Jornada por defecto: L-V. Un dia con horas vacias = jornada completa. */
+  jornadaDefault: SlotJornada[] = jornadaVaciaPorDefecto();
+  jornadaNueva: SlotJornada[] = jornadaVaciaPorDefecto();
   mostrarModalNuevoEmpleado = false;
   guardandoNuevoEmpleado = false;
   errorNuevoEmpleado = '';
 
   diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  diasCompletos = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  diasCompletos = DIAS;
 
   constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
 
@@ -41,12 +59,9 @@ export class EmpleadosComponent implements OnInit {
 
   async cargarEmpleados() {
     const data = await this.supabase.getEmpleados();
-    // Normalizar dias_trabaja (pueden venir como strings de Supabase)
     this.empleados = data.map((e: any) => ({
       ...e,
-      dias_trabaja: e.dias_trabaja 
-        ? e.dias_trabaja.map((d: any) => d === true || d === 'true')
-        : [false, true, true, true, true, true, false]
+      jornada: normalizarJornada(e.jornada),
     }));
     this.cdr.detectChanges();
   }
@@ -65,7 +80,7 @@ export class EmpleadosComponent implements OnInit {
     this.nuevoNombre = '';
     this.nuevoTelefono = '';
     this.nuevaComision = 10;
-    this.diasTrabaja = [false, true, true, true, true, true, false];
+    this.jornadaNueva = jornadaVaciaPorDefecto();
     this.errorNuevoEmpleado = '';
     this.cdr.detectChanges();
   }
@@ -88,13 +103,13 @@ export class EmpleadosComponent implements OnInit {
         nombre: this.nuevoNombre.trim(),
         telefono: this.nuevoTelefono.trim() || null,
         comision_porcentaje: this.nuevaComision,
-        dias_trabaja: this.diasTrabaja
+        jornada: this.jornadaNueva
       });
       this.empleados.push(empleado);
       this.nuevoNombre = '';
       this.nuevoTelefono = '';
       this.nuevaComision = 10;
-      this.diasTrabaja = [false, true, true, true, true, true, false];
+      this.jornadaNueva = jornadaVaciaPorDefecto();
       this.cerrarModalNuevoEmpleado();
       this.mostrarMensaje('✅ Empleado agregado.');
     } catch (e: any) {
@@ -106,9 +121,16 @@ export class EmpleadosComponent implements OnInit {
   }
 
   async seleccionarEmpleado(empleado: any) {
-    this.empleadoSeleccionado = { ...empleado, editando: false };
+    const jornada = normalizarJornada(empleado.jornada);
+    this.empleadoSeleccionado = {
+      ...empleado,
+      jornada,
+      _jornadaOrig: JSON.parse(JSON.stringify(jornada)),
+      editando: false,
+    };
     await this.cargarComisiones();
     await this.cargarComisionesPorServicio();
+    await this.cargarAusencias();
     this.cdr.detectChanges();
   }
 
@@ -227,23 +249,109 @@ export class EmpleadosComponent implements OnInit {
     }
   }
 
-  async guardarDias() {
+  async guardarJornada() {
     if (!this.empleadoSeleccionado || this.empleadoSeleccionado.guardando) return;
     const emp = this.empleadoSeleccionado;
+    // Normalizar antes de guardar: un slot con horas pero sin activo no tiene sentido.
+    const jornada = normalizarJornada(emp.jornada).map((s: SlotJornada) =>
+      s.activo ? s : { activo: false, hora_inicio: null, hora_fin: null }
+    );
     emp.guardando = true;
     this.cdr.detectChanges();
     try {
-      await this.supabase.updateEmpleado(emp.id, { dias_trabaja: emp.dias_trabaja });
+      await this.supabase.updateEmpleado(emp.id, { jornada });
       const idx = this.empleados.findIndex(e => e.id === emp.id);
-      if (idx >= 0) this.empleados[idx].dias_trabaja = [...emp.dias_trabaja];
-      emp.editandoDias = false;
-      this.mostrarMensaje('✅ Días actualizados.');
+      if (idx >= 0) this.empleados[idx].jornada = jornada;
+      emp.jornada = jornada;
+      emp.editandoJornada = false;
+      this.mostrarMensaje('✅ Jornada actualizada.');
     } catch (e) {
       this.mostrarError('❌ Error al actualizar.');
     } finally {
       emp.guardando = false;
       this.cdr.detectChanges();
     }
+  }
+
+  cancelarJornada() {
+    const emp = this.empleadoSeleccionado;
+    if (!emp) return;
+    emp.jornada = emp._jornadaOrig
+      ? normalizarJornada(JSON.parse(JSON.stringify(emp._jornadaOrig)))
+      : normalizarJornada(emp.jornada);
+    emp.editandoJornada = false;
+    this.mostrarError('');
+    this.cdr.detectChanges();
+  }
+
+  /** Un dia activo sin tope horario trabaja todo el dia. */
+  limpiarHorario(i: number) {
+    const s = this.empleadoSeleccionado?.jornada?.[i];
+    if (!s) return;
+    s.hora_inicio = null;
+    s.hora_fin = null;
+    this.cdr.detectChanges();
+  }
+
+  limpiarHorarioNueva(i: number) {
+    const s = this.jornadaNueva?.[i];
+    if (!s) return;
+    s.hora_inicio = null;
+    s.hora_fin = null;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Desactivar un dia. Antes el checkbox usaba [ngModel] (unidireccional) y en
+   * el ngModelChange solo se limpiaba hora_fin: `activo` nunca pasaba a false,
+   * asi que el dia seguia marcado y los horarios quedaban a la vista.
+   */
+  desactivarDia(i: number) {
+    const s = this.empleadoSeleccionado?.jornada?.[i];
+    if (!s) return;
+    s.activo = false;
+    s.hora_inicio = null;
+    s.hora_fin = null;
+    this.cdr.detectChanges();
+  }
+
+  desactivarDiaNueva(i: number) {
+    const s = this.jornadaNueva?.[i];
+    if (!s) return;
+    s.activo = false;
+    s.hora_inicio = null;
+    s.hora_fin = null;
+    this.cdr.detectChanges();
+  }
+
+  activarDiaNueva(i: number) {
+    const s = this.jornadaNueva?.[i];
+    if (!s) return;
+    s.activo = true;
+    if (!s.hora_fin) { s.hora_inicio = '08:00'; s.hora_fin = '17:00'; }
+    this.cdr.detectChanges();
+  }
+
+  /** Al activar un dia, se le pone un tope por defecto util (08:00-17:00). */
+  activarDia(i: number) {
+    const s = this.empleadoSeleccionado?.jornada?.[i];
+    if (!s) return;
+    s.activo = true;
+    if (!s.hora_fin) { s.hora_inicio = '08:00'; s.hora_fin = '17:00'; }
+    this.cdr.detectChanges();
+  }
+
+  get resumenJornada(): string {
+    const j = normalizarJornada(this.empleadoSeleccionado?.jornada);
+    const activos = j.filter(s => s.activo);
+    if (!activos.length) return 'No trabaja ningún día';
+    const conTope = activos.filter(s => s.hora_fin).length;
+    const nombres = j
+      .map((s, i) => (s.activo ? this.diasSemana[i] : null))
+      .filter(Boolean).join(' ');
+    return conTope
+      ? `${nombres} · ${conTope} con horario parcial`
+      : `${nombres} · jornada completa`;
   }
 
   async inactivarEmpleado() {
@@ -297,6 +405,122 @@ export class EmpleadosComponent implements OnInit {
   servicios: any[] = [];
   editandoComisionServicio: number | null = null;
   nuevaComisionServicio = 0;
+
+  // ── AUSENCIAS ──────────────────────────────────────────────
+  ausencias: any[] = [];
+  mostrarFormAusencia = false;
+  guardandoAusencia = false;
+  nuevaAusencia: any = AusenciaVacia();
+
+  async cargarAusencias() {
+    if (!this.empleadoSeleccionado) {
+      this.ausencias = [];
+      return;
+    }
+    this.ausencias = await this.supabase.getAusencias(this.empleadoSeleccionado.id);
+    this.cdr.detectChanges();
+  }
+
+  abrirFormAusencia() {
+    this.nuevaAusencia = AusenciaVacia();
+    this.mostrarFormAusencia = true;
+    this.mostrarError('');
+    this.cdr.detectChanges();
+  }
+
+  async agregarAusencia() {
+    if (this.guardandoAusencia) return;
+    this.mostrarError('');
+    const a = this.nuevaAusencia;
+    if (!a.desde) {
+      this.mostrarError('❌ Elegí la fecha de inicio.');
+      return;
+    }
+    if (a.hasta && a.hasta < a.desde) {
+      this.mostrarError('❌ "Hasta" no puede ser anterior a "Desde".');
+      return;
+    }
+    // Con una sola hora no se puede: el tope siempre es un rango.
+    if (!!a.hora_inicio !== !!a.hora_fin) {
+      this.mostrarError('❌ Cargá las dos horas, o ninguna para el día entero.');
+      return;
+    }
+    if (a.hora_inicio && a.hora_fin <= a.hora_inicio) {
+      this.mostrarError('❌ La hora de fin debe ser posterior a la de inicio.');
+      return;
+    }
+
+    const empId = this.empleadoSeleccionado.id;
+    const aLimpia = {
+      empleado_id: empId,
+      desde: a.desde,
+      hasta: a.hasta || null,
+      hora_inicio: a.hora_inicio || null,
+      hora_fin: a.hora_fin || null,
+      tipo: a.tipo || 'ausencia',
+      motivo: (a.motivo || '').trim() || null,
+    };
+
+    this.guardandoAusencia = true;
+    this.cdr.detectChanges();
+    try {
+      // Aviso ANTES de guardar: si pisa turnos ya agendados el usuario decide.
+      // (opcion a: los turnos no se mueven, se reprograman a mano)
+      const enRiesgo = await this.turnosEnRiesgo(aLimpia);
+      if (enRiesgo.length && !confirm(
+        `${enRiesgo.length} turno(s) van a quedar sin cobertura.\n\n` +
+        `No se van a mover solos: reprogramalos a mano cuando puedas.\n\n` +
+        `¿Guardar la ausencia igual?`
+      )) {
+        return;
+      }
+
+      await this.supabase.crearAusencia(aLimpia);
+      await this.cargarAusencias();
+      this.mostrarFormAusencia = false;
+      this.mostrarMensaje(
+        enRiesgo.length
+          ? `✅ Ausencia guardada. ${enRiesgo.length} turno(s) a reprogramar.`
+          : '✅ Ausencia guardada.'
+      );
+    } catch (e: any) {
+      this.mostrarError(`❌ ${e?.message || 'No se pudo guardar'}`);
+    } finally {
+      this.guardandoAusencia = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** Turnos del empleado dentro del rango de la ausencia que quedan sin cobertura. */
+  async turnosEnRiesgo(a: any): Promise<any[]> {
+    if (!this.empleadoSeleccionado || !a?.desde) return [];
+    const empId = this.empleadoSeleccionado.id;
+    const turnos = await this.supabase.getTurnosPendientesDe(empId, a.desde, a.hasta || a.desde);
+    return turnos.filter((t: any) =>
+      turnoTocadoPorAusencia(
+        [{ ...a, empleado_id: empId }],
+        t.fecha,
+        (t.hora_inicio || t.hora || '00:00').slice(0, 5),
+        t.duracion_minutos || 45
+      )
+    );
+  }
+
+  async eliminarAusencia(a: any) {
+    if (!confirm(`¿Eliminar la ausencia del ${a.desde}?`)) return;
+    try {
+      await this.supabase.eliminarAusencia(a.id);
+      await this.cargarAusencias();
+      this.mostrarMensaje('✅ Ausencia eliminada. Los turnos no se revalidan.');
+    } catch (e: any) {
+      this.mostrarError(`❌ ${e?.message || 'Error'}`);
+    }
+    this.cdr.detectChanges();
+  }
+
+  textoAusencia(a: any): string {
+    return textoAusencia(a);
+  }
 
   async cargarComisiones() {
     if (!this.empleadoSeleccionado) {

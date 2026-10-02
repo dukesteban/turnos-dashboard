@@ -42,9 +42,12 @@
           <div *ngFor="let col of columnasAgenda"
                class="puesto-header"
                [class.sin-asignar]="col.sinAsignar"
-               [class.sin-gente]="!col.sinAsignar && !puestoAgendable(col.puesto)">
+               [class.sin-gente]="!col.sinAsignar && !puestoAgendable(col.puesto)"
+               [class.ausente]="!col.sinAsignar && !!motivoColumnaAusente(col, fechaActualISO)"
+               [title]="!col.sinAsignar ? (motivoColumnaAusente(col, fechaActualISO) || '') : ''">
             <span class="ph-puesto">{{ col.sinAsignar ? '—' : col.puesto.nombre }}</span>
             <span class="ph-empleado">
+              <span class="ph-lock" *ngIf="!col.sinAsignar && motivoColumnaAusente(col, fechaActualISO)">✕</span>
               {{ col.sinAsignar ? 'Sin asignar' : (col.puesto.empleado?.nombre || 'Sin empleado') }}
             </span>
           </div>
@@ -104,7 +107,9 @@
             <div *ngFor="let col of columnasAgenda"
                  class="puesto-header"
                  [class.sin-asignar]="col.sinAsignar"
-                 [class.sin-gente]="!col.sinAsignar && !puestoAgendable(col.puesto)">
+                 [class.sin-gente]="!col.sinAsignar && !puestoAgendable(col.puesto)"
+                 [class.ausente]="!col.sinAsignar && !!motivoColumnaAusente(col, dia.toLocaleDateString('en-CA'))"
+                 [title]="!col.sinAsignar ? (motivoColumnaAusente(col, dia.toLocaleDateString('en-CA')) || '') : ''">
               <span class="ph-empleado">
                 {{ col.sinAsignar ? 'Sin asignar' : (col.puesto.empleado?.nombre || 'Sin empleado') }}
               </span>
@@ -223,26 +228,33 @@
         <div class="popup-body">
           <div class="campo">
             <label>Nueva Fecha</label>
-            <input type="date" [(ngModel)]="nuevaFecha" (ngModelChange)="errorEditarTurno = ''"/>
+            <input type="date" [(ngModel)]="nuevaFecha"
+                   (ngModelChange)="errorEditarTurno = ''; actualizarEmpleadosReprogramar()"/>
           </div>
           <div class="campo">
             <label>Nueva Hora</label>
-            <input type="time" [(ngModel)]="nuevaHora" (ngModelChange)="errorEditarTurno = ''"/>
+            <input type="time" [(ngModel)]="nuevaHora"
+                   (ngModelChange)="errorEditarTurno = ''; actualizarEmpleadosReprogramar()"/>
           </div>
           <div class="campo">
             <label>Nuevo Servicio</label>
-            <select [(ngModel)]="nuevoServicioId" (ngModelChange)="errorEditarTurno = ''">
+            <select [(ngModel)]="nuevoServicioId"
+                    (ngModelChange)="errorEditarTurno = ''; actualizarEmpleadosReprogramar()">
               <option *ngFor="let s of servicios" [value]="s.id">{{ s.nombre }} — ${{ s.precio | number }}</option>
             </select>
           </div>
           <div class="campo">
             <label>Empleado que atiende</label>
-            <select [(ngModel)]="nuevoEmpleadoId" (ngModelChange)="errorEditarTurno = ''">
+            <select [(ngModel)]="nuevoEmpleadoId"
+                    (ngModelChange)="errorEditarTurno = ''; actualizarEmpleadosReprogramar()">
               <option [value]="null">-- Sin asignar --</option>
-              <option *ngFor="let e of empleados" [value]="e.id">
-                {{ e.nombre }}{{ e.activo === false ? ' (inactivo)' : '' }}
+              <option *ngFor="let e of empleadosReprogramar" [value]="e.id">
+                {{ e.nombre }} ({{ getComisionEmpleadoServicioReprogramar(e.id) }}%){{ e.activo === false ? ' (inactivo)' : '' }}
               </option>
             </select>
+            <div *ngIf="empleadoReprogramarNoPuede" class="aviso-empleado">
+              ⚠️ Ese empleado no puede trabajar en esa fecha/hora. Elegí otro.
+            </div>
           </div>
           <div *ngIf="errorEditarTurno" class="error-msg">{{ errorEditarTurno }}</div>
         </div>
@@ -250,7 +262,7 @@
           <button class="btn-atendido" (click)="confirmarEditarTurno()" [disabled]="editandoTurno">
             {{ editandoTurno ? 'Guardando...' : '💾 Confirmar' }}
           </button>
-          <button class="btn-cancelado" (click)="modoEditarTurno = false">↩️ Volver</button>
+          <button class="btn-cancelado" (click)="salirDeEditarTurno()">↩️ Volver</button>
         </div>
       </div>
 
@@ -261,7 +273,7 @@
     <ng-container *ngIf="turnos.length > 0">
       <div
         *ngFor="let turno of turnos"
-        [class]="mini ? 'bloque-turno-semana' : 'bloque-turno'"
+        [class]="claseBloque(turno, !!mini)"
         [ngClass]="getColorTurno(turno)"
         [style.top.px]="posicionTurno(turno, null, !!mini).top"
         [style.height.px]="posicionTurno(turno, null, !!mini).height"
