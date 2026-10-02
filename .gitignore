@@ -1,4 +1,4 @@
-# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+﻿# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
 # Compiled output
 /dist
@@ -49,5 +49,4 @@ agent.md
 memory.md
 ENCODING.md
 
-# test bundle temporal
-test-disp.bundle.mjs
+# (el arnes de tests viejo se elimino: ahora son .spec.ts con ng test)

@@ -1,0 +1,47 @@
+name: CI
+
+# Corre en cada push a main y en cada PR. No corre en los demás branches:
+# mientras se experimenta, no hace falta gastar minutos de runner.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Si llega un push nuevo mientras el run anterior sigue vivo, este se cancela.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Tests + build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # La misma major que la local (v24). Angular 21 pide >=20.19.
+          node-version: '24'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # 1) Typecheck. Rápido y da el error de TS más legible.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # 2) Los 52 tests de lógica pura: disponibilidad (jornada + ausencias) y
+      #    validación de teléfono. No tocan la base: son funciones puras.
+      - name: Tests
+        run: npm run test:ci
+
+      # 3) Build. Va último porque es el más lento, y es el ÚNICO que ve los
+      #    errores de template. `tsc --noEmit` no los ve porque los datos de las
+      #    tablas son `any[]`: un `{{ turno.noExiste }}` compila bien y revienta
+      #    en runtime. Por eso el build va sí o sí, aunque los tests pasen.
+      - name: Build
+        run: npm run build
