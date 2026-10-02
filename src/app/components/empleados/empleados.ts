@@ -2,6 +2,7 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
+import { problemaTelefono } from '../../utils/telefono';
 import {
   nombreMes, normalizarJornada, DIAS, SlotJornada,
   turnoTocadoPorAusencia, textoAusencia,
@@ -98,6 +99,16 @@ export class EmpleadosComponent implements OnInit {
     }
     this.guardandoNuevoEmpleado = true;
     this.errorNuevoEmpleado = '';
+    // El teléfono es opcional, pero si se escribe tiene que parecer un teléfono.
+    if (this.nuevoTelefono.trim()) {
+      const problema = problemaTelefono(this.nuevoTelefono);
+      if (problema) {
+        this.errorNuevoEmpleado = problema;
+        this.guardandoNuevoEmpleado = false;
+        this.cdr.detectChanges();
+        return;
+      }
+    }
     try {
       const empleado = await this.supabase.crearEmpleado({
         nombre: this.nuevoNombre.trim(),

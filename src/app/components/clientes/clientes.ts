@@ -2,6 +2,7 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
+import { problemaTelefono } from '../../utils/telefono';
 
 @Component({
   selector: 'app-clientes',
@@ -90,7 +91,8 @@ export class ClientesComponent implements OnInit {
   }
 
   async agregarTelefono() {
-    if (!this.nuevoTelefono.trim()) return;
+    const problema = problemaTelefono(this.nuevoTelefono);
+    if (problema) return this.mostrarError(`❌ ${problema}`);
     try {
       const tel = await this.supabase.agregarTelefono(this.clienteSeleccionado.id, this.nuevoTelefono.trim());
       this.clienteSeleccionado.telefonos = [...(this.clienteSeleccionado.telefonos || []), tel];
@@ -134,7 +136,8 @@ export class ClientesComponent implements OnInit {
   }
 
   async guardarTelefono(tel: any) {
-    if (!tel._telEditando?.trim()) return;
+    const problema = problemaTelefono(tel._telEditando);
+    if (problema) return this.mostrarError(`❌ ${problema}`);
     try {
       await this.supabase.editarTelefono(tel.id, tel._telEditando.trim());
       tel.telefono = tel._telEditando.trim();

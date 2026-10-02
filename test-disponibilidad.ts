@@ -1,4 +1,5 @@
 import { jornadaCubre, turnoTocadoPorAusencia, normalizarJornada, textoAusencia } from './src/app/utils/fechas';
+import { telefonoValido, problemaTelefono } from './src/app/utils/telefono';
 
 let ok = 0, fail = 0;
 function check(nombre: string, real: any, esperado: any) {
@@ -64,6 +65,24 @@ check('otro dia: libre',            !!turnoTocadoPorAusencia([REUNION], '2026-12
 console.log('\n--- texto para la UI ---');
 check('texto vacaciones',          textoAusencia(VAC), 'Vacaciones al 15/12');
 check('texto medio dia',           textoAusencia(MEDIODIA), 'Sale a las 13:00');
+
+console.log('\n--- validacion de telefono ---');
+// Los dos casos reales que hubo en la base.
+check('rechaza nombre en campo tel', telefonoValido('Esteban Aguero'), false);
+check('rechaza placeholder',         telefonoValido('Tu número'),      false);
+check('rechaza vacio',               telefonoValido('   '),            false);
+check('rechaza 3 digitos',           telefonoValido('123'),           false);
+// Casos que SÍ deben pasar.
+check('acepta 10 digitos',           telefonoValido('1123456789'),    true);
+check('acepta con espacios',         telefonoValido('11 2345-6789'),  true);
+check('acepta internacional',        telefonoValido('+54 9 11 2345 6789'), true);
+check('acepta parentesis',           telefonoValido('(011) 2345-6789'),   true);
+check('acepta guiones y mas',        telefonoValido('+1-555-0100'),   true);
+// El motivo tiene que decir qué está mal, no un "inválido" genérico.
+check('motivo: falta digitos',       /2 dígitos/.test(problemaTelefono('12') || ''), true);
+check('motivo: sobran digitos',      /demasiado largo/.test(problemaTelefono('1234567890123456789') || ''), true);
+check('motivo: letra suelta',        /no es un teléfono/.test(problemaTelefono('Esteban Aguero') || ''), true);
+check('sin problema -> null',        problemaTelefono('1123456789'), null);
 
 console.log(`\n${ok} OK / ${fail} FALLAS`);
 process.exit(fail ? 1 : 0);
