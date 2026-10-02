@@ -642,6 +642,84 @@
   min-width: 0;
 }
 
+// ── Turnos en riesgo ──────────────────────────────────────────
+//
+// Dos tonos distintos porque las dos causas se resuelven distinto:
+//   rojo  = una ausencia lo tapa     → reprogramar o buscar a quién moverlo
+//   ámbar = la jornada no lo cubre   → puede ser un error de la jornada misma
+//                                         (ej: "no trabaja el martes")
+.riesgo-contador {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  border-radius: 9px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.riesgo-lista {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.riesgo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  border: 1px solid #fecaca;
+  background: #fef2f2;              // ausencia lo tapa
+}
+
+.riesgo-jornada {
+  border-color: #fcd34d;
+  background: #fffbeb;              // la jornada no lo cubre
+}
+
+.riesgo-cuando {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.riesgo-fecha {
+  font-weight: 700;
+  color: #7f1d1d;
+  font-variant-numeric: tabular-nums;
+}
+
+.riesgo-jornada .riesgo-fecha { color: #854d0e; }
+.riesgo-dia   { font-size: 0.72rem; color: #991b1b; text-transform: uppercase; }
+.riesgo-hora  { font-size: 0.78rem; color: #b91c1c; font-variant-numeric: tabular-nums; }
+.riesgo-jornada .riesgo-dia,
+.riesgo-jornada .riesgo-hora { color: #a16207; }
+
+.riesgo-que {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.riesgo-cliente { font-weight: 600; color: #1f2937; }
+
+.riesgo-motivo {
+  font-size: 0.75rem;
+  color: #b91c1c;
+}
+.riesgo-jornada .riesgo-motivo { color: #a16207; }
+
 .acciones {
   display: flex;
   gap: 4px;

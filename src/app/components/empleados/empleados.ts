@@ -5,7 +5,7 @@ import { SupabaseService } from '../../services/supabase';
 import { problemaTelefono } from '../../utils/telefono';
 import {
   nombreMes, normalizarJornada, DIAS, SlotJornada,
-  turnoTocadoPorAusencia, textoAusencia,
+  turnoTocadoPorAusencia, textoAusencia, jornadaCubre,
 } from '../../utils/fechas';
 
 /** Jornada por defecto: lunes a viernes, sin tope horario. */
@@ -142,6 +142,7 @@ export class EmpleadosComponent implements OnInit {
     await this.cargarComisiones();
     await this.cargarComisionesPorServicio();
     await this.cargarAusencias();
+    await this.cargarTurnosEnRiesgo();
     this.cdr.detectChanges();
   }
 
@@ -275,6 +276,8 @@ export class EmpleadosComponent implements OnInit {
       if (idx >= 0) this.empleados[idx].jornada = jornada;
       emp.jornada = jornada;
       emp.editandoJornada = false;
+      // Cambiar la jornada puede SACAR turnos de riesgo o meterlos.
+      await this.cargarTurnosEnRiesgo();
       this.mostrarMensaje('✅ Jornada actualizada.');
     } catch (e) {
       this.mostrarError('❌ Error al actualizar.');
@@ -488,6 +491,7 @@ export class EmpleadosComponent implements OnInit {
 
       await this.supabase.crearAusencia(aLimpia);
       await this.cargarAusencias();
+      await this.cargarTurnosEnRiesgo();
       this.mostrarFormAusencia = false;
       this.mostrarMensaje(
         enRiesgo.length
@@ -517,11 +521,68 @@ export class EmpleadosComponent implements OnInit {
     );
   }
 
+  // ── TURNOS EN RIESGO (Fase 5) ───────────────────────────────
+  //
+  // Un turno queda "en riesgo" cuando la disponibilidad actual del empleado ya no
+  // lo cubre. Pasa por dos motivos distintos:
+  //   · la jornada semanal no lo alcanza (no trabaja ese día, o se pasa del tope)
+  //   · una ausencia cargada después lo tapa
+  //
+  // Decisión del usuario: los turnos NO se mueven ni se borran solos. Se listan
+  // acá para que los reprograme a mano.
+  //
+  // Se recalcula cada vez que se guarda la jornada o se toca una ausencia, que
+  // son los dos momentos en que un turno puede pasar (o dejar de estar) en riesgo.
+  turnosEnRiesgoLista: any[] = [];
+  cargandoRiesgo = false;
+
+  async cargarTurnosEnRiesgo() {
+    if (!this.empleadoSeleccionado) {
+      this.turnosEnRiesgoLista = [];
+      return;
+    }
+    this.cargandoRiesgo = true;
+    try {
+      const hoy = new Date().toISOString().slice(0, 10);
+      const turnos = await this.supabase.getTurnosPendientesDe(
+        this.empleadoSeleccionado.id, hoy, '2099-12-31'
+      );
+      const jornada = this.empleadoSeleccionado.jornada;
+
+      this.turnosEnRiesgoLista = turnos
+        .map((t: any) => {
+          const hora = (t.hora_inicio || t.hora || '00:00').slice(0, 5);
+          const dur = t.duracion_minutos || 45;
+
+          const j = jornadaCubre(jornada, t.fecha, hora, dur);
+          if (!j.ok) return { ...t, _motivoRiesgo: j.motivo, _tipoRiesgo: 'jornada' };
+
+          const ausencia = turnoTocadoPorAusencia(this.ausencias, t.fecha, hora, dur);
+          if (ausencia) return { ...t, _motivoRiesgo: textoAusencia(ausencia), _tipoRiesgo: 'ausencia' };
+
+          return null;
+        })
+        .filter((t: any) => !!t)
+        .sort((a: any, b: any) =>
+          `${a.fecha}${a.hora_inicio}`.localeCompare(`${b.fecha}${b.hora_inicio}`)
+        );
+    } catch (e: any) {
+      // No romper la pantalla de empleados si esta consulta falla.
+      this.turnosEnRiesgoLista = [];
+    } finally {
+      this.cargandoRiesgo = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   async eliminarAusencia(a: any) {
     if (!confirm(`¿Eliminar la ausencia del ${a.desde}?`)) return;
     try {
       await this.supabase.eliminarAusencia(a.id);
       await this.cargarAusencias();
+      // Borrar una ausencia puede SACAR turnos de riesgo. No los revalida la base
+      // (decisión del usuario), pero el listado sí se recalcula.
+      await this.cargarTurnosEnRiesgo();
       this.mostrarMensaje('✅ Ausencia eliminada. Los turnos no se revalidan.');
     } catch (e: any) {
       this.mostrarError(`❌ ${e?.message || 'Error'}`);

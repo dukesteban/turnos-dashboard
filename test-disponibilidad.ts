@@ -66,6 +66,22 @@ console.log('\n--- texto para la UI ---');
 check('texto vacaciones',          textoAusencia(VAC), 'Vacaciones al 15/12');
 check('texto medio dia',           textoAusencia(MEDIODIA), 'Sale a las 13:00');
 
+console.log('\n--- discriminacion: jornada vs ausencia (lista "Turnos en riesgo") ---');
+// Es lo que decide el COLOR del item en la lista de riesgo. Si las dos capas
+// dieran el mismo veredicto, un turno de sábado tapado por vacaciones se
+// mostraría como "no trabaja ese día" y el usuario iría a fixar la jornada.
+//
+// Fechas dentro de VAC (01/12 al 15/12) y dentro de la jornada de ESTEBAN
+// (L,M,J,V). Diciembre 2026: 01=mar, 05=sáb.
+check('mar en vacaciones: la jornada lo cubre', jornadaCubre(ESTEBAN, '2026-12-01', '10:00', 60).ok, true);
+check('mar en vacaciones: la ausencia lo tapa',  !!turnoTocadoPorAusencia([VAC], '2026-12-01', '10:00', 60), true);
+check('sab en vacaciones: la jornada lo rechaza', jornadaCubre(ESTEBAN, '2026-12-05', '10:00', 60).ok, false);
+check('sab en vacaciones: la ausencia lo tapa',   !!turnoTocadoPorAusencia([VAC], '2026-12-05', '10:00', 60), true);
+check('lun de octubre: ninguna capa lo tapa',     jornadaCubre(ESTEBAN, '2026-10-05', '10:00', 60).ok, true);
+check('lun de octubre: sin ausencia',             !!turnoTocadoPorAusencia([VAC], '2026-10-05', '10:00', 60), false);
+check('motivo de jornada es el de jornada',       jornadaCubre(ESTEBAN, '2026-12-05', '10:00', 60).motivo,   'No trabaja ese día');
+check('motivo de ausencia es el de la ausencia',  textoAusencia(turnoTocadoPorAusencia([VAC], '2026-12-01', '10:00', 60)), 'Vacaciones al 15/12');
+
 console.log('\n--- validacion de telefono ---');
 // Los dos casos reales que hubo en la base.
 check('rechaza nombre en campo tel', telefonoValido('Esteban Aguero'), false);

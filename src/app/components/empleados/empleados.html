@@ -177,6 +177,40 @@
         </div>
       </div>
 
+      <!-- Turnos en riesgo -->
+      <div class="detalle-bloque">
+        <div class="bloque-header">
+          <h4>
+            Turnos en riesgo
+            <span *ngIf="turnosEnRiesgoLista.length" class="riesgo-contador">{{ turnosEnRiesgoLista.length }}</span>
+          </h4>
+          <button class="btn-icon" (click)="cargarTurnosEnRiesgo()" title="Recalcular" [disabled]="cargandoRiesgo">🔄</button>
+        </div>
+        <p class="ayuda-jornada">
+          Turnos ya agendados que la jornada o una ausencia dejó sin cubrir. No se mueven
+          solos: reprogramalos desde la Agenda.
+        </p>
+
+        <div class="riesgo-lista">
+          <div *ngFor="let t of turnosEnRiesgoLista" class="riesgo-item" [ngClass]="'riesgo-' + t._tipoRiesgo">
+            <div class="riesgo-cuando">
+              <span class="riesgo-fecha">{{ t.fecha | date:'dd/MM' }}</span>
+              <span class="riesgo-dia">{{ t.fecha | date:'EEE' }}</span>
+              <span class="riesgo-hora">{{ (t.hora_inicio || t.hora).slice(0,5) }}</span>
+            </div>
+            <div class="riesgo-que">
+              <span class="riesgo-cliente">{{ t.cliente_nombre }}</span>
+              <span class="riesgo-motivo">{{ t._motivoRiesgo }}</span>
+            </div>
+          </div>
+
+          <div *ngIf="cargandoRiesgo" class="vacio-sm">Calculando...</div>
+          <div *ngIf="!cargandoRiesgo && turnosEnRiesgoLista.length === 0" class="vacio-sm">
+            Sin turnos en riesgo ✅
+          </div>
+        </div>
+      </div>
+
       <!-- Comisión por servicio -->
       <div class="detalle-bloque">
         <h4>Comisión por servicio</h4>
