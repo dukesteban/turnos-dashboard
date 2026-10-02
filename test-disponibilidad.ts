@@ -97,7 +97,13 @@ check('acepta guiones y mas',        telefonoValido('+1-555-0100'),   true);
 // El motivo tiene que decir qué está mal, no un "inválido" genérico.
 check('motivo: falta digitos',       /2 dígitos/.test(problemaTelefono('12') || ''), true);
 check('motivo: sobran digitos',      /demasiado largo/.test(problemaTelefono('1234567890123456789') || ''), true);
-check('motivo: letra suelta',        /no es un teléfono/.test(problemaTelefono('Esteban Aguero') || ''), true);
+check('motivo: letra suelta',        /tiene letras/.test(problemaTelefono('Esteban Aguero') || ''), true);
+check('motivo: con acentos',         /tiene letras/.test(problemaTelefono('José Ramírez') || ''), true);
+// El mensaje tiene que ser legible: nunca letras separadas por espacios.
+check('motivo: no separa letras',    !/E s t/.test(problemaTelefono('Esteban Aguero') || ''), true);
+check('motivo: muestra ejemplo',      /Ej: 11 2345-6789/.test(problemaTelefono('Esteban Aguero') || ''), true);
+check('motivo: nombra el simbolo',   /no se puede usar/.test(problemaTelefono('1123*4567') || ''), true);
+check('motivo: asterisco concreto',  /"\*"/.test(problemaTelefono('1123*4567') || ''), true);
 check('sin problema -> null',        problemaTelefono('1123456789'), null);
 
 console.log(`\n${ok} OK / ${fail} FALLAS`);

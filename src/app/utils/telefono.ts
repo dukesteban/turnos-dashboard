@@ -36,9 +36,17 @@ export function problemaTelefono(valor: string | null | undefined): string | nul
   const limpio = (valor || '').trim();
 
   if (!limpio) return 'El teléfono está vacío.';
+
   if (!CARACTERES_VALIDOS.test(limpio)) {
-    const intrusos = [...new Set(limpio.match(/[^\d\s+\-()]/g) || [])].join(' ');
-    return `"${intrusos}" no es un teléfono. Solo se admiten números y los signos + - ( ).`;
+    // El caso real es "se escribió un nombre en el campo teléfono". Enumerar los
+    // caracteres sobrantes no ayuda: "Esteban Aguero" son 12 distintos (E y e
+    // cuentan aparte) y el mensaje se vuelve un muro de letras.
+    // Para ese caso alcanza con decir que hay letras y mostrar un ejemplo válido.
+    if (/[a-záéíóúüñ]/i.test(limpio)) {
+      return 'No parece un teléfono: tiene letras. Solo números y los signos + - ( ). Ej: 11 2345-6789';
+    }
+    const simbolos = [...new Set(limpio.match(/[^\d\s+\-()]/g) || [])].join(' ');
+    return `El símbolo "${simbolos}" no se puede usar en un teléfono.`;
   }
 
   const digitos = digitosDe(limpio).length;
