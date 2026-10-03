@@ -78,6 +78,94 @@
         </div>
       </div>
 
+      <!-- COMISIÓN POR SERVICIO
+           Va segundo, arriba de Jornada: es lo que se consulta todos los días
+           ("cuánto le debo a este chabón"), más que la disponibilidad. -->
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonComisiones = !acordeonComisiones">
+          <span>Comisión por servicio</span>
+          <span class="chevron" [class.abierto]="acordeonComisiones">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonComisiones">
+        <div class="campo-editable comision-general">
+          <span class="label-general">General</span>
+          <span *ngIf="!empleadoSeleccionado.editandoComision" class="comision-grande">{{ empleadoSeleccionado.comision_porcentaje }}%</span>
+          <input *ngIf="empleadoSeleccionado.editandoComision" type="number" [(ngModel)]="empleadoSeleccionado.comision_porcentaje"
+            min="0" max="100" class="input-num" />
+          <button *ngIf="!empleadoSeleccionado.editandoComision" class="btn-icon" (click)="empleadoSeleccionado.editandoComision = true">✏️</button>
+          <button *ngIf="empleadoSeleccionado.editandoComision && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarComision()">💾</button>
+          <button *ngIf="empleadoSeleccionado.editandoComision" class="btn-icon" (click)="empleadoSeleccionado.editandoComision = false">↩️</button>
+        </div>
+
+        <!-- Configuración por servicio -->
+        <p class="texto-ayuda">Configurá un porcentaje específico para cada servicio. Si no se configura, se usa la comisión general.</p>
+        <div class="servicios-comision-lista">
+          <div *ngFor="let servicio of servicios" class="servicio-comision-item">
+            <div class="servicio-comision-nombre">{{ servicio.nombre }}</div>
+            <div class="servicio-comision-valor">
+              <span *ngIf="editandoComisionServicio !== servicio.id" class="comision-valor">
+                {{ getComisionServicio(servicio.id) }}%
+              </span>
+              <input *ngIf="editandoComisionServicio === servicio.id" type="number" [(ngModel)]="nuevaComisionServicio" min="0" max="100" class="input-comision" />
+            </div>
+            <div class="servicio-comision-acciones">
+              <button *ngIf="editandoComisionServicio !== servicio.id" class="btn-icon" (click)="editarComisionServicio(servicio.id)">✏️</button>
+              <button *ngIf="editandoComisionServicio === servicio.id && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarComisionServicio(servicio.id)">💾</button>
+              <button *ngIf="editandoComisionServicio === servicio.id" class="btn-icon" (click)="editandoComisionServicio = null">↩️</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Resumen por período -->
+        <div class="resumen-periodo">
+          <div class="periodo-selector">
+            <button class="btn-periodo" [class.activo]="vistaComisiones === 'dia'" (click)="vistaComisiones = 'dia'; cargarComisiones()">
+              <span class="icono">📅</span> Día
+            </button>
+            <button class="btn-periodo" [class.activo]="vistaComisiones === 'semana'" (click)="vistaComisiones = 'semana'; cargarComisiones()">
+              <span class="icono">📅</span> Semana
+            </button>
+            <button class="btn-periodo" [class.activo]="vistaComisiones === 'mes'" (click)="vistaComisiones = 'mes'; cargarComisiones()">
+              <span class="icono">📅</span> Mes
+            </button>
+          </div>
+
+          <div class="navegacion-fecha">
+            <button class="btn-nav" (click)="navegarPeriodo(-1)">‹</button>
+            <button class="btn-hoy" (click)="irAHoy()">Hoy</button>
+            <button class="btn-nav" (click)="navegarPeriodo(1)">›</button>
+            <span class="fecha-periodo">{{ formatearPeriodo() }}</span>
+          </div>
+
+          <div class="resumen">
+            <div class="resumen-item">
+              <span class="resumen-label">Servicios</span>
+              <span class="resumen-valor">{{ totalServiciosAtendidos }}</span>
+            </div>
+            <div class="resumen-item">
+              <span class="resumen-label">Total a pagar</span>
+              <span class="resumen-valor">${{ totalComisiones | number:'1.2-2' }}</span>
+            </div>
+          </div>
+
+          <div class="servicios-lista">
+            <div *ngIf="cargandoComisiones" class="vacio-sm">Cargando...</div>
+            <div *ngIf="!cargandoComisiones">
+              <div *ngFor="let c of comisionesEmpleado" class="servicio-item">
+                <div class="servicio-fecha">{{ formatearFechaTurno(c.fecha) }} - {{ formatearHora(c.hora) }}</div>
+                <div class="servicio-nombre">{{ c.servicio_nombre }}</div>
+                <div class="servicio-monto">
+                  <span class="monto-total">${{ c.precio_final | number }}</span>
+                  <span class="monto-comision">+${{ c.comision | number:'1.2-2' }}</span>
+                </div>
+              </div>
+              <div *ngIf="comisionesEmpleado.length === 0" class="vacio-sm">Sin servicios en este período</div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+
       <!-- JORNADA -->
       <div class="acordeon">
         <div class="acordeon-header" (click)="acordeonJornada = !acordeonJornada">
@@ -137,14 +225,18 @@
           <span class="chevron" [class.abierto]="acordeonAusencias">›</span>
         </div>
         <div class="acordeon-body" [class.visible]="acordeonAusencias">
-        <div class="bloque-header">
-          <button class="btn-icon" (click)="mostrarFormAusencia ? mostrarFormAusencia = false : abrirFormAusencia()">
-            {{ mostrarFormAusencia ? '↩️' : '➕' }}
+        <!-- El botón va solo y a la derecha, con etiqueta. Antes era un ➕
+             suelto en un flex con `space-between` al lado de un texto largo: el
+             texto se enrollaba y el ícono quedaba descolgado (y en un celu un
+             ➕ solo no dice qué abre). -->
+        <div class="acciones-ausencias">
+          <button class="btn-agregar" (click)="mostrarFormAusencia ? mostrarFormAusencia = false : abrirFormAusencia()">
+            {{ mostrarFormAusencia ? '↩️ Cerrar' : '➕ Agregar ausencia' }}
           </button>
-          <span class="texto-ayuda">
-            Fechas donde no atiende. Con horario, bloquea solo esa franja del día.
-          </span>
         </div>
+        <p class="ayuda-jornada">
+          Fechas donde no atiende. Con horario, bloquea solo esa franja del día.
+        </p>
 
         <div *ngIf="mostrarFormAusencia" class="ausencia-form">
           <div class="fila">
@@ -235,92 +327,6 @@
           <div *ngIf="cargandoRiesgo" class="vacio-sm">Calculando...</div>
           <div *ngIf="!cargandoRiesgo && turnosEnRiesgoLista.length === 0" class="vacio-sm">
             Sin turnos en riesgo ✅
-          </div>
-        </div>
-        </div>
-      </div>
-
-      <!-- COMISIÓN POR SERVICIO -->
-      <div class="acordeon">
-        <div class="acordeon-header" (click)="acordeonComisiones = !acordeonComisiones">
-          <span>Comisión por servicio</span>
-          <span class="chevron" [class.abierto]="acordeonComisiones">›</span>
-        </div>
-        <div class="acordeon-body" [class.visible]="acordeonComisiones">
-        <div class="campo-editable comision-general">
-          <span class="label-general">General</span>
-          <span *ngIf="!empleadoSeleccionado.editandoComision" class="comision-grande">{{ empleadoSeleccionado.comision_porcentaje }}%</span>
-          <input *ngIf="empleadoSeleccionado.editandoComision" type="number" [(ngModel)]="empleadoSeleccionado.comision_porcentaje"
-            min="0" max="100" class="input-num" />
-          <button *ngIf="!empleadoSeleccionado.editandoComision" class="btn-icon" (click)="empleadoSeleccionado.editandoComision = true">✏️</button>
-          <button *ngIf="empleadoSeleccionado.editandoComision && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarComision()">💾</button>
-          <button *ngIf="empleadoSeleccionado.editandoComision" class="btn-icon" (click)="empleadoSeleccionado.editandoComision = false">↩️</button>
-        </div>
-
-        <!-- Configuración por servicio -->
-        <p class="texto-ayuda">Configurá un porcentaje específico para cada servicio. Si no se configura, se usa la comisión general.</p>
-        <div class="servicios-comision-lista">
-          <div *ngFor="let servicio of servicios" class="servicio-comision-item">
-            <div class="servicio-comision-nombre">{{ servicio.nombre }}</div>
-            <div class="servicio-comision-valor">
-              <span *ngIf="editandoComisionServicio !== servicio.id" class="comision-valor">
-                {{ getComisionServicio(servicio.id) }}%
-              </span>
-              <input *ngIf="editandoComisionServicio === servicio.id" type="number" [(ngModel)]="nuevaComisionServicio" min="0" max="100" class="input-comision" />
-            </div>
-            <div class="servicio-comision-acciones">
-              <button *ngIf="editandoComisionServicio !== servicio.id" class="btn-icon" (click)="editarComisionServicio(servicio.id)">✏️</button>
-              <button *ngIf="editandoComisionServicio === servicio.id && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarComisionServicio(servicio.id)">💾</button>
-              <button *ngIf="editandoComisionServicio === servicio.id" class="btn-icon" (click)="editandoComisionServicio = null">↩️</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Resumen por período -->
-        <div class="resumen-periodo">
-          <div class="periodo-selector">
-            <button class="btn-periodo" [class.activo]="vistaComisiones === 'dia'" (click)="vistaComisiones = 'dia'; cargarComisiones()">
-              <span class="icono">📅</span> Día
-            </button>
-            <button class="btn-periodo" [class.activo]="vistaComisiones === 'semana'" (click)="vistaComisiones = 'semana'; cargarComisiones()">
-              <span class="icono">📅</span> Semana
-            </button>
-            <button class="btn-periodo" [class.activo]="vistaComisiones === 'mes'" (click)="vistaComisiones = 'mes'; cargarComisiones()">
-              <span class="icono">📅</span> Mes
-            </button>
-          </div>
-
-          <div class="navegacion-fecha">
-            <button class="btn-nav" (click)="navegarPeriodo(-1)">‹</button>
-            <button class="btn-hoy" (click)="irAHoy()">Hoy</button>
-            <button class="btn-nav" (click)="navegarPeriodo(1)">›</button>
-            <span class="fecha-periodo">{{ formatearPeriodo() }}</span>
-          </div>
-
-          <div class="resumen">
-            <div class="resumen-item">
-              <span class="resumen-label">Servicios</span>
-              <span class="resumen-valor">{{ totalServiciosAtendidos }}</span>
-            </div>
-            <div class="resumen-item">
-              <span class="resumen-label">Total a pagar</span>
-              <span class="resumen-valor">${{ totalComisiones | number:'1.2-2' }}</span>
-            </div>
-          </div>
-
-          <div class="servicios-lista">
-            <div *ngIf="cargandoComisiones" class="vacio-sm">Cargando...</div>
-            <div *ngIf="!cargandoComisiones">
-              <div *ngFor="let c of comisionesEmpleado" class="servicio-item">
-                <div class="servicio-fecha">{{ formatearFechaTurno(c.fecha) }} - {{ formatearHora(c.hora) }}</div>
-                <div class="servicio-nombre">{{ c.servicio_nombre }}</div>
-                <div class="servicio-monto">
-                  <span class="monto-total">${{ c.precio_final | number }}</span>
-                  <span class="monto-comision">+${{ c.comision | number:'1.2-2' }}</span>
-                </div>
-              </div>
-              <div *ngIf="comisionesEmpleado.length === 0" class="vacio-sm">Sin servicios en este período</div>
-            </div>
           </div>
         </div>
         </div>

@@ -429,9 +429,25 @@
     &:last-child { border-bottom: none; }
   }
 
-  // Las tablas de pagos y de compras tienen 6 columnas.
-  .tr:has(> span:nth-child(6)) {
+  // Las tablas con un botón de acción al final necesitan más columnas.
+  //
+  // Antes se detectaban con `:has(> span:nth-child(6))`, que NUNCA matcheaba:
+  // la sexta celda de las compras es un `<button>`, no un `<span>`. Como la
+  // regla no aplicaba, la fila usaba la grilla de 5 columnas con 6 celdas y el
+  // botón se caía a una segunda línea (se veía como un botón suelto abajo).
+  //
+  // Ahora cada tabla que tiene acciones lleva la clase explícita. Más legible
+  // que `:has()` y no depende de qué tag tenga la última celda.
+  .tr-con-acciones {
     grid-template-columns: 1.8fr 1fr 2fr 0.5fr 0.9fr 34px;
+  }
+
+  .tr-contacto {
+    grid-template-columns: 2.4fr 1.4fr 1.4fr 34px;
+  }
+
+  .tr-pagos {
+    grid-template-columns: 2.2fr 1fr 1fr 1fr 34px;
   }
   .tr-cabecera {
     background: #f8fafc;
@@ -451,6 +467,14 @@
   .celda-principal { font-weight: 600; }
   .celda-concepto  { color: #475569; overflow: hidden; text-overflow: ellipsis; }
   .celda-chica     { color: #64748b; font-size: 0.82rem; }
+
+  // Los botones de acción van juntos en una celda. Si cada `<button>` fuera una
+  // celda por separado, la grilla los cuenta como columnas y se caen de lado.
+  .celda-acciones {
+    display: flex;
+    gap: 2px;
+    justify-content: flex-end;
+  }
 
   .verde { color: #15803d; }
   .rojo  { color: #b91c1c; }
@@ -668,7 +692,7 @@
   // La fila no baja del ancho mínimo: si se comprime, los importes se parten en
   // dos líneas y la tabla deja de poder leerse. El scroll hace el resto.
   .tabla-caja .tr { min-width: 460px; }
-  .tabla-caja .tr:has(> span:nth-child(6)) { min-width: 540px; }
+  .tabla-caja .tr-con-acciones { min-width: 540px; }
 
   // Menos padding en celular: la tabla tiene que dejar lugar al scroll.
   .tabla-caja .tr { padding: 10px 12px; }

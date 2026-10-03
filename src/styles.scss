@@ -9,6 +9,21 @@
    defecto del navegador (Times).
    ============================================================ */
 
+/* `box-sizing: border-box` en TODO.
+   Sin esto, un `width: 100%` con padding y borde mide 100% MÁS el
+   padding y el borde, y el elemento se sale de su contenedor. Pasaba en el
+   buscador de proveedores y en los campos de fecha/hora de Ausencias: los dos
+   se veían cortados del lado derecho.
+
+   El valor por defecto de CSS (`content-box`) hace que casi todo `width: 100%`
+   con padding sea un bug esperando. Es el reset que hace el 99% de las
+   librerías y lo que espera cualquiera que lea el CSS después. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
 }

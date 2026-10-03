@@ -57,8 +57,13 @@ export class CajaComponent implements OnInit {
   busquedaProveedor = '';
   mostrarFormProveedor = false;
   nuevoProveedor: any = { nombre: '', contacto: '', telefono: '', notas: '' };
+  // Fila que se está editando, o null si el popup es un alta nueva. El popup es
+  // el mismo para las dos cosas: si el usuario edita y después quiere crear, el
+  // botón "Nuevo proveedor" siempre abre limpio.
+  proveedorEditando: any = null;
   mostrarFormCompra = false;
   nuevaCompra: any = { proveedor_id: null, fecha: '', concepto: '', cantidad: 1, monto: null, notas: '' };
+  compraEditando: any = null;
   guardando = false;
   mensaje = '';
   mensajeError = '';
@@ -265,9 +270,13 @@ export class CajaComponent implements OnInit {
   // el form dentro de la tarjeta y empujaba la tabla hacia abajo; con el popup la
   // lista no se mueve y el ✕ queda siempre a mano.
   //
-  // Al abrir se limpian los mensajes de error: si el usuario abrió, corrigió,
-  // cerró sin guardar y volvió a abrir, no tiene que seguir viendo el error
-  // viejo del intento anterior.
+  // El mismo popup sirve para el alta y para la edición: la diferencia es
+  // `proveedorEditando` / `compraEditando`. Si fueran dos popups separados habría
+  // que mantener dos veces el mismo form.
+  //
+  // Al abrir se limpian los mensajes de error, y también al CERRAR: si el usuario
+  // abre, corrige a medias, cierra sin guardar y vuelve a abrir, tiene que ver
+  // el formulario limpio y no el reclamo del intento anterior.
 
   abrirFormPago() {
     this.mensajeErrorPagos = '';
@@ -277,29 +286,59 @@ export class CajaComponent implements OnInit {
 
   cerrarFormPago() {
     this.mostrarFormPago = false;
+    this.mensajeErrorPagos = '';
     this.cdr.detectChanges();
   }
 
-  abrirFormCompra() {
+  /** Sin argumento = alta nueva. Con un proveedor = editar ese. */
+  abrirFormProveedor(p: any = null) {
     this.mensajeError = '';
-    this.mostrarFormCompra = true;
-    this.cdr.detectChanges();
-  }
-
-  cerrarFormCompra() {
-    this.mostrarFormCompra = false;
-    this.cdr.detectChanges();
-  }
-
-  abrirFormProveedor() {
-    this.mensajeError = '';
+    this.proveedorEditando = p;
+    this.nuevoProveedor = p
+      ? { nombre: p.nombre, contacto: p.contacto || '', telefono: p.telefono || '', notas: p.notas || '' }
+      : { nombre: '', contacto: '', telefono: '', notas: '' };
     this.mostrarFormProveedor = true;
     this.cdr.detectChanges();
   }
 
   cerrarFormProveedor() {
     this.mostrarFormProveedor = false;
+    this.proveedorEditando = null;
+    this.mensajeError = '';
     this.cdr.detectChanges();
+  }
+
+  get editandoProveedor(): boolean {
+    return this.proveedorEditando !== null;
+  }
+
+  /** Sin argumento = alta nueva. Con una compra = editar esa. */
+  abrirFormCompra(c: any = null) {
+    this.mensajeError = '';
+    this.compraEditando = c;
+    this.nuevaCompra = c
+      ? {
+          proveedor_id: c.proveedor_id,
+          fecha: c.fecha,
+          concepto: c.concepto,
+          cantidad: c.cantidad,
+          monto: Number(c.monto),
+          notas: c.notas || '',
+        }
+      : { proveedor_id: null, fecha: '', concepto: '', cantidad: 1, monto: null, notas: '' };
+    this.mostrarFormCompra = true;
+    this.cdr.detectChanges();
+  }
+
+  cerrarFormCompra() {
+    this.mostrarFormCompra = false;
+    this.compraEditando = null;
+    this.mensajeError = '';
+    this.cdr.detectChanges();
+  }
+
+  get editandoCompra(): boolean {
+    return this.compraEditando !== null;
   }
 
   // ── PAGOS A EMPLEADOS: alta y borrado ──────────────────────
@@ -364,22 +403,35 @@ export class CajaComponent implements OnInit {
     }
     // El índice único de la base es `lower(btrim(nombre))`. Se avisa acá para
     // que el mensaje sea "ya existe" y no un error de Postgres.
-    if (this.proveedores.some((p: any) => paraComparar(p.nombre) === paraComparar(this.nuevoProveedor.nombre))) {
+    //
+    // Al EDITAR hay que excluirse a uno mismo: sin el `?.id !==`, guardar el
+    // mismo proveedor sin tocarle el nombre daría "ya existe" siempre.
+    const idEnEdicion = this.proveedorEditando?.id;
+    if (this.proveedores.some(
+      (p: any) => paraComparar(p.nombre) === paraComparar(this.nuevoProveedor.nombre)
+        && p.id !== idEnEdicion
+    )) {
       this.mensajeError = '⚠️ Ya existe un proveedor con ese nombre.';
       return;
     }
     this.guardando = true;
+    const datos = {
+      nombre: this.nuevoProveedor.nombre.trim(),
+      contacto: this.nuevoProveedor.contacto.trim() || null,
+      telefono: this.nuevoProveedor.telefono.trim() || null,
+      notas: this.nuevoProveedor.notas.trim() || null,
+    };
     try {
-      await this.supabase.crearProveedor({
-        nombre: this.nuevoProveedor.nombre.trim(),
-        contacto: this.nuevoProveedor.contacto.trim() || null,
-        telefono: this.nuevoProveedor.telefono.trim() || null,
-        notas: this.nuevoProveedor.notas.trim() || null,
-      });
-      this.nuevoProveedor = { nombre: '', contacto: '', telefono: '', notas: '' };
+      if (this.editandoProveedor) {
+        await this.supabase.actualizarProveedor(idEnEdicion, datos);
+      } else {
+        await this.supabase.crearProveedor(datos);
+      }
+      const eraEdicion = this.editandoProveedor;
       this.cerrarFormProveedor();
+      this.nuevoProveedor = { nombre: '', contacto: '', telefono: '', notas: '' };
       await this.cargarDatos();
-      this.mostrarMensaje('✅ Proveedor agregado.');
+      this.mostrarMensaje(eraEdicion ? '✅ Proveedor actualizado.' : '✅ Proveedor agregado.');
     } catch (e) {
       this.mensajeError = '❌ No se pudo guardar el proveedor.';
     }
@@ -422,19 +474,25 @@ export class CajaComponent implements OnInit {
       return;
     }
     this.guardando = true;
+    const datos = {
+      proveedor_id: Number(this.nuevaCompra.proveedor_id),
+      fecha: this.nuevaCompra.fecha,
+      concepto: this.nuevaCompra.concepto.trim(),
+      cantidad: Number(this.nuevaCompra.cantidad) || 1,
+      monto: Number(this.nuevaCompra.monto),
+      notas: this.nuevaCompra.notas || null,
+    };
     try {
-      await this.supabase.crearCompra({
-        proveedor_id: Number(this.nuevaCompra.proveedor_id),
-        fecha: this.nuevaCompra.fecha,
-        concepto: this.nuevaCompra.concepto.trim(),
-        cantidad: Number(this.nuevaCompra.cantidad) || 1,
-        monto: Number(this.nuevaCompra.monto),
-        notas: this.nuevaCompra.notas || null,
-      });
-      this.nuevaCompra = { proveedor_id: null, fecha: '', concepto: '', cantidad: 1, monto: null, notas: '' };
+      if (this.editandoCompra) {
+        await this.supabase.actualizarCompra(this.compraEditando.id, datos);
+      } else {
+        await this.supabase.crearCompra(datos);
+      }
+      const eraEdicion = this.editandoCompra;
       this.cerrarFormCompra();
+      this.nuevaCompra = { proveedor_id: null, fecha: '', concepto: '', cantidad: 1, monto: null, notas: '' };
       await this.cargarDatos();
-      this.mostrarMensaje('✅ Compra registrada.');
+      this.mostrarMensaje(eraEdicion ? '✅ Compra actualizada.' : '✅ Compra registrada.');
     } catch (e) {
       this.mensajeError = '❌ No se pudo guardar la compra.';
     }

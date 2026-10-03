@@ -230,19 +230,21 @@
 
       <div class="tabla-scroll">
         <div class="tabla-caja">
-          <div class="tr tr-cabecera">
+          <div class="tr tr-cabecera tr-pagos">
             <span>Empleado</span>
             <span>Fecha</span>
             <span>Monto</span>
             <span>Método</span>
             <span></span>
           </div>
-          <div *ngFor="let p of pagos" class="tr">
+          <div *ngFor="let p of pagos" class="tr tr-pagos">
             <span class="celda-principal">{{ p.empleados?.nombre || ('Empleado #' + p.empleado_id) }}</span>
             <span>{{ p.fecha | date:'dd/MM/yyyy' }}</span>
             <span>${{ p.monto | number }}</span>
             <span class="celda-chica">{{ p.metodo }}</span>
-            <button class="btn-icon" (click)="eliminarPago(p)" title="Borrar">🗑️</button>
+            <span class="celda-acciones">
+              <button class="btn-icon" (click)="eliminarPago(p)" title="Borrar">🗑️</button>
+            </span>
           </div>
         </div>
       </div>
@@ -328,7 +330,7 @@
 
       <div class="tabla-scroll">
         <div class="tabla-caja">
-          <div class="tr tr-cabecera">
+          <div class="tr tr-cabecera tr-con-acciones">
             <span>Proveedor</span>
             <span>Fecha</span>
             <span>Concepto</span>
@@ -336,13 +338,18 @@
             <span>Monto</span>
             <span></span>
           </div>
-          <div *ngFor="let c of compras" class="tr">
+          <div *ngFor="let c of compras" class="tr tr-con-acciones">
             <span class="celda-principal">{{ c.proveedores?.nombre || ('#' + c.proveedor_id) }}</span>
             <span>{{ c.fecha | date:'dd/MM/yyyy' }}</span>
             <span class="celda-concepto">{{ c.concepto }}</span>
             <span>{{ c.cantidad }}</span>
             <span>${{ c.monto | number }}</span>
-            <button class="btn-icon" (click)="eliminarCompra(c)" title="Borrar">🗑️</button>
+            <!-- Editar y borrar van en la MISMA celda para que no se caigan a
+                 una segunda línea cuando la grilla no los calcula bien. -->
+            <span class="celda-acciones">
+              <button class="btn-icon" (click)="abrirFormCompra(c)" title="Editar">✏️</button>
+              <button class="btn-icon" (click)="eliminarCompra(c)" title="Borrar">🗑️</button>
+            </span>
           </div>
         </div>
       </div>
@@ -380,21 +387,25 @@
 
       <div class="tabla-scroll">
         <div class="tabla-caja">
-          <div class="tr tr-cabecera">
+          <div class="tr tr-cabecera tr-contacto">
             <span>Proveedor</span>
             <span>Contacto</span>
             <span>Teléfono</span>
             <span></span>
           </div>
-          <div *ngFor="let p of proveedoresFiltrados" class="tr" [class.fila-inactiva]="!p.activo">
+          <div *ngFor="let p of proveedoresFiltrados" class="tr tr-contacto" [class.fila-inactiva]="!p.activo">
             <span class="celda-principal">
               {{ p.nombre }}
               <span *ngIf="!p.activo" class="badge-inactivo">Inactivo</span>
             </span>
             <span class="celda-chica">{{ p.contacto || '—' }}</span>
             <span class="celda-chica">{{ p.telefono || '—' }}</span>
-            <button *ngIf="p.activo" class="btn-icon" (click)="inactivarProveedor(p)"
-                    title="Inactivar">🚫</button>
+            <!-- Editar y borrar juntos en la celda de acciones. -->
+            <span class="celda-acciones">
+              <button class="btn-icon" (click)="abrirFormProveedor(p)" title="Editar">✏️</button>
+              <button *ngIf="p.activo" class="btn-icon" (click)="inactivarProveedor(p)"
+                      title="Inactivar">🚫</button>
+            </span>
           </div>
         </div>
       </div>
@@ -405,7 +416,7 @@
   <div *ngIf="mostrarFormCompra" class="popup-overlay" (click)="cerrarFormCompra()">
     <div class="popup" (click)="$event.stopPropagation()">
       <div class="popup-header">
-        <h3>📦 Registrar compra</h3>
+        <h3>{{ editandoCompra ? '📦 Editar compra' : '📦 Registrar compra' }}</h3>
         <button class="btn-cerrar" (click)="cerrarFormCompra()">✕</button>
       </div>
 
@@ -446,7 +457,7 @@
 
       <div class="popup-acciones">
         <button class="btn-atendido" [disabled]="guardando" (click)="guardarCompra()">
-          {{ guardando ? 'Guardando...' : '💾 Guardar compra' }}
+          {{ guardando ? 'Guardando...' : (editandoCompra ? '💾 Guardar cambios' : '💾 Guardar compra') }}
         </button>
         <button class="btn-cancelado" (click)="cerrarFormCompra()">↩️ Cancelar</button>
       </div>
@@ -457,7 +468,7 @@
   <div *ngIf="mostrarFormProveedor" class="popup-overlay" (click)="cerrarFormProveedor()">
     <div class="popup" (click)="$event.stopPropagation()">
       <div class="popup-header">
-        <h3>🏭 Nuevo proveedor</h3>
+        <h3>{{ editandoProveedor ? '🏭 Editar proveedor' : '🏭 Nuevo proveedor' }}</h3>
         <button class="btn-cerrar" (click)="cerrarFormProveedor()">✕</button>
       </div>
 
@@ -490,7 +501,7 @@
 
       <div class="popup-acciones">
         <button class="btn-atendido" [disabled]="guardando" (click)="guardarProveedor()">
-          {{ guardando ? 'Guardando...' : '💾 Guardar proveedor' }}
+          {{ guardando ? 'Guardando...' : (editandoProveedor ? '💾 Guardar cambios' : '💾 Guardar proveedor') }}
         </button>
         <button class="btn-cancelado" (click)="cerrarFormProveedor()">↩️ Cancelar</button>
       </div>

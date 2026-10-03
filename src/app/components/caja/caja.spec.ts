@@ -356,11 +356,37 @@ describe('Caja — el error se va cuando tocás un campo', () => {
     });
   }
 
-  it('cerrar NO borra el error: si se cerrara, se perdería la pista', async () => {
+  // El usuario lo pidió explícitamente: cerrar ALSO limpia el error. Antes yo lo
+  // dejaba a propósito para "no perder la pista de qué faltaba", y fue una mala
+  // decisión: si abría, corregía a medias, cerraba y volvía a abrir, veía el
+  // reclamo viejo y la app parecía no enterarse de nada.
+  //
+  // Un test por popup: `listo()` llama a `TestBed.configureTestingModule`, y en
+  // un mismo test no se puede volver a llamar.
+  for (const p of POPUPS) {
+    it(`${p.cerrar} también borra el error`, async () => {
+      const { cmp } = await listo();
+      cmp.mensajeErrorPagos = '❌ de antes';
+      cmp.mensajeError = '❌ de antes';
+      (cmp as any)[p.abrir]();
+      (cmp as any)[p.cerrar]();
+      expect((cmp as any)[p.campo]).toBe('');
+    });
+  }
+
+  it('cerrar también descarta el modo edición', async () => {
+    // Si cerrar solo tapara el popup y dejara `proveedorEditando` puesto, el
+    // "Nuevo proveedor" de después abriría en modo edición.
     const { cmp } = await listo();
-    cmp.mensajeErrorPagos = '❌ Elegí el empleado.';
-    cmp.cerrarFormPago();
-    expect(cmp.mensajeErrorPagos).toBe('❌ Elegí el empleado.');
+    cmp.abrirFormProveedor({ id: 1, nombre: 'Químicas' });
+    cmp.cerrarFormProveedor();
+    expect(cmp.proveedorEditando).toBeNull();
+    expect(cmp.editandoProveedor).toBe(false);
+
+    cmp.abrirFormCompra({ id: 1, proveedor_id: 1, fecha: '2026-03-01', concepto: 'x', cantidad: 1, monto: 100 });
+    cmp.cerrarFormCompra();
+    expect(cmp.compraEditando).toBeNull();
+    expect(cmp.editandoCompra).toBe(false);
   });
 
   // Un test por campo, y no un loop dentro de un test: mutar el mismo componente
@@ -518,6 +544,287 @@ describe('Caja — botones del popup iguales a los de Nuevo turno', () => {
     const body = fixture.nativeElement.querySelector('.popup-body');
     expect(body.querySelectorAll('.error-msg').length).toBe(1);
     expect(body.querySelectorAll('.alerta').length).toBe(0);
+  });
+});
+
+describe('Caja — editar proveedores y compras', () => {
+  const listo = async (over: Record<string, any> = {}) => {
+    const r = montar(over);
+    await r.cmp.cargarDatos();
+    return r;
+  };
+
+  const PROV = { id: 1, nombre: 'Quimicas', contacto: 'Ana', telefono: '123', notas: null, activo: true };
+  const COMPRA = { id: 5, proveedor_id: 1, fecha: '2026-03-15', concepto: 'Shampoo', cantidad: 2, monto: 48000, notas: null };
+
+  // ── PROVEEDOR ──
+
+  it('abrir sin argumento es un ALTA, no una edición', async () => {
+    const { cmp } = await listo({ getProveedores: () => Promise.resolve([PROV]) });
+    cmp.abrirFormProveedor();
+    expect(cmp.editandoProveedor).toBe(false);
+    expect(cmp.proveedorEditando).toBeNull();
+    expect(cmp.nuevoProveedor.nombre).toBe('');
+  });
+
+  it('abrir con un proveedor carga sus datos en el formulario', async () => {
+    const { cmp } = await listo({ getProveedores: () => Promise.resolve([PROV]) });
+    cmp.abrirFormProveedor(PROV);
+    expect(cmp.editandoProveedor).toBe(true);
+    expect(cmp.nuevoProveedor.nombre).toBe('Quimicas');
+    expect(cmp.nuevoProveedor.contacto).toBe('Ana');
+  });
+
+  it('los null del proveedor llegan como cadena vacía, no como "null"', async () => {
+    // Si no, el input muestra literalmente la palabra "null".
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([{ ...PROV, contacto: null, telefono: null }]),
+    });
+    cmp.abrirFormProveedor({ ...PROV, contacto: null, telefono: null });
+    expect(cmp.nuevoProveedor.contacto).toBe('');
+    expect(cmp.nuevoProveedor.telefono).toBe('');
+  });
+
+  it('guardar en modo edición llama a actualizar, NO a crear', async () => {
+    const actualizados: any[] = [];
+    const creados: any[] = [];
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([PROV]),
+      actualizarProveedor: (id: number, d: any) => { actualizados.push({ id, ...d }); return Promise.resolve(); },
+      crearProveedor: (d: any) => { creados.push(d); return Promise.resolve(); },
+    });
+    cmp.abrirFormProveedor(PROV);
+    cmp.nuevoProveedor.telefono = '999';
+
+    await cmp.guardarProveedor();
+
+    expect(actualizados.length).toBe(1);
+    expect(actualizados[0].id).toBe(1);
+    expect(actualizados[0].telefono).toBe('999');
+    expect(creados).toEqual([]);
+  });
+
+  // Sin el `?.id !==`, guardar el mismo proveedor sin tocarle el nombre daría
+  // "ya existe" siempre y sería imposible editar cualquier cosa.
+  it('editar sin cambiar el nombre NO da "ya existe"', async () => {
+    const { cmp } = await listo({ getProveedores: () => Promise.resolve([PROV]) });
+    cmp.abrirFormProveedor(PROV);
+    cmp.nuevoProveedor.contacto = 'Otro nombre de contacto';
+
+    await cmp.guardarProveedor();
+
+    expect(cmp.mensajeError).toBe('');
+  });
+
+  it('editar y poner el nombre de OTRO proveedor sí avisa', async () => {
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([PROV, { id: 2, nombre: 'Ledesma', activo: true }]),
+    });
+    cmp.abrirFormProveedor(PROV);
+    cmp.nuevoProveedor.nombre = 'ledesma';
+
+    await cmp.guardarProveedor();
+
+    expect(cmp.mensajeError).toMatch(/ya existe/i);
+  });
+
+  it('tras editar, el popup se cierra y avisa que se actualizó', async () => {
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([PROV]),
+      actualizarProveedor: () => Promise.resolve(),
+    });
+    cmp.abrirFormProveedor(PROV);
+    await cmp.guardarProveedor();
+    expect(cmp.mostrarFormProveedor).toBe(false);
+    expect(cmp.proveedorEditando).toBeNull();
+  });
+
+  // ── COMPRA ──
+
+  it('abrir sin argumento es un ALTA de compra', async () => {
+    const { cmp } = await listo();
+    cmp.abrirFormCompra();
+    expect(cmp.editandoCompra).toBe(false);
+    expect(cmp.compraEditando).toBeNull();
+    expect(cmp.nuevaCompra.concepto).toBe('');
+    expect(cmp.nuevaCompra.cantidad).toBe(1);
+  });
+
+  it('abrir con una compra carga sus datos', async () => {
+    const { cmp } = await listo();
+    cmp.abrirFormCompra(COMPRA);
+    expect(cmp.editandoCompra).toBe(true);
+    expect(cmp.nuevaCompra.proveedor_id).toBe(1);
+    expect(cmp.nuevaCompra.concepto).toBe('Shampoo');
+    expect(cmp.nuevaCompra.monto).toBe(48000);
+  });
+
+  it('el monto llega como número, no como string de la base', async () => {
+    // Postgres devuelve los numeric como string. Si queda string, la validación
+    // `Number(monto) > 0` igual funciona pero el input number muestra basura.
+    const { cmp } = await listo();
+    cmp.abrirFormCompra({ ...COMPRA, monto: '48000.55' });
+    expect(cmp.nuevaCompra.monto).toBe(48000.55);
+  });
+
+  it('guardar en modo edición llama a actualizarCompra, NO a crearCompra', async () => {
+    const actualizadas: any[] = [];
+    const creadas: any[] = [];
+    const { cmp } = await listo({
+      actualizarCompra: (id: number, d: any) => { actualizadas.push({ id, ...d }); return Promise.resolve(); },
+      crearCompra: (d: any) => { creadas.push(d); return Promise.resolve(); },
+    });
+    cmp.abrirFormCompra(COMPRA);
+    cmp.nuevaCompra.monto = 50000;
+
+    await cmp.guardarCompra();
+
+    expect(actualizadas.length).toBe(1);
+    expect(actualizadas[0].id).toBe(5);
+    expect(actualizadas[0].monto).toBe(50000);
+    expect(creadas).toEqual([]);
+  });
+
+  it('editar una compra recalcula el total y el balance', async () => {
+    // El motivo de que exista el botón de editar: corregir un monto mal cargado
+    // tiene que mover el balance sin borrar y recargar la compra.
+    //
+    // El mock es STATEFUL a propósito: uno que devuelve siempre la misma lista
+    // haría pasar el test sin probar nada, porque el `actualizarCompra` no
+    // cambiaría nada de lo que se lee después.
+    const compraEnBase: any = { ...COMPRA, proveedores: { nombre: 'Quimicas', activo: true } };
+    const { cmp } = await listo({
+      getGanancias: () => Promise.resolve([ganancia({ precio: 100000 })]),
+      getCompras: () => Promise.resolve([compraEnBase]),
+      actualizarCompra: (_id: number, d: any) => { Object.assign(compraEnBase, d); return Promise.resolve(); },
+    });
+    await cmp.cargarDatos();
+    expect(cmp.totalCompras).toBe(48000);
+    expect(cmp.balance).toBe(52000);
+
+    cmp.abrirFormCompra(compraEnBase);
+    cmp.nuevaCompra.monto = 30000;
+    await cmp.guardarCompra();
+    await cmp.cargarDatos();
+
+    expect(cmp.totalCompras).toBe(30000);
+    expect(cmp.balance).toBe(70000);
+  });
+
+  it('si actualizar falla, el popup sigue abierto con los datos', async () => {
+    const { cmp } = await listo({ actualizarCompra: () => Promise.reject(new Error('boom')) });
+    cmp.abrirFormCompra(COMPRA);
+    await cmp.guardarCompra();
+    expect(cmp.mensajeError).toMatch(/no se pudo/i);
+    expect(cmp.mostrarFormCompra).toBe(true);
+    expect(cmp.nuevaCompra.concepto).toBe('Shampoo');   // no se pierde lo tipeado
+  });
+});
+
+describe('Caja — el pie de acciones está en la fila', () => {
+  const listo = async (over: Record<string, any> = {}) => {
+    const r = montar(over);
+    await r.cmp.cargarDatos();
+    return r;
+  };
+
+  // BUG: las columnas se detectaban con `:has(> span:nth-child(6))` y la sexta
+  // celda de las compras es un `<button>`, no un `<span>`. La regla nunca
+  // matcheaba, la fila usaba la grilla de 5 columnas con 6 celdas y el botón se
+  // caía a una línea aparte.
+  it('la fila de compras declara la clase de acciones', async () => {
+    const { cmp, fixture } = await listo({
+      getCompras: () => Promise.resolve([{
+        id: 1, proveedor_id: 1, fecha: '2026-03-15', concepto: 'Shampoo',
+        cantidad: 2, monto: 48000, notas: null, proveedores: { nombre: 'Quimicas', activo: true },
+      }]),
+    });
+    cmp.cambiarTab('proveedores');
+    fixture.detectChanges();
+
+    const filas = fixture.nativeElement.querySelectorAll('.tabla-caja .tr');
+    const conCompra = (Array.from(filas) as HTMLElement[])
+      .filter((f) => f.classList.contains('tr-con-acciones'));
+    expect(conCompra.length).toBeGreaterThan(0);
+
+    // Editar y borrar van JUNTOS en una celda, no sueltos como celdas.
+    const filaCompra = conCompra[conCompra.length - 1];
+    const acciones = filaCompra.querySelector('.celda-acciones');
+    expect(acciones).toBeTruthy();
+    expect(acciones!.querySelectorAll('button').length).toBe(2);
+    // Y las celdas coinciden con las columnas de la grilla.
+    expect(filaCompra.children.length).toBe(6);
+
+    // En jsdom no hay layout, así que "está en la misma línea" no se puede
+    // medir por geometría. Lo que se verifica es lo que la rompió: la celda de
+    // acciones es UNA celda, no un botón suelto que la grilla no contaba.
+  });
+
+  // La causa del botón en una segunda línea: la grilla se elegía con
+  // `:has(> span:nth-child(6))`, que NUNCA matcheaba porque la sexta celda es un
+  // `<button>`. La fila caía en la grilla de 5 columnas con 6 celdas y el último
+  // hijo se iba de fila.
+  //
+  // Aquí se comprueba la relación que importa: para cada tabla con acciones, la
+  // grilla que se declara tiene TANTAS columnas como celdas tiene la fila.
+  const TABLAS_CON_ACCIONES = [
+    { clase: 'tr-con-acciones', celdas: 6, etiqueta: 'compras', tab: 'proveedores' },
+    { clase: 'tr-contacto', celdas: 4, etiqueta: 'proveedores', tab: 'proveedores' },
+    { clase: 'tr-pagos', celdas: 5, etiqueta: 'pagos', tab: 'empleados' },
+  ];
+
+  for (const t of TABLAS_CON_ACCIONES) {
+    it(`${t.etiqueta}: la fila tiene ${t.celdas} celdas`, async () => {
+      const { cmp, fixture } = await listo({
+        getCompras: () => Promise.resolve([{
+          id: 1, proveedor_id: 1, fecha: '2026-03-15', concepto: 'X', cantidad: 1,
+          monto: 100, notas: null, proveedores: { nombre: 'P', activo: true },
+        }]),
+        getProveedores: () => Promise.resolve([{ id: 1, nombre: 'P', activo: true }]),
+        getPagosEmpleado: () => Promise.resolve([{
+          id: 1, empleado_id: 1, fecha: '2026-03-15', monto: 100,
+          metodo: 'efectivo', empleados: { nombre: 'E', activo: true },
+        }]),
+      });
+      // La tabla vive en UNA pestaña: compras y proveedores en 'proveedores',
+      // pagos en 'empleados'. Hay que medirla con su pestaña abierta.
+      cmp.cambiarTab(t.tab);
+      fixture.detectChanges();
+
+      const filas = (Array.from(fixture.nativeElement.querySelectorAll('.' + t.clase)) as HTMLElement[])
+        .filter((f) => !f.classList.contains('tr-cabecera'));
+      expect(filas.length).toBeGreaterThan(0);
+      for (const f of filas) {
+        expect(f.children.length).toBe(t.celdas);
+      }
+    });
+  }
+
+  it('la fila de proveedores también usa su clase de acciones', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([
+        { id: 1, nombre: 'Quimicas', contacto: 'Ana', telefono: '123', activo: true },
+      ]),
+    });
+    cmp.cambiarTab('proveedores');
+    fixture.detectChanges();
+
+    const filas = fixture.nativeElement.querySelectorAll('.tr-contacto');
+    expect(filas.length).toBeGreaterThan(0);
+    const conAcciones = filas[filas.length - 1];
+    expect(conAcciones.querySelector('.celda-acciones')).toBeTruthy();
+    expect(conAcciones.children.length).toBe(4);
+  });
+
+  it('eliminar una compra pide confirmación antes de tocar la base', async () => {
+    const spy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { cmp, mock } = await listo();
+    await cmp.eliminarCompra({
+      id: 1, proveedor_id: 1, fecha: '2026-03-15', concepto: 'Shampoo', cantidad: 2, monto: 48000,
+    });
+    expect(spy).toHaveBeenCalled();
+    expect(mock.llamadas).not.toContain('eliminarCompra');
+    spy.mockRestore();
   });
 });
 

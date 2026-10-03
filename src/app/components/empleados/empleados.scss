@@ -607,6 +607,28 @@
 }
 
 /* ── Ausencias ─────────────────────────────────────────────── */
+// Fila de acción del bloque de ausencias: el botón solo y a la derecha.
+.acciones-ausencias {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.btn-agregar {
+  padding: 7px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover { background: #f8fafc; }
+}
+
 .ausencia-form {
   margin: 10px 0;
   padding: 12px;
