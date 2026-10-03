@@ -284,13 +284,12 @@
   &:focus { outline: none; border-color: #3b82f6; background: white; }
 }
 
-/* Campo de nombre (Servicios, Puestos, Días cerrados, Métodos de pago).
+/* Campo de nombre (Servicios, Días cerrados, Métodos de pago).
    Ancho FIJO y no porcentaje: dentro de una tabla con width:100%, un width en %
    crea una dependencia circular que el navegador resuelve distinto según cuántas
-   columnas tenga la tabla (Puestos tiene 4, Servicios 5) y los boxes quedaban
-   de tamaños distintos. Con px ambos se ven idénticos en cualquier pantalla. */
-.input-nombre,
-.input-empleado-puesto {
+   columnas tenga la tabla y los campos quedaban de tamaños distintos. Con px
+   ambos se ven idénticos en cualquier pantalla. */
+.input-nombre {
   width: 175px;
   min-width: 175px;
   max-width: 175px;
@@ -452,18 +451,11 @@
   margin-bottom: 12px;
 }
 
-/* -- PUESTOS DE TRABAJO ----------------------------- */
-.alerta.aviso {
-  background: #fef9c3;
-  color: #854d0e;
-  margin-bottom: 10px;
-}
-
 /* ── Tabla de Puestos: RETIRADA (migracion 011) ──
-   .tabla-puestos, .input-empleado-puesto y .puesto-dup quedaron sin uso cuando
-   la tabla `puestos` se eliminó. Los selectores `.celda-empleado` e
-   `.input-nombre` que se comparten con Servicios y con la lista de empleados
-   siguen vivos y NO se tocan. */
+   Se fueron .tabla-puestos, .input-empleado-puesto, .puesto-dup y
+   .alerta.aviso (esta ultima solo la usaba `avisosPuestos`). Los selectores
+   `.celda-empleado` e `.input-nombre` que se comparten con Servicios y con la
+   lista de empleados siguen vivos y NO se tocan. */
 
 /* Texto plano del Empleado (fuera de edición).
    Debe verse idéntico al <input> en readonly: mismo tamaño, mismo color

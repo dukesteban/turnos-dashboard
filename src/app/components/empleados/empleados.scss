@@ -352,14 +352,8 @@
   margin-top: 2px;
 }
 
-.comision-badge {
-  font-size: 0.75rem;
-  color: #1d4ed8;
-  font-weight: 600;
-  background: #dbeafe;
-  padding: 2px 8px;
-  border-radius: 10px;
-}
+// .comision-badge: RETIRADO. El badge de la lista pasó a ser Activo/Inactivo
+// (.estado-badge) y la comisión se ve sola en el panel de detalle.
 
 // Badge Activo/Inactivo de la lista. Reemplaza al % de comisión porque en la
 // lista lo que importa es si la persona labra, no cuanto cobra.

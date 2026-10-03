@@ -522,7 +522,7 @@ tr.vencido td { background: #fff7ed; }
   line-height: 1.4;
 }
 
-/* Celdas de Empleado y Puesto en las tablas de turnos */
+/* Celda de Empleado en las tablas de turnos (la de Puesto se fue con la 011) */
 .celda-empleado {
   color: #334155;
   font-weight: 500;
@@ -532,12 +532,13 @@ tr.vencido td { background: #fff7ed; }
    La tabla ahora muestra Empleado en su lugar, con .celda-empleado. */
 
 /* ── RESPONSIVE ──────────────────────────────────────────────
-   En celular las tablas tienen 7-8 columnas y no entran: se ocultan
+   En celular las tablas tienen 6-7 columnas y no entran: se ocultan
    las menos importantes. Para cambiar la prioridad de una columna
    alcanza con moverle la clase (th y td siempre en la misma posicion):
      ocultar-movil  -> se oculta hasta 640px
      ocultar-xs     -> se oculta hasta 480px
-   Prioridad actual en el celu: Puesto > Estado > Cliente > Hora.
+   La columna Puesto ya no existe (migracion 011): ahora la que se
+   oculta primero es Empleado.
    Los datos ocultos siguen visibles en el popup al tocar el turno. */
 @media (max-width: 768px) {
   .tabla {

@@ -5,9 +5,9 @@ import { SupabaseService } from '../../services/supabase';
 import { jornadaCubre, turnoTocadoPorAusencia, textoAusencia, normalizarJornada, debeMostrarColumna } from '../../utils/fechas';
 
 const PX_POR_MINUTO = 1.2;
-/** Alto del header de puestos (vista dia). Los turnos se corren esta cantidad. */
-const H_HEADER_PUESTOS = 44;
-/** Alto del header de puestos compactado (vista semana). */
+/** Alto del header de columnas (vista dia). Los turnos se corren esta cantidad. */
+const H_HEADER_COLUMNAS = 44;
+/** Alto del header de columnas compactado (vista semana). */
 const H_HEADER_MINI = 20;
 /** Gutter horizontal entre columnas: debe coincidir con el margen del header. */
 const GAP_COLUMNA = 3;
@@ -403,7 +403,7 @@ export class AgendaComponent implements OnInit, OnDestroy {
     const m = parseInt(inicio.slice(3, 5));
     const duracion = turno.duracion_minutos || 45;
     const minutosDesdeInicio = (h - this.horaInicio) * 60 + m;
-    const offset = mini ? H_HEADER_MINI : H_HEADER_PUESTOS;
+    const offset = mini ? H_HEADER_MINI : H_HEADER_COLUMNAS;
 
     const total = Math.max(this.columnasAgenda.length, 1);
     const col = Math.min(this.columnaDeTurno(turno), total - 1);
@@ -445,8 +445,8 @@ claseBloque(turno: any, mini: boolean): string {
   return `bloque-turno nivel-${this.nivelContenido(turno)}`;
 }
 
-/** Ancho de UNA columna de puesto, en px. Base de todo el layout. */
-  get anchoColPuesto(): number {
+/** Ancho de UNA columna de empleado, en px. Base de todo el layout. */
+  get anchoColEmpleado(): number {
     return this.vista === 'dia' ? 240 : 92;
   }
 
@@ -454,9 +454,9 @@ claseBloque(turno: any, mini: boolean): string {
     return 4;
   }
 
-  get anchoPuestos(): string {
+  get anchoColumnas(): string {
     const n = Math.max(this.columnasAgenda.length, 1);
-    return `${n * (this.anchoColPuesto + this.gapColumna)}px`;
+    return `${n * (this.anchoColEmpleado + this.gapColumna)}px`;
   }
 
   /**
@@ -466,12 +466,12 @@ claseBloque(turno: any, mini: boolean): string {
   get anchoGrillaSemana(): string {
     const nDias = this.diasDeSemana.length || 1;
     const nCols = Math.max(this.columnasAgenda.length, 1);
-    return `${40 + nDias * nCols * (this.anchoColPuesto + this.gapColumna)}px`;
+    return `${40 + nDias * nCols * (this.anchoColEmpleado + this.gapColumna)}px`;
   }
 
-  /** Offset vertical que dejan los headers de puestos. */
+  /** Offset vertical que dejan los headers de columnas. */
   get offsetHeader(): number {
-    return this.vista === 'dia' ? H_HEADER_PUESTOS : H_HEADER_MINI;
+    return this.vista === 'dia' ? H_HEADER_COLUMNAS : H_HEADER_MINI;
   }
 
   /** Top de una linea de hora, ya descontado el alto del header. */

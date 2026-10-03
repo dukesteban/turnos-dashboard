@@ -31,14 +31,10 @@ export class ConfiguracionComponent implements OnInit {
   // Nota: dentro de los bloques comentados NO puede haber `*/` (cierra antes de
   // tiempo), por eso los JSDoc internos se pasaron a comentarios `//`.
 
-  // Puestos de trabajo
-  puestos: any[] = [];
-  empleadosActivos: any[] = [];
-  mensajePuestos = '';
-  mensajeErrorPuestos = '';
-  guardandoPuestos = false;
-  mostrarFormPuesto = false;
-  nuevoPuesto: any = { nombre: '', empleado_id: null };
+  // Los 7 campos de la seccion de Puestos (puestos, empleadosActivos,
+  // mensajePuestos, mensajeErrorPuestos, guardandoPuestos, mostrarFormPuesto,
+  // nuevoPuesto) se eliminaron: el HTML los dejo de referenciar. Los metodos
+  // quedaron comentados mas abajo, entre bloques /* */.
 
   // Puestos activos que tienen un empleado activo y por lo tanto se pueden agendar.
   // (RETIRADO con los puestos)
@@ -861,9 +857,11 @@ export class ConfiguracionComponent implements OnInit {
 
   // ── UTILS ──────────────────────────────────────────────────
 
-  mostrarMensaje(msg: string, seccion: 'datos' | 'puestos' | 'horarios' | 'servicios' | 'diasCerrados' | 'metodosPago') {
+  // La rama 'puestos' se elimino junto con la seccion (migracion 011). Si alguna
+  // vez vuelve a hacer falta, hay que reponer tambien mensajePuestos y
+  // mensajeErrorPuestos, que se fueron con ella.
+  mostrarMensaje(msg: string, seccion: 'datos' | 'horarios' | 'servicios' | 'diasCerrados' | 'metodosPago') {
     if (seccion === 'datos') { this.mensajeDatos = msg; this.mensajeErrorDatos = ''; }
-    else if (seccion === 'puestos') { this.mensajePuestos = msg; this.mensajeErrorPuestos = ''; }
     else if (seccion === 'horarios') { this.mensajeHorarios = msg; this.mensajeErrorHorarios = ''; }
     else if (seccion === 'servicios') { this.mensajeServicios = msg; this.mensajeErrorServicios = ''; }
     else if (seccion === 'diasCerrados') { this.mensajeDiasCerrados = msg; this.mensajeErrorDiasCerrados = ''; }
@@ -871,7 +869,6 @@ export class ConfiguracionComponent implements OnInit {
     this.cdr.detectChanges();
     setTimeout(() => {
       if (seccion === 'datos') this.mensajeDatos = '';
-      else if (seccion === 'puestos') this.mensajePuestos = '';
       else if (seccion === 'horarios') this.mensajeHorarios = '';
       else if (seccion === 'servicios') this.mensajeServicios = '';
       else if (seccion === 'diasCerrados') this.mensajeDiasCerrados = '';

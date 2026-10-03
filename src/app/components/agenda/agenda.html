@@ -36,16 +36,16 @@
       </div>
 
       <!-- Columna de turnos: UNA sola, con el header de puestos adentro -->
-      <div class="col-turnos" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(fechaActual)">
+      <div class="col-turnos" [style.min-width]="anchoColumnas" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(fechaActual)">
         <!-- Header: una columna por EMPLEADO -->
-        <div class="puestos-header">
+        <div class="columnas-header">
           <div *ngFor="let col of columnasAgenda"
-               class="puesto-header"
+               class="columna-header"
                [class.ausente]="col.ausente || !col.trabaja"
                [class.en-riesgo]="col.enRiesgo && !col.ausente"
                [title]="motivoColumnaAusente(col.empleado.id, fechaActualISO) || ''">
-            <span class="ph-puesto">{{ col.empleado.nombre }}</span>
-            <span class="ph-empleado">
+            <span class="ph-nombre">{{ col.empleado.nombre }}</span>
+            <span class="ph-marcas">
               <span class="ph-lock" *ngIf="motivoColumnaAusente(col.empleado.id, fechaActualISO)">✕</span>
               <span class="ph-riesgo" *ngIf="col.enRiesgo && !col.ausente" title="Tiene turnos que la jornada o una ausencia dejó sin cubrir">⚠</span>
             </span>
@@ -80,7 +80,7 @@
         <div class="col-horas-header"></div>
         <div *ngFor="let dia of diasDeSemana"
           class="col-dia-header"
-          [style.min-width]="anchoPuestos"
+          [style.min-width]="anchoColumnas"
           [class.hoy]="esHoy(dia)"
           [class.dia-cerrado]="esDiaCerrado(dia)">
           <div class="dia-nombre">{{ diasSemana[dia.getDay()] }}</div>
@@ -103,15 +103,15 @@
              Cada día resuelve su propio set, así que un lunes puede tener 3
              columnas y un sábado ninguna: los anchos quedan desparejos a
              propósito, porque así se ve quién labra cada día. -->
-        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
+        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.min-width]="anchoColumnas" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
           <!-- Mini header con los empleados de ESE día -->
-          <div class="puestos-header mini">
+          <div class="columnas-header mini">
             <div *ngFor="let col of columnasPara(fechaISOde(dia))"
-                 class="puesto-header"
+                 class="columna-header"
                  [class.ausente]="col.ausente || !col.trabaja"
                  [class.en-riesgo]="col.enRiesgo && !col.ausente"
                  [title]="motivoColumnaAusente(col.empleado.id, fechaISOde(dia)) || ''">
-              <span class="ph-empleado">
+              <span class="ph-marcas">
                 {{ col.empleado.nombre }}
                 <span class="ph-lock" *ngIf="motivoColumnaAusente(col.empleado.id, fechaISOde(dia))">✕</span>
               </span>

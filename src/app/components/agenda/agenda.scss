@@ -1,4 +1,4 @@
-﻿.agenda-page {
+.agenda-page {
   padding: 24px;
   max-width: 1100px;
   margin: 0 auto;
@@ -477,8 +477,8 @@ textarea {
 }
 }
 
-/* -- HEADER DE PUESTOS v2: imita el header de dias -------- */
-.puestos-header {
+/* -- HEADER DE COLUMNAS: imita el header de dias ---------------- */
+.columnas-header {
   position: absolute;
   top: 0;
   left: 0;
@@ -496,7 +496,7 @@ textarea {
   }
 }
 
-.puesto-header {
+.columna-header {
   /* flex:1 1 0 + margin = reproduce exactamente el calc() de posicionTurno */
   flex: 1 1 0;
   min-width: 0;
@@ -526,8 +526,8 @@ textarea {
     border-left: 1px dashed #94a3b8;
 
     /* El nombre se apaga: se lee que no atiende sin tapar nada */
-    .ph-empleado { color: #94a3b8; }
-    .ph-puesto { color: #94a3b8; }
+    .ph-marcas { color: #94a3b8; }
+    .ph-nombre { color: #94a3b8; }
   }
 
   /* Turnos en riesgo: la jornada o una ausencia dejaron turnos sin cubrir.
@@ -566,7 +566,7 @@ textarea {
 }
 
 /*Replica .dia-nombre / .dia-fecha del header de dias*/
-.ph-puesto {
+.ph-nombre {
   font-size: 0.68rem;
   color: #64748b;
   text-transform: uppercase;
@@ -576,7 +576,7 @@ textarea {
   text-overflow: ellipsis;
 }
 
-.ph-empleado {
+.ph-marcas {
   font-size: 0.82rem;
   font-weight: 600;
   color: #1e293b;
