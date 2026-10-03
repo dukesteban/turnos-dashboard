@@ -42,98 +42,11 @@
     </div>
   </div>
 
-  <!-- ── PUESTOS DE TRABAJO ── -->
-  <div class="acordeon">
-    <div class="acordeon-header" (click)="acordeonPuestos = !acordeonPuestos">
-      <span>🚿 Puestos de trabajo</span>
-      <span class="chevron" [class.abierto]="acordeonPuestos">›</span>
-    </div>
-    <div class="acordeon-body" [class.visible]="acordeonPuestos">
-      <div class="seccion-header">
-        <button class="btn-primary" (click)="mostrarFormPuesto = !mostrarFormPuesto; mensajeErrorPuestos = ''; nuevoPuesto = { nombre: '', empleado_id: null }">
-          {{ mostrarFormPuesto ? '↩️ Cancelar' : '➕ Nuevo puesto' }}
-        </button>
-      </div>
-
-      <div *ngIf="mostrarFormPuesto" class="form-nuevo-horario">
-        <div class="fila">
-          <div class="campo">
-            <label>Nombre</label>
-            <input type="text" [(ngModel)]="nuevoPuesto.nombre"
-                   (ngModelChange)="mensajeErrorPuestos = ''" placeholder="Ej: Box 1" />
-          </div>
-          <div class="campo">
-            <label>Empleado</label>
-            <select [(ngModel)]="nuevoPuesto.empleado_id" (ngModelChange)="mensajeErrorPuestos = ''">
-              <option [ngValue]="null">— Sin asignar —</option>
-              <option *ngFor="let e of empleadosActivos" [ngValue]="e.id"
-                      [disabled]="empleadoEnOtroPuesto(e.id)">
-                {{ e.nombre }}{{ empleadoEnOtroPuesto(e.id) ? ' (ya asignado)' : '' }}
-              </option>
-            </select>
-          </div>
-          <button class="btn-primary" (click)="agregarPuesto()">➕ Agregar</button>
-        </div>
-      </div>
-
-      <div *ngFor="let aviso of avisosPuestos" class="alerta aviso">{{ aviso }}</div>
-
-      <!-- Mensajes acá adentro: antes quedaban arriba del header y no se veían -->
-      <div *ngIf="mensajeErrorPuestos" class="alerta error">{{ mensajeErrorPuestos }}</div>
-      <div *ngIf="mensajePuestos" class="alerta exito">{{ mensajePuestos }}</div>
-
-      <div class="tabla-wrapper">
-        <table class="tabla-horarios tabla-puestos">
-          <thead>
-            <tr><th>Puesto</th><th>Empleado</th><th>Activo</th><th>Acciones</th></tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let p of puestos" [class.inactivo]="!p.activo">
-              <td>
-                <input type="text" [(ngModel)]="p.nombre"
-                       (ngModelChange)="mensajeErrorPuestos = ''"
-                       class="input-inline input-nombre" [readonly]="!p.editando" />
-                <div *ngIf="p.editando && nombrePuestoDuplicado(p.nombre, p.id)" class="puesto-dup">
-                  ⚠️ Ya existe otro puesto con ese nombre
-                </div>
-              </td>
-              <td>
-                <span *ngIf="!p.editando" class="celda-empleado">{{ nombreEmpleadoDePuesto(p) }}</span>
-                <select *ngIf="p.editando" [(ngModel)]="p.empleado_id"
-                        (ngModelChange)="mensajeErrorPuestos = ''"
-                        class="input-inline input-empleado-puesto">
-                  <option [ngValue]="null">— Sin asignar —</option>
-                  <option *ngFor="let e of empleadosActivos" [ngValue]="e.id"
-                          [disabled]="empleadoEnOtroPuesto(e.id, p.id)">
-                    {{ e.nombre }}{{ empleadoEnOtroPuesto(e.id, p.id) ? ' (ya asignado)' : '' }}
-                  </option>
-                </select>
-              </td>
-              <td>
-                <label class="toggle">
-                  <input type="checkbox" [checked]="p.activo" [disabled]="p.guardando" (change)="togglePuesto(p)" />
-                  <span class="slider"></span>
-                </label>
-              </td>
-              <td class="acciones">
-                <button *ngIf="!p.editando && !p.guardando" class="btn-icon"
-                  (click)="p._nombreOrig = p.nombre; p._empleadoOrig = p.empleado_id; p.editando = true"
-                  title="Editar">✏️
-                </button>
-                <button *ngIf="p.editando && !p.guardando" class="btn-icon" (click)="guardarPuesto(p)" title="Guardar">💾</button>
-                <button *ngIf="p.editando && !p.guardando" class="btn-icon" (click)="cancelarPuesto(p)" title="Cancelar">↩️</button>
-                <span *ngIf="p.guardando" class="guardando-celda">⏳ Guardando…</span>
-                <button *ngIf="!p.guardando" class="btn-icon" (click)="eliminarPuesto(p)" title="Desactivar puesto">🗑️</button>
-              </td>
-            </tr>
-            <tr *ngIf="puestos.length === 0">
-              <td colspan="4" class="vacio">No hay puestos configurados</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+  <!-- ── PUESTOS DE TRABAJO: RETIRADO ──
+       La agenda ya no usa puestos: cada columna es un EMPLEADO, y el empleado
+       se configura desde la pantalla Empleados (jornada) o aca abajo via el
+       listado de empleados. La tabla `puestos` se borra en la migracion 011.
+       El codigo de esta seccion quedo comentado en configuracion.ts. -->
 
   <!-- ── HORARIOS ── -->
   <div class="acordeon">

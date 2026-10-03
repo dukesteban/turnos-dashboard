@@ -3,6 +3,7 @@ import {
   turnoTocadoPorAusencia,
   normalizarJornada,
   textoAusencia,
+  debeMostrarColumna,
 } from './fechas';
 
 /** Esteban: L,M,J,V (no miércoles, no sábado) — dato real de la base. */
@@ -148,6 +149,78 @@ describe('textoAusencia', () => {
 
   it('describe el medio día con la hora de corte', () => {
     expect(textoAusencia(MEDIODIA)).toBe('Sale a las 13:00');
+  });
+});
+
+describe('debeMostrarColumna (regla de columnas de la agenda)', () => {
+  // La agenda tiene una columna por EMPLEADO, no por puesto. Estos son los
+  // casos que definen si la columna aparece.
+  const base = { activo: true, trabaja: true, tieneAusencia: false, tieneTurnosEnRiesgo: false };
+
+  it('el día que trabaja: columna', () => {
+    expect(debeMostrarColumna(base)).toBe(true);
+  });
+
+  it('día que no trabaja, sin nada más: SIN columna', () => {
+    expect(debeMostrarColumna({ ...base, trabaja: false })).toBe(false);
+  });
+
+  // Estas dos son las que evitan que un turno quede invisible.
+  it('no trabaja pero tiene ausencia: columna rayada', () => {
+    expect(debeMostrarColumna({ ...base, trabaja: false, tieneAusencia: true })).toBe(true);
+  });
+
+  it('no trabaja pero tiene turnos en riesgo: columna marcada', () => {
+    expect(debeMostrarColumna({ ...base, trabaja: false, tieneTurnosEnRiesgo: true })).toBe(true);
+  });
+
+  it('inactivo, aunque trabaje ese día: SIN columna', () => {
+    expect(debeMostrarColumna({ ...base, activo: false })).toBe(false);
+  });
+
+  it('inactivo, aunque tenga turnos: SIN columna', () => {
+    expect(debeMostrarColumna({
+      activo: false, trabaja: false, tieneAusencia: true, tieneTurnosEnRiesgo: true,
+    })).toBe(false);
+  });
+});
+
+describe('la regla de columna aplicada a una jornada real', () => {
+  // Integración: la regla de arriba combinada con los resolvers, sobre las
+  // fechas que importan. ESTEBAN = L,M,J,V (no miércoles, no sábado).
+  // Diciembre 2026: 05=sáb, 07=lun, 12=sáb.
+  const turnoEnSabado = { fecha: '2026-12-05', hora_inicio: '10:00', duracion_minutos: 60 };
+  const sabadoSinNada = { fecha: '2026-12-12', hora_inicio: '10:00', duracion_minutos: 60 };
+  const vacacionesEnSabado = {
+    empleado_id: 8, desde: '2026-12-05', hasta: '2026-12-06',
+    hora_inicio: null, hora_fin: null, tipo: 'vacaciones', motivo: null,
+  };
+
+  const columna = (fecha: string, ausencias: any[], hayTurnoEnRiesgo: boolean) =>
+    debeMostrarColumna({
+      activo: true,
+      trabaja: jornadaCubre(ESTEBAN, fecha, '00:00', 1).ok,
+      tieneAusencia: !!turnoTocadoPorAusencia(ausencias, fecha, '12:00', 1),
+      tieneTurnosEnRiesgo: hayTurnoEnRiesgo,
+    });
+
+  it('lunes normal: columna', () => {
+    expect(columna('2026-12-07', [], false)).toBe(true);
+  });
+
+  it('sábado sin nada: no aparece', () => {
+    expect(columna(sabadoSinNada.fecha, [], false)).toBe(false);
+  });
+
+  it('sábado con vacaciones: aparece rayada', () => {
+    expect(columna(turnoEnSabado.fecha, [vacacionesEnSabado], false)).toBe(true);
+  });
+
+  it('sábado con turno en riesgo: aparece marcada (el turno NO se oculta)', () => {
+    // El turno cae en un día que ESTEBAN no trabaja → está en riesgo.
+    const enRiesgo = !jornadaCubre(ESTEBAN, turnoEnSabado.fecha, '10:00', 60).ok;
+    expect(enRiesgo).toBe(true);
+    expect(columna(turnoEnSabado.fecha, [], enRiesgo)).toBe(true);
   });
 });
 

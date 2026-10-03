@@ -110,3 +110,32 @@ export function textoAusencia(a: any): string {
   const hasta = a.hasta && a.hasta !== a.desde ? ` al ${a.hasta.slice(8, 10)}/${a.hasta.slice(5, 7)}` : '';
   return `${a.tipo === 'vacaciones' ? 'Vacaciones' : a.tipo === 'baja' ? 'Baja' : 'Ausente'}${hasta}`;
 }
+
+/** Datos que decide si un empleado tiene columna en la agenda de una fecha. */
+export interface EstadoColumna {
+  activo: boolean;
+  trabaja: boolean;
+  tieneAusencia: boolean;
+  tieneTurnosEnRiesgo: boolean;
+}
+
+/**
+ * ¿Tiene columna este empleado en la agenda?
+ *
+ * Regla de la agenda con columnas por empleado. Sale TRUE si:
+ *   - esta ACTIVO, y ademas
+ *   - trabaja ese dia (jornada), O
+ *   - tiene una ausencia ese dia (se ve rayada), O
+ *   - tiene turnos EN RIESGO ese dia (se ve marcada para resolverlos)
+ *
+ * La tercera clausula es la que no se puede sacar: sin ella, un turno que quedo
+ * fuera de la jornada (al cambiarle los dias, o al cargarle una ausencia
+ * encima) desapareceria de la agenda y no habria forma de verlo para
+ * reprogramarlo. Los dias normales siguen mostrando solo a quien labra.
+ *
+ * Lo unico que nunca da columna es un empleado INACTIVO.
+ */
+export function debeMostrarColumna(e: EstadoColumna): boolean {
+  if (!e.activo) return false;
+  return e.trabaja || e.tieneAusencia || e.tieneTurnosEnRiesgo;
+}

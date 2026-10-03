@@ -37,18 +37,17 @@
 
       <!-- Columna de turnos: UNA sola, con el header de puestos adentro -->
       <div class="col-turnos" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(fechaActual)">
-        <!-- Header: una columna por puesto -->
+        <!-- Header: una columna por EMPLEADO -->
         <div class="puestos-header">
           <div *ngFor="let col of columnasAgenda"
                class="puesto-header"
-               [class.sin-asignar]="col.sinAsignar"
-               [class.sin-gente]="!col.sinAsignar && !puestoAgendable(col.puesto)"
-               [class.ausente]="!col.sinAsignar && !!motivoColumnaAusente(col, fechaActualISO)"
-               [title]="!col.sinAsignar ? (motivoColumnaAusente(col, fechaActualISO) || '') : ''">
-            <span class="ph-puesto">{{ col.sinAsignar ? '—' : col.puesto.nombre }}</span>
+               [class.ausente]="col.ausente || !col.trabaja"
+               [class.en-riesgo]="col.enRiesgo && !col.ausente"
+               [title]="motivoColumnaAusente(col.empleado.id, fechaActualISO) || ''">
+            <span class="ph-puesto">{{ col.empleado.nombre }}</span>
             <span class="ph-empleado">
-              <span class="ph-lock" *ngIf="!col.sinAsignar && motivoColumnaAusente(col, fechaActualISO)">✕</span>
-              {{ col.sinAsignar ? 'Sin asignar' : (col.puesto.empleado?.nombre || 'Sin empleado') }}
+              <span class="ph-lock" *ngIf="motivoColumnaAusente(col.empleado.id, fechaActualISO)">✕</span>
+              <span class="ph-riesgo" *ngIf="col.enRiesgo && !col.ausente" title="Tiene turnos que la jornada o una ausencia dejó sin cubrir">⚠</span>
             </span>
           </div>
         </div>
@@ -100,18 +99,21 @@
           </div>
         </div>
 
-        <!-- Columnas por día: dentro de cada día, una columna por puesto -->
+        <!-- Columnas por día: dentro de cada día, una columna por EMPLEADO.
+             Cada día resuelve su propio set, así que un lunes puede tener 3
+             columnas y un sábado ninguna: los anchos quedan desparejos a
+             propósito, porque así se ve quién labra cada día. -->
         <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
-          <!-- Mini header con los empleados -->
+          <!-- Mini header con los empleados de ESE día -->
           <div class="puestos-header mini">
-            <div *ngFor="let col of columnasAgenda"
+            <div *ngFor="let col of columnasPara(fechaISOde(dia))"
                  class="puesto-header"
-                 [class.sin-asignar]="col.sinAsignar"
-                 [class.sin-gente]="!col.sinAsignar && !puestoAgendable(col.puesto)"
-                 [class.ausente]="!col.sinAsignar && !!motivoColumnaAusente(col, dia.toLocaleDateString('en-CA'))"
-                 [title]="!col.sinAsignar ? (motivoColumnaAusente(col, dia.toLocaleDateString('en-CA')) || '') : ''">
+                 [class.ausente]="col.ausente || !col.trabaja"
+                 [class.en-riesgo]="col.enRiesgo && !col.ausente"
+                 [title]="motivoColumnaAusente(col.empleado.id, fechaISOde(dia)) || ''">
               <span class="ph-empleado">
-                {{ col.sinAsignar ? 'Sin asignar' : (col.puesto.empleado?.nombre || 'Sin empleado') }}
+                {{ col.empleado.nombre }}
+                <span class="ph-lock" *ngIf="motivoColumnaAusente(col.empleado.id, fechaISOde(dia))">✕</span>
               </span>
             </div>
           </div>
@@ -153,7 +155,7 @@
             <div class="popup-fila"><span class="popup-label">Hora</span><span>{{ formatearHora(turnoSeleccionado.hora_inicio || turnoSeleccionado.hora) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Duración</span><span>{{ turnoSeleccionado.duracion_minutos || 45 }} min</span></div>
             <div class="popup-fila"><span class="popup-label">Empleado</span><span>{{ nombreEmpleadoDeTurno(turnoSeleccionado) }}</span></div>
-            <div class="popup-fila"><span class="popup-label">Puesto</span><span>{{ nombrePuestoDeTurno(turnoSeleccionado) }}</span></div>
+            <div class="popup-fila"><span class="popup-label">Empleado</span><span>{{ nombreEmpleadoDeTurno(turnoSeleccionado) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Estado</span><span class="badge" [ngClass]="esVencido(turnoSeleccionado) ? 'vencido' : turnoSeleccionado.estado">{{ esVencido(turnoSeleccionado) ? 'vencido' : turnoSeleccionado.estado }}</span></div>
             <div *ngIf="turnoSeleccionado.estado === 'atendido'">
               <div class="popup-fila" *ngIf="turnoSeleccionado.metodo_pago">

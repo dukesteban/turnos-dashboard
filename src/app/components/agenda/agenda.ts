@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
-import { jornadaCubre, turnoTocadoPorAusencia, textoAusencia, normalizarJornada } from '../../utils/fechas';
+import { jornadaCubre, turnoTocadoPorAusencia, textoAusencia, normalizarJornada, debeMostrarColumna } from '../../utils/fechas';
 
 const PX_POR_MINUTO = 1.2;
 /** Alto del header de puestos (vista dia). Los turnos se corren esta cantidad. */
@@ -27,7 +27,8 @@ export class AgendaComponent implements OnInit, OnDestroy {
   turnos: any[] = [];
 
   // Puestos de trabajo (columnas de la agenda)
-  puestos: any[] = [];
+  // RETIRADO: las columnas de la agenda ahora son una por EMPLEADO.
+  // Ver columnasPara(fecha) mas abajo.
   ausencias: any[] = [];
   /** Telefono ACTUAL por cliente. El del turno es un snapshot y puede estar viejo. */
   telefonosPorCliente: Record<number, string> = {};
@@ -40,8 +41,11 @@ export class AgendaComponent implements OnInit, OnDestroy {
   }
   /** Cache de jornadas por empleado para no consultarla por celda de la agenda. */
   jornadas: Record<number, any> = {};
-  /** Turnos sin puesto asignado -> columna gris al final */
-  mostrarColumnaSinAsignar = false;
+  /**
+   * Columnas ya resueltas por fecha. La vista Dia la pide una vez, la Semana
+   * siete; sin cache se recalculan en cada change detection.
+   */
+  private cacheColumnas: Record<string, any[]> = {};
 
   horaInicio = 8;
   horaFin = 20;
@@ -97,7 +101,6 @@ export class AgendaComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     await this.cargarHorarios();
-    await this.cargarPuestos();
     await this.cargarTurnos();
     this.metodosPago = await this.supabase.getMetodosPago();
     this.empleados = await this.supabase.getEmpleados();
@@ -130,33 +133,18 @@ export class AgendaComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Empleado real del turno. Los turnos viejos tienen puesto_id pero empleado_id
-   * en null (se guardaban antes de que existieran los puestos), asi que cuando
-   * falta se deriva del puesto que ya tiene asignado.
+   * Empleado del turno. Es OBLIGATORIO: define la columna de la agenda y es quien
+   * cobra la comision. Antes se derivaba del puesto cuando faltaba, porque
+   * existian turnos viejos sin `empleado_id`; ya no hace falta ese fallback.
    */
   empleadoDeTurno(turno: any): number | null {
-    if (!turno) return null;
-    if (turno.empleado_id) return turno.empleado_id;
-    const puesto = this.puestos.find((p: any) => p.id === turno.puesto_id);
-    return puesto?.empleado_id || null;
-  }
-
-  /** Nombre del puesto del turno. Si falta puesto_id, lo deriva del empleado. */
-  puestoDeTurno(turno: any): any {
-    if (!turno) return null;
-    if (turno.puesto_id) return this.puestos.find((p: any) => p.id === turno.puesto_id) || null;
-    if (turno.empleado_id) return this.puestos.find((p: any) => p.empleado_id === turno.empleado_id) || null;
-    return null;
-  }
-
-  nombrePuestoDeTurno(turno: any): string {
-    return this.puestoDeTurno(turno)?.nombre || '—';
+    return turno?.empleado_id ?? null;
   }
 
   nombreEmpleadoDeTurno(turno: any): string {
     const id = this.empleadoDeTurno(turno);
-    if (!id) return '—';
-    return this.empleados.find((e: any) => e.id === id)?.nombre || '—';
+    if (!id) return 'Sin empleado';
+    return this.empleados.find((e: any) => e.id === id)?.nombre || 'Sin empleado';
   }
 
   actualizarVista() {
@@ -205,13 +193,8 @@ export class AgendaComponent implements OnInit, OnDestroy {
 
   async cargarTurnos() {
     this.turnos = await this.supabase.getTurnos();
-    this.actualizarColumnaSinAsignar(this.turnos.filter((t: any) => t.fecha === this.fechaISO && t.estado !== 'cancelado'));
+    this.limpiarCacheColumnas();
     this.ajustarLimitesConTurnos();
-    this.cdr.detectChanges();
-  }
-
-  async cargarPuestos() {
-    this.puestos = await this.supabase.getPuestos();
     this.cdr.detectChanges();
   }
 
@@ -268,43 +251,96 @@ export class AgendaComponent implements OnInit, OnDestroy {
     return (hora - this.horaInicio) * 60 * PX_POR_MINUTO + 8;
   }
 
-  /** Puestos activos en orden. Si hay turnos huerfanos, suma la columna "Sin asignar". */
-  get columnasAgenda(): any[] {
-    const cols = this.puestos.filter((p: any) => p.activo).map((p: any) => ({ puesto: p, sinAsignar: false }));
-    if (this.mostrarColumnaSinAsignar) cols.push({ puesto: null, sinAsignar: true });
+  /**
+   * QUÉ COLUMNAS APARECEN en una fecha dada. Esta es la regla central de la
+   * agenda con columnas por empleado.
+   *
+   * Un empleado tiene columna si esta ACTIVO y ademas:
+   *   - trabaja ese dia (jornada), o
+   *   - tiene una ausencia ese dia      -> se muestra rayada, para que se vea
+   *   - tiene turnos EN RIESGO ese dia  -> se muestra para poder resolverlos
+   *
+   * La tercera cláusula es la importante: sin ella, un turno que quedó fuera de
+   * la jornada (al cambiarle los dias, o al cargarle una ausencia encima)
+   * desapareceria de la agenda y no habria forma de verlo para reprogramarlo.
+   *
+   * Solo los INACTIVOS no tienen columna.
+   */
+  columnasPara(fecha: string): any[] {
+    if (this.cacheColumnas[fecha]) return this.cacheColumnas[fecha];
+
+    const cols = (this.empleados || [])
+      .map((e: any) => {
+        const ausencia = this.ausenciaDe(e.id, fecha);
+        const estado = {
+          activo: !!e.activo,
+          trabaja: jornadaCubre(this.jornadaDe(e.id), fecha, '00:00', 1).ok,
+          tieneAusencia: !!ausencia,
+          tieneTurnosEnRiesgo: this.tieneTurnosEnRiesgo(e.id, fecha),
+        };
+        return {
+          empleado: e,
+          ...estado,
+          ausencia,
+          // Ausente de verdad = lo tapa una ausencia. Si solo no labra ese dia,
+          // la columna sale por el turno en riesgo y se marca distinto.
+          ausente: estado.tieneAusencia,
+        };
+      })
+      .filter((c: any) => debeMostrarColumna(c));
+
+    this.cacheColumnas[fecha] = cols;
     return cols;
+  }
+
+  /** Columnas de la vista Dia. */
+  get columnasAgenda(): any[] {
+    return this.columnasPara(this.fechaISO);
+  }
+
+  /** La cache se invalida cuando cambian los datos que la sostienen. */
+  private limpiarCacheColumnas() {
+    this.cacheColumnas = {};
+  }
+
+  /** Ausencia del empleado en esa fecha, o null. */
+  ausenciaDe(empleadoId: number, fecha: string): any {
+    const suyas = this.ausencias.filter((a: any) => a.empleado_id === empleadoId);
+    // Mediodia como referencia: alcanza para marcar la columna del dia.
+    return turnoTocadoPorAusencia(suyas, fecha, '12:00', 1);
+  }
+
+  /** ¿Tiene este empleado algun turno en riesgo en esa fecha? */
+  tieneTurnosEnRiesgo(empleadoId: number, fecha: string): boolean {
+    return (this.turnos || []).some(
+      (t: any) => t.empleado_id === empleadoId
+        && t.fecha === fecha
+        && t.estado !== 'cancelado'
+        && this.turnoEnRiesgo(t)
+    );
   }
 
   /**
    * Delega en el servicio: antes la Agenda tenia su PROPIA copia de esta
    * funcion y por eso no se enteraba de las reglas nuevas.
-   * `fecha` es opcional: sin ella solo chequea puesto + empleado activo
-   * (para pintar la columna), con ella aplica jornada + ausencias.
    */
-  puestoAgendable(p: any, fecha?: string, hora?: string, dur?: number): boolean {
-    return this.supabase.puestoEsAgendable(
-      p, fecha, hora, dur, this.ausencias
-    ) as boolean;
+  empleadoAgendable(e: any, fecha?: string, hora?: string, dur?: number): boolean {
+    return this.supabase.empleadoEsAgendable(e, fecha, hora, dur, this.ausencias) as boolean;
   }
 
-  /** Motivo por el que una columna no se puede agendar en esa fecha (o null). */
-  motivoColumna(p: any, fecha: string, hora = '09:00', dur = 45): string | null {
-    return this.supabase.motivoDeNoAgendable(p, fecha, hora, dur, this.ausencias);
+  /** Motivo por el que este empleado no puede atender en esa fecha (o null). */
+  motivoColumna(e: any, fecha: string, hora = '09:00', dur = 45): string | null {
+    return this.supabase.motivoDeNoAtender(e, fecha, hora, dur, this.ausencias);
   }
 
   /**
-   * Motivo "de persona ausente" para pintar la columna rayada.
-   * Solo cuenta ausencias y dias que no trabaja: si lo que falla es que el
-   * puesto esta desactivado, eso ya lo muestra el estado .sin-gente.
+   * Motivo para pintar la columna rayada: ausencia, o dia que no labra.
+   * Devuelve null cuando esta todo bien.
    */
-  motivoColumnaAusente(col: any, fecha: string): string | null {
-    if (col?.sinAsignar || !col?.puesto?.empleado_id) return null;
-    const empId = col.puesto.empleado_id;
-    const suyas = this.ausencias.filter((a: any) => a.empleado_id === empId);
-    // Se evalua a las 09:00 como referencia: alcanza para marcar la columna.
-    const a = turnoTocadoPorAusencia(suyas, fecha, '09:00', 45);
+  motivoColumnaAusente(empleadoId: number, fecha: string): string | null {
+    const a = this.ausenciaDe(empleadoId, fecha);
     if (a) return textoAusencia(a);
-    const j = jornadaCubre(this.jornadaDe(empId), fecha, '09:00', 45);
+    const j = jornadaCubre(this.jornadaDe(empleadoId), fecha, '00:00', 1);
     return j.ok ? null : (j.motivo || null);
   }
 
@@ -325,17 +361,18 @@ export class AgendaComponent implements OnInit, OnDestroy {
     return this.jornadas[empleadoId] || null;
   }
 
-  /** Actualiza la visibilidad de la columna gris segun si hay turnos sin puesto. */
-  actualizarColumnaSinAsignar(turnosVisibles: any[]) {
-    this.mostrarColumnaSinAsignar = turnosVisibles.some((t: any) => !t.puesto_id);
-  }
-
-  /** Indice de columna de un turno: la de su puesto, o la de "Sin asignar". */
-  columnaDeTurno(turno: any): number {
-    const cols = this.columnasAgenda;
+  /**
+   * Indice de la columna donde cae un turno: la de su empleado.
+   *
+   * No existe columna "Sin asignar": el empleado es obligatorio al agendar. Si
+   * aun asi el empleado no esta entre las columnas visibles (esta inactivo, o
+   * fue dado de baja despues de agendar), el turno cae en la ultima columna
+   * para que al menos se vea en vez de desaparecer.
+   */
+  columnaDeTurno(turno: any, fecha?: string): number {
+    const cols = this.columnasPara(fecha || turno?.fecha || this.fechaISO);
     if (!cols.length) return 0;
-    if (!turno?.puesto_id) return cols.length - 1;
-    const idx = cols.findIndex((c: any) => !c.sinAsignar && c.puesto.id === turno.puesto_id);
+    const idx = cols.findIndex((c: any) => c.empleado.id === turno?.empleado_id);
     return idx >= 0 ? idx : cols.length - 1;
   }
 
@@ -431,6 +468,11 @@ claseBloque(turno: any, mini: boolean): string {
     const m = String(fecha.getMonth() + 1).padStart(2, '0');
     const d = String(fecha.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
+  }
+
+  /** 'YYYY-MM-DD' de un Date de la grilla semanal. La vista Semana lo pide por dia. */
+  fechaISOde(dia: Date): string {
+    return this.formatearFechaLocal(dia);
   }
 
   get turnosDia(): any[] {
@@ -563,15 +605,14 @@ claseBloque(turno: any, mini: boolean): string {
     }
     const servicio = this.atendidoServicio;
 
-    // Sin empleado no se puede guardar: se perderia la comision y el puesto quedaria huerfano.
+    // Sin empleado no se puede guardar: se perderia la comision y el turno
+    // no tendria columna en la agenda.
     if (!this.atendidoEmpleadoId) {
       this.errorAtendido = '❌ Elegí el empleado que atendió.';
       this.cdr.detectChanges();
       return;
     }
 
-    // El empleado elegido no puede pisar a otro turno de su mismo puesto
-    const puestoId = await this.supabase.puestoDeEmpleado(this.atendidoEmpleadoId);
     // Jornada + ausencias del empleado que se esta anotando
     const puede = await this.supabase.empleadoPuedeAtender(
       this.atendidoEmpleadoId,
@@ -586,14 +627,9 @@ claseBloque(turno: any, mini: boolean): string {
       this.cdr.detectChanges();
       return;
     }
-    if (!puestoId) {
-      this.errorAtendido = '❌ Ese empleado no tiene un puesto asignado.';
-      this.cdr.detectChanges();
-      return;
-    }
     const dur = servicio?.duracion_minutos || this.turnoSeleccionado.duracion_minutos || 45;
-    const ocupado = await this.supabase.puestoEstaOcupado(
-      puestoId,
+    const ocupado = await this.supabase.empleadoEstaOcupado(
+      this.atendidoEmpleadoId,
       this.turnoSeleccionado.fecha,
       this.turnoSeleccionado.hora_inicio?.slice(0, 5) || this.turnoSeleccionado.hora?.slice(0, 5),
       dur,
@@ -670,11 +706,11 @@ claseBloque(turno: any, mini: boolean): string {
     }
     const servicio = this.servicios.find((s: any) => s.id == Number(this.nuevoServicioId));
     const dur = servicio?.duracion_minutos || 45;
-    const disponibles = await this.supabase.getPuestosDisponibles(
+    const disponibles = await this.supabase.getEmpleadosDisponibles(
       this.nuevaFecha, this.nuevaHora || '00:00', dur, this.ausencias
     );
     const puede = (e: any) =>
-      !!disponibles.some((p: any) => p.empleado_id === e.id && p.puede_atender);
+      !!disponibles.some((d: any) => d.empleado_id === e.id && d.puede_atender);
 
     this.empleadosReprogramar = this.empleados.filter(
       (e: any) => puede(e) || e.id === this.nuevoEmpleadoId
@@ -751,33 +787,31 @@ claseBloque(turno: any, mini: boolean): string {
       fin.setMinutes(fin.getMinutes() + servicio.duracion_minutos);
       const horaFin = `${String(fin.getHours()).padStart(2,'0')}:${String(fin.getMinutes()).padStart(2,'0')}`;
 
-      // Validar que el puesto elegido no este ocupado en ese rango
-      // Jornada + ausencias del empleado elegido
-      if (this.nuevoEmpleadoId) {
-        const puede = await this.supabase.empleadoPuedeAtender(
-          this.nuevoEmpleadoId, this.nuevaFecha, this.nuevaHora,
-          this.nuevoServicio?.duracion_minutos || 45, this.ausencias
-        );
-        if (!puede.ok) {
-          const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
-          this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
-          return;
-        }
+      // El empleado es obligatorio: define la columna de la agenda y la comision.
+      if (!this.nuevoEmpleadoId) {
+        this.errorEditarTurno = '❌ Elegí el empleado que atiende.';
+        return;
       }
 
-      const puestoId = await this.supabase.puestoDeEmpleado(this.nuevoEmpleadoId);
-      if (puestoId) {
-        const ocupado = await this.supabase.puestoEstaOcupado(
-          puestoId, this.nuevaFecha, this.nuevaHora,
-          servicio.duracion_minutos, this.turnoSeleccionado.id
-        );
-        if (ocupado) {
-          const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
-          this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
-          return;
-        }
-      } else if (this.nuevoEmpleadoId) {
-        this.errorEditarTurno = '❌ Ese empleado no tiene un puesto asignado.';
+      // Jornada + ausencias del empleado elegido
+      const puede = await this.supabase.empleadoPuedeAtender(
+        this.nuevoEmpleadoId, this.nuevaFecha, this.nuevaHora,
+        this.nuevoServicio?.duracion_minutos || 45, this.ausencias
+      );
+      if (!puede.ok) {
+        const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
+        this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
+        return;
+      }
+
+      // Y no puede pisar otro turno suyo en ese rango
+      const ocupado = await this.supabase.empleadoEstaOcupado(
+        this.nuevoEmpleadoId, this.nuevaFecha, this.nuevaHora,
+        servicio.duracion_minutos, this.turnoSeleccionado.id
+      );
+      if (ocupado) {
+        const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
+        this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
         return;
       }
 
@@ -810,7 +844,6 @@ claseBloque(turno: any, mini: boolean): string {
         duracion_minutos: servicio.duracion_minutos,
         // Sin esto el selector de empleado era decorativo: el turno se
         // reprogramaba pero se mantenía el empleado anterior.
-        // El servicio deriva el puesto_id a partir del empleado.
         empleado_id: this.nuevoEmpleadoId
       });
       await this.cargarTurnos();

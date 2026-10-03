@@ -22,6 +22,15 @@ export class ConfiguracionComponent implements OnInit {
   acordeonServicios = false;
   acordeonPassword = false;
 
+  // ── PUESTOS DE TRABAJO: RETIRADO ────────────────────────────
+  //
+  // La agenda ya no usa puestos: cada columna es un EMPLEADO. La tabla
+  // `puestos` se borra en la migracion 011, junto con esta seccion.
+  //
+  // Todo lo de abajo quedo comentado para poder consultarlo si hace falta.
+  // Nota: dentro de los bloques comentados NO puede haber `*/` (cierra antes de
+  // tiempo), por eso los JSDoc internos se pasaron a comentarios `//`.
+
   // Puestos de trabajo
   puestos: any[] = [];
   empleadosActivos: any[] = [];
@@ -31,11 +40,15 @@ export class ConfiguracionComponent implements OnInit {
   mostrarFormPuesto = false;
   nuevoPuesto: any = { nombre: '', empleado_id: null };
 
-  /** Puestos activos que tienen un empleado activo y por lo tanto se pueden agendar. */
+  // Puestos activos que tienen un empleado activo y por lo tanto se pueden agendar.
+  // (RETIRADO con los puestos)
+  /*
   get puestosAgendables(): number {
     return this.puestos.filter((p: any) => this.puestoAgendable(p)).length;
   }
+  */
 
+  /* RETIRADO con los puestos (ver bloque de metodos al final del archivo).
   puestoAgendable(p: any): boolean {
     if (!p?.activo) return false;
     if (!p.empleado_id) return false;
@@ -43,24 +56,24 @@ export class ConfiguracionComponent implements OnInit {
     return true;
   }
 
-  /** Empleados ya asignados a otro puesto (para no ofrecerlos dos veces). */
+  // Empleados ya asignados a otro puesto (para no ofrecerlos dos veces).
   empleadoEnOtroPuesto(empleadoId: number, excluirPuestoId?: number): boolean {
     return this.puestos.some(
       (p: any) => p.empleado_id === empleadoId && p.activo && p.id !== excluirPuestoId
     );
   }
 
-  /** Nombre del empleado asignado al puesto (columna de solo lectura). */
+  // Nombre del empleado asignado al puesto (columna de solo lectura).
   nombreEmpleadoDePuesto(puesto: any): string {
     return puesto?.empleado?.nombre || '— Sin asignar —';
   }
 
-  /** Normaliza nombres para comparar: sin mayusculas, sin espacios de sobra. */
+  // Normaliza nombres para comparar: sin mayusculas, sin espacios de sobra.
   private normNombre(nombre: string): string {
     return (nombre || '').trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
-  /** Ya existe otro puesto con ese nombre? La base tambien lo bloquea (indice unico). */
+  // Ya existe otro puesto con ese nombre? La base tambien lo bloquea (indice unico).
   nombrePuestoDuplicado(nombre: string, excluirPuestoId?: number): boolean {
     const n = this.normNombre(nombre);
     if (!n) return false;
@@ -69,7 +82,7 @@ export class ConfiguracionComponent implements OnInit {
     );
   }
 
-  /** Traduce errores de la base a algo entendible. */
+  // Traduce errores de la base a algo entendible.
   private errorPuesto(e: any): string {
     const code = e?.code || '';
     const msg = String(e?.message || '');
@@ -93,6 +106,7 @@ export class ConfiguracionComponent implements OnInit {
     }
     return out;
   }
+  */
 
   // Datos del negocio
   nombreNegocio = '';
@@ -159,8 +173,7 @@ export class ConfiguracionComponent implements OnInit {
     const config = await this.supabase.getConfiguracion();
     this.nombreNegocio = config.find((c: any) => c.clave === 'nombre_negocio')?.valor || '';
     this.descripcion = config.find((c: any) => c.clave === 'descripcion')?.valor || '';
-    
-    await this.cargarPuestos();
+
     this.horasLimiteCancelacion = parseInt(config.find((c: any) => c.clave === 'horas_limite_cancelacion')?.valor) || 12;
     this.recordatorioCuando = config.find((c: any) => c.clave === 'recordatorio_cuando')?.valor || 'dia_anterior';
     this.recordatorioHora = config.find((c: any) => c.clave === 'recordatorio_hora')?.valor || '08:00';
@@ -176,8 +189,15 @@ export class ConfiguracionComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
-  // ── PUESTOS DE TRABAJO ─────────────────────────────────────
-
+  // ── PUESTOS DE TRABAJO: RETIRADO ────────────────────────────
+  //
+  // Seccion completa comentada. La agenda ya no usa puestos: cada columna es
+  // un EMPLEADO. Los empleados se administran en la pantalla Empleados y los
+  // servicios/metodos/horarios/dias cerrados siguen abajo sin cambios.
+  //
+  // La tabla `puestos` se borra en la migracion 011.
+  //
+  /*
   async cargarPuestos() {
     this.puestos = await this.supabase.getPuestos();
     this.empleadosActivos = await this.supabase.getEmpleados();
@@ -249,7 +269,7 @@ export class ConfiguracionComponent implements OnInit {
     this.mensajeErrorPuestos = '';
   }
 
-  /** Baja logica: el puesto se desactiva, no se borra (preserva el historico). */
+  // Baja logica: el puesto se desactiva, no se borra (preserva el historico).
   async eliminarPuesto(puesto: any) {
     if (!confirm(
       `¿Desactivar "${puesto.nombre}"?\n\nNo se borra: los turnos que ya lo usaron siguen guardados. ` +
@@ -297,7 +317,7 @@ export class ConfiguracionComponent implements OnInit {
       puesto.editando = false;
       puesto.guardando = false;
       // El guardado ya esta: si falla la recarga no se pierde el cambio.
-      try { await this.cargarPuestos(); } catch { /* ignorar */ }
+      try { await this.cargarPuestos(); } catch { }   // si falla la recarga, no se pierde el cambio
       this.mostrarMensaje(`✅ "${nombre}" guardado.`, 'puestos');
     } catch (e: any) {
       puesto.guardando = false;
@@ -305,6 +325,7 @@ export class ConfiguracionComponent implements OnInit {
       this.cdr.detectChanges();
     }
   }
+  */
 
   // ── DATOS DEL NEGOCIO ──────────────────────────────────────
 

@@ -45,7 +45,6 @@
             <th>Cliente</th>
             <th class="ocultar-movil">Servicio</th>
             <th class="ocultar-xs">Empleado</th>
-            <th>Puesto</th>
             <th class="ocultar-movil">Precio</th>
             <th>Estado</th>
           </tr>
@@ -56,7 +55,6 @@
             <td [style.color]="!telefonoDe(turno) ? '#dc2626' : ''" >{{ turno.cliente_nombre }}</td>
             <td class="ocultar-movil">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</td>
             <td class="celda-empleado ocultar-xs">{{ nombreEmpleadoDeTurno(turno) }}</td>
-            <td class="celda-puesto">{{ nombrePuestoDeTurno(turno) }}</td>
             <td class="ocultar-movil">${{ (turno.estado === 'atendido' && turno.precio_final ? turno.precio_final : turno.precio) | number }}</td>
             <td>
               <span class="badge" [ngClass]="esVencido(turno) ? 'vencido' : turno.estado">
@@ -99,7 +97,6 @@
             <th>Cliente</th>
             <th class="ocultar-movil">Servicio</th>
             <th class="ocultar-xs">Empleado</th>
-            <th>Puesto</th>
             <th class="ocultar-movil">Precio</th>
             <th>Estado</th>
           </tr>
@@ -111,7 +108,6 @@
             <td [style.color]="!telefonoDe(turno) ? '#dc2626' : ''" >{{ turno.cliente_nombre }}</td>
             <td class="ocultar-movil">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</td>
             <td class="celda-empleado ocultar-xs">{{ nombreEmpleadoDeTurno(turno) }}</td>
-            <td class="celda-puesto">{{ nombrePuestoDeTurno(turno) }}</td>
             <td class="ocultar-movil">${{ (turno.estado === 'atendido' && turno.precio_final ? turno.precio_final : turno.precio) | number }}</td>
             <td>
               <span class="badge" [ngClass]="esVencido(turno) ? 'vencido' : turno.estado">
@@ -150,7 +146,6 @@
             <div class="popup-fila"><span class="popup-label">Hora</span><span>{{ formatearHora(turnoSeleccionado.hora_inicio || turnoSeleccionado.hora) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Duración</span><span>{{ turnoSeleccionado.duracion_minutos || 45 }} min</span></div>
             <div class="popup-fila"><span class="popup-label">Empleado</span><span>{{ nombreEmpleadoDeTurno(turnoSeleccionado) }}</span></div>
-            <div class="popup-fila"><span class="popup-label">Puesto</span><span>{{ nombrePuestoDeTurno(turnoSeleccionado) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Estado</span><span class="badge" [ngClass]="turnoSeleccionado.estado">{{ turnoSeleccionado.estado }}</span></div>
             <div *ngIf="turnoSeleccionado.estado === 'atendido'">
               <div class="popup-fila" *ngIf="turnoSeleccionado.metodo_pago">
@@ -333,14 +328,17 @@
 
         <!-- Empleado -->
         <div class="campo">
-          <label>Empleado que atiende</label>
+          <label>Empleado que atende</label>
           <select [(ngModel)]="nuevoTurnoEmpleadoId"
             (ngModelChange)="errorNuevoTurno = ''">
-            <option [value]="null">-- Automático (primer puesto libre) --</option>
+            <option [value]="null" disabled>-- Elegí un empleado --</option>
             <option *ngFor="let e of empleadosLibres" [value]="e.id">
               {{ e.nombre }} ({{ getComisionEmpleadoServicio(e.id) }}%)
             </option>
           </select>
+          <p class="ayuda-campo" *ngIf="nuevoTurnoFecha && nuevoTurnoHora">
+            Solo aparecen los que pueden trabajar en esa fecha y hora.
+          </p>
           <div *ngIf="nuevoTurnoFecha && nuevoTurnoHora && empleadosLibres.length === 0"
                class="empleados-ocupados">
             ⚠️ No hay empleados libres en este horario

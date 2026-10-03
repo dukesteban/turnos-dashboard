@@ -361,6 +361,39 @@
   border-radius: 10px;
 }
 
+// Badge Activo/Inactivo de la lista. Reemplaza al % de comisión porque en la
+// lista lo que importa es si la persona labra, no cuanto cobra.
+.estado-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+
+  &.inactivo {
+    color: #991b1b;
+    background: #fee2e2;
+    border-color: #fecaca;
+  }
+}
+
+// Un inactivo se ve atenuado pero se puede seleccionar para poder reactivarlo.
+.item.inactivo {
+  opacity: 0.62;
+  cursor: pointer;
+
+  &:hover { opacity: 0.85; }
+}
+
+// Foco visible para navegación por teclado (el item es un botón de hecho).
+.item:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
 .arrow {
   color: #cbd5e1;
   font-size: 1.2rem;

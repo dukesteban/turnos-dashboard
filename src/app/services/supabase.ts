@@ -107,14 +107,9 @@ export class SupabaseService {
       precio: datos.precio,
       duracion_minutos: datos.duracion_minutos
     };
-    if ('puesto_id' in datos) update.puesto_id = datos.puesto_id;
-    if ('empleado_id' in datos) {
-      update.empleado_id = datos.empleado_id;
-      // Si vino empleado sin puesto explicito, se deriva de su columna.
-      if (!('puesto_id' in datos)) {
-        update.puesto_id = await this.puestoDeEmpleado(datos.empleado_id ?? null);
-      }
-    }
+    // El empleado es OBLIGATORIO: es lo que define la columna de la agenda y
+    // quien cobra la comisión. No se toca puesto_id (ver migracion 011).
+    if ('empleado_id' in datos) update.empleado_id = datos.empleado_id;
 
     const { error } = await this.supabase
       .from('turnos')
@@ -123,30 +118,18 @@ export class SupabaseService {
     if (error) throw error;
   }
 
-  /** Asigna (o libera) el puesto de un turno ya creado. */
-  async asignarPuestoATurno(turnoId: number, puestoId: number | null, empleadoId: number | null = null) {
-    const { error } = await this.supabase
-      .from('turnos')
-      .update({ puesto_id: puestoId, empleado_id: empleadoId })
-      .eq('id', turnoId);
-    if (error) throw error;
-  }
+  // ── PUESTOS: retirado ───────────────────────────────────────
+  //
+  // La agenda usa una columna por EMPLEADO, no por puesto. Estas funciones
+  // quedaron sin uso; se borran en la migracion 011 junto con la tabla.
+  //
+  //   async asignarPuestoATurno(turnoId, puestoId, empleadoId) {...}
+  //   async puestoDeEmpleado(empleadoId) {...}
 
-  /**
-   * El puesto sigue al empleado: si le corresponde un puesto activo, el turno debe
-   * caer en esa columna. Sin esto, un turno queda en la columna de otro y se apila.
-   * @returns el puesto asignado, o null si el empleado no tiene puesto.
-   */
-  async puestoDeEmpleado(empleadoId: number | null): Promise<number | null> {
-    if (!empleadoId) return null;
-    const { data, error } = await this.supabase
-      .from('puestos')
-      .select('id')
-      .eq('empleado_id', empleadoId)
-      .eq('activo', true)
-      .maybeSingle();
-    if (error) throw error;
-    return data?.id ?? null;
+  /** El empleado es obligatorio al agendar. Corta acá si viene null. */
+  async exigeEmpleado(empleadoId: number | null | undefined): Promise<number> {
+    if (empleadoId == null) throw new Error('El turno tiene que tener un empleado asignado.');
+    return empleadoId;
   }
 
   async getTurnosCliente(clienteId: number) {
@@ -182,11 +165,9 @@ export class SupabaseService {
       ...datos
     };
     // Nunca pisar el empleado con null: si no viene, se conserva el que ya tenia.
-    // (si se escribiera null, el turno perdia la comision y quedaba sin puesto)
+    // (si se escribiera null, el turno perdia la comision y quedaba sin columna)
     if (datos.empleado_id == null) {
       delete update.empleado_id;
-    } else {
-      update.puesto_id = await this.puestoDeEmpleado(datos.empleado_id);
     }
 
     const { error } = await this.supabase
@@ -238,64 +219,63 @@ export class SupabaseService {
     if (error) throw error;
   }
 
-  // ── PUESTOS DE TRABAJO ────────────────────────────────────
-
-  /** Trae los puestos con el nombre del empleado resuelto. */
-  async getPuestos() {
-    const { data, error } = await this.supabase
-      .from('puestos')
-      .select('*, empleados(id, nombre, activo, comision_porcentaje, jornada)')
-      .order('orden', { ascending: true })
-      .order('id', { ascending: true });
-    if (error) throw error;
-
-    return (data || []).map((p: any) => {
-      const emp = Array.isArray(p.empleados) ? p.empleados[0] : p.empleados;
-      return { ...p, empleado: emp || null };
-    });
-  }
+  // ── PUESTOS DE TRABAJO: RETIRADO ───────────────────────────
+  //
+  // La agenda ya no usa puestos: cada columna es un EMPLEADO. El codigo queda
+  // comentado hasta la migracion 011, que borra la tabla `puestos`. Si todavia
+  // se necesita leer algo, la tabla sigue existiendo en la base.
+  //
+  //   async getPuestos() {
+  //     const { data, error } = await this.supabase
+  //       .from('puestos')
+  //       .select('*, empleados(id, nombre, activo, comision_porcentaje, jornada)')
+  //       .order('orden', { ascending: true })
+  //       .order('id', { ascending: true });
+  //     ...
+  //   }
+  //
+  // Y el CRUD (crearPuesto / actualizarPuesto / eliminarPuesto) mas abajo.
 
   /**
-   * Un puesto solo es agendable si:
-   *   - esta activo, tiene empleado, y el empleado esta activo
-   *   - la JORNADA del empleado cubre ese dia/hora   (patron recurrente)
-   *   - el empleado no tiene una AUSENCIA que lo tape  (excepcion con fecha)
+   * Un empleado es agendable si:
+   *   - esta activo
+   *   - la JORNADA cubre ese dia/hora        (patron recurrente)
+   *   - no tiene una AUSENCIA que lo tape    (excepcion con fecha)
    *
-   * Si se pasa `fecha`, la respuesta incluye el motivo del rechazo para poder
-   * mostrarlo ("No trabaja ese día", "Sale a las 13:00", "Vacaciones").
-   * Sin `fecha` devuelve solo el boolean (usolegacy).
+   * Antes esta funcion recibia un PUESTO y validaba "puesto activo + tiene
+   * empleado + el empleado puede". Con una columna por empleado desaparece la
+   * parte del puesto y queda solo la disponibilidad de la persona.
+   *
+   * Devuelve el motivo del rechazo para poder mostrarlo en la UI
+   * ("No trabaja ese día", "Sale a las 13:00", "Vacaciones al 15/12").
    */
-  puestoEsAgendable(
-    puesto: any,
+  empleadoEsAgendable(
+    empleado: any,
     fecha?: string,
     horaInicio?: string,
     duracionMin?: number,
     ausencias: any[] = []
   ): boolean | { agendable: boolean; motivo?: string } {
     let motivo: string | undefined;
-    if (!puesto?.activo) motivo = 'Puesto desactivado';
-    else if (!puesto.empleado_id) motivo = 'Sin empleado asignado';
-    else {
-      const emp = puesto.empleado;
-      if (emp && emp.activo === false) motivo = 'Empleado inactivo';
-      else if (fecha) {
-        const dur = duracionMin || 45;
-        const j = jornadaCubre(emp?.jornada, fecha, horaInicio || '00:00', dur);
-        if (!j.ok) motivo = j.motivo;
-        else {
-          const a = turnoTocadoPorAusencia(ausencias, fecha, horaInicio || '00:00', dur);
-          if (a) motivo = textoAusencia(a);
-        }
+    if (!empleado) motivo = 'Sin empleado';
+    else if (empleado.activo === false) motivo = 'Empleado inactivo';
+    else if (fecha) {
+      const dur = duracionMin || 45;
+      const j = jornadaCubre(empleado.jornada, fecha, horaInicio || '00:00', dur);
+      if (!j.ok) motivo = j.motivo;
+      else {
+        const a = turnoTocadoPorAusencia(ausencias, fecha, horaInicio || '00:00', dur);
+        if (a) motivo = textoAusencia(a);
       }
     }
     return fecha ? { agendable: !motivo, motivo } : !motivo;
   }
 
-  /** Mismo chequeo pero siempre devuelve el objeto con motivo. */
-  motivoDeNoAgendable(
-    puesto: any, fecha: string, horaInicio: string, duracionMin: number, ausencias: any[] = []
+  /** Mismo chequeo pero siempre devuelve solo el motivo (o null si puede). */
+  motivoDeNoAtender(
+    empleado: any, fecha: string, horaInicio: string, duracionMin: number, ausencias: any[] = []
   ): string | null {
-    const r = this.puestoEsAgendable(puesto, fecha, horaInicio, duracionMin, ausencias) as any;
+    const r = this.empleadoEsAgendable(empleado, fecha, horaInicio, duracionMin, ausencias) as any;
     return r.agendable ? null : (r.motivo || 'No disponible');
   }
 
@@ -374,66 +354,36 @@ export class SupabaseService {
     return data || [];
   }
 
-  async crearPuesto(puesto: Partial<{ nombre: string; empleado_id: number | null; orden: number }>) {
-    const { data, error } = await this.supabase
-      .from('puestos')
-      .insert({
-        nombre: puesto.nombre || 'Puesto',
-        empleado_id: puesto.empleado_id ?? null,
-        orden: puesto.orden ?? 0,
-      })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  }
-
-  async actualizarPuesto(id: number, cambios: any) {
-    const { error } = await this.supabase
-      .from('puestos')
-      .update(cambios)
-      .eq('id', id);
-    if (error) throw error;
-  }
-
-  /** Baja logica: conserva el historial de turnos que lo referencian. */
-  async desactivarPuesto(id: number) {
-    const { error } = await this.supabase
-      .from('puestos')
-      .update({ activo: false, empleado_id: null })
-      .eq('id', id);
-    if (error) throw error;
-  }
-
-  async reordenarPuestos(idsEnOrden: number[]) {
-    for (let i = 0; i < idsEnOrden.length; i++) {
-      const { error } = await this.supabase
-        .from('puestos')
-        .update({ orden: i })
-        .eq('id', idsEnOrden[i]);
-      if (error) throw error;
-    }
-  }
-
+  // ── PUESTOS: CRUD retirado (migracion 011 borra la tabla) ───
+  //
+  // Ninguno de estos metodos se llama desde la app. Se comentan junto con la
+  // tabla para que la fase 2 sea solo SQL. Si volvieran a hacer falta, revisar
+  // primero por que se decidio que la columna de la agenda es el empleado.
+  //
+  //   async crearPuesto(puesto)         -> INSERT en 'puestos'
+  //   async actualizarPuesto(id, c)     -> UPDATE 'puestos'
+  //   async desactivarPuesto(id)        -> UPDATE 'puestos' SET activo=false
+  //   async reordenarPuestos(ids)       -> UPDATE 'puestos' SET orden = i
+  //   async eliminarPuesto(id)          -> DELETE 'puestos'
   /**
    * Nucleo de disponibilidad. Responde la pregunta:
-   * "para esta fecha/hora, que puestos quedan libres y quien atiende?"
+   * "para esta fecha/hora, que empleados quedan libres y pueden atender?"
    * Es la funcion que consumira el agente de WhatsApp.
    */
-  async getPuestosDisponibles(
+  async getEmpleadosDisponibles(
     fecha: string, horaInicio: string, duracionMin: number, ausencias: any[] = []
   ) {
     const [h, m] = (horaInicio.length === 5 ? horaInicio : horaInicio.slice(0, 5)).split(':');
     const total = parseInt(h, 10) * 60 + parseInt(m, 10) + (duracionMin || 45);
     const horaFin = `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 
-    const [{ data: turnosDia }, puestos] = await Promise.all([
+    const [{ data: turnosDia }, empleados] = await Promise.all([
       this.supabase
         .from('turnos')
-        .select('puesto_id, hora_inicio, hora_fin')
+        .select('empleado_id, hora_inicio, hora_fin')
         .eq('fecha', fecha)
         .neq('estado', 'cancelado'),
-      this.getPuestos(),
+      this.getEmpleados(),
     ]);
 
     const ini = horaInicio.length === 5 ? horaInicio + ':00' : horaInicio;
@@ -443,57 +393,43 @@ export class SupabaseService {
       return ti < horaFin && tf > ini;
     });
 
-    const puestosOcupados = new Set(solapados.map((t: any) => t.puesto_id).filter(Boolean));
+    // El doble booking ahora es por EMPLEADO. Antes era por puesto, pero como
+    // puesto<->empleado era 1:1 la condicion era equivalente: misma columna.
+    const ocupados = new Set(solapados.map((t: any) => t.empleado_id).filter(Boolean));
 
-    return puestos
-      .filter((p: any) => p.activo)
-      .map((p: any) => {
-        const { agendable, motivo } = this.puestoEsAgendable(
-          p, fecha, horaInicio, duracionMin, ausencias
+    return empleados
+      .filter((e: any) => e.activo)
+      .map((e: any) => {
+        const { agendable, motivo } = this.empleadoEsAgendable(
+          e, fecha, horaInicio, duracionMin, ausencias
         ) as { agendable: boolean; motivo?: string };
+        const libre = !ocupados.has(e.id);
         return {
-          puesto_id: p.id,
-          nombre: p.nombre,
-          empleado_id: p.empleado_id,
-          empleado: p.empleado?.nombre || null,
-          jornada: p.empleado?.jornada || null,
-          // Que el empleado pueda o no, y el motivo si no puede.
+          empleado_id: e.id,
+          nombre: e.nombre,
+          jornada: e.jornada || null,
+          comision_porcentaje: e.comision_porcentaje,
+          // Que pueda trabajar o no, y el motivo si no puede.
           puede_atender: agendable,
           motivo_bloqueo: agendable ? null : (motivo || 'No disponible'),
-          // Solo agenda si ademas esta LIBRE en ese horario.
-          agendable: agendable && !puestosOcupados.has(p.id),
-          libre: !puestosOcupados.has(p.id),
-          ocupado_por: puestosOcupados.has(p.id)
-            ? solapados.find((t: any) => t.puesto_id === p.id) || null
-            : null,
+          // Agenda solo si ademas esta LIBRE en ese horario.
+          agendable: agendable && libre,
+          libre,
+          ocupado_por: libre
+            ? null
+            : solapados.find((t: any) => t.empleado_id === e.id) || null,
         };
       });
   }
 
-  /** "Tenes lugar con este empleado?" - para el caso de consultar por un empleado puntual. */
-  async getPuestoDisponibleDeEmpleado(
-    empleadoId: number, fecha: string, horaInicio: string, duracionMin: number, ausencias: any[] = []
-  ) {
-    const disponibles = await this.getPuestosDisponibles(fecha, horaInicio, duracionMin, ausencias);
-    const delEmpleado = disponibles.filter((p: any) => p.empleado_id === empleadoId);
-    const libre = delEmpleado.find((p: any) => p.libre && p.puede_atender);
-    return {
-      disponible: !!libre,
-      puesto: libre || null,
-      nombre_empleado: delEmpleado[0]?.empleado || null,
-      // Si esta libre pero no puede, el motivo (jornada / ausencia).
-      motivo: libre ? null : (delEmpleado[0]?.motivo_bloqueo || 'No disponible'),
-    };
+  /** Primer empleado agendable y libre. Base del autoscaneo del agente de WhatsApp. */
+  async getPrimerEmpleadoLibre(fecha: string, horaInicio: string, duracionMin: number, ausencias: any[] = []) {
+    const disponibles = await this.getEmpleadosDisponibles(fecha, horaInicio, duracionMin, ausencias);
+    return disponibles.find((e: any) => e.agendable) || null;
   }
 
-  /** Primer puesto agendable y libre. Base para el autoscaneo al agendar. */
-  async getPrimerPuestoLibre(fecha: string, horaInicio: string, duracionMin: number, ausencias: any[] = []) {
-    const disponibles = await this.getPuestosDisponibles(fecha, horaInicio, duracionMin, ausencias);
-    return disponibles.find((p: any) => p.agendable) || null;
-  }
-
-  /** Confirma que el puesto no este ocupado en ese rango (doble booking). */
-  async puestoEstaOcupado(puestoId: number, fecha: string, horaInicio: string, duracionMin: number, excludeTurnoId = 0): Promise<boolean> {
+  /** Confirma que el empleado no tenga otro turno en ese rango (doble booking). */
+  async empleadoEstaOcupado(empleadoId: number, fecha: string, horaInicio: string, duracionMin: number, excludeTurnoId = 0): Promise<boolean> {
     const [h, m] = horaInicio.split(':');
     const total = parseInt(h, 10) * 60 + parseInt(m, 10) + duracionMin;
     const horaFin = `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
@@ -503,7 +439,7 @@ export class SupabaseService {
       .from('turnos')
       .select('id, hora_inicio, hora_fin')
       .eq('fecha', fecha)
-      .eq('puesto_id', puestoId)
+      .eq('empleado_id', empleadoId)
       .neq('estado', 'cancelado')
       .neq('id', excludeTurnoId)
       .lt('hora_inicio', horaFin)
@@ -862,14 +798,29 @@ export class SupabaseService {
   }
 
   // EMPLEADOS
-  async getEmpleados() {
-    const { data, error } = await this.supabase
+
+  /**
+   * `soloActivos` existe porque la pantalla de Empleados quiere MOSTRAR los
+   * inactivos (con su badge "Inactivo"), pero todos los selectores de turnos,
+   * la agenda y las comisiones tienen que seguir ofreciendo solo gente activa.
+   *
+   * Si se saca el `.eq('activo', true)` sin el parametro, los selectores
+   * empiezan a ofrecer empleados dados de baja.
+   */
+  async getEmpleados(soloActivos = true) {
+    let q = this.supabase
       .from('empleados')
       .select('*')
-      .eq('activo', true)
       .order('nombre', { ascending: true });
+    if (soloActivos) q = q.eq('activo', true);
+    const { data, error } = await q;
     if (error) throw error;
     return data;
+  }
+
+  /** Todos, inactivos incluidos. Solo para la lista de la pantalla de Empleados. */
+  async getTodosEmpleados() {
+    return this.getEmpleados(false);
   }
 
   async crearEmpleado(empleado: any) {

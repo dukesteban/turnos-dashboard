@@ -59,7 +59,10 @@ export class EmpleadosComponent implements OnInit {
   }
 
   async cargarEmpleados() {
-    const data = await this.supabase.getEmpleados();
+    // Trae TODOS, inactivos incluidos: la lista los muestra con su badge para
+    // que se vea quien esta dado de baja. Los selectores de turnos y la agenda
+    // usan getEmpleados() (solo activos) y no se ven afectados.
+    const data = await this.supabase.getTodosEmpleados();
     this.empleados = data.map((e: any) => ({
       ...e,
       jornada: normalizarJornada(e.jornada),

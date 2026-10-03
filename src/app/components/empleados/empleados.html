@@ -14,13 +14,22 @@
         <div *ngFor="let empleado of empleadosFiltrados"
           class="item"
           [class.activo]="empleadoSeleccionado?.id === empleado.id"
-          (click)="seleccionarEmpleado(empleado)">
+          [class.inactivo]="!empleado.activo"
+          role="button"
+          tabindex="0"
+          (click)="seleccionarEmpleado(empleado)"
+          (keydown.enter)="seleccionarEmpleado(empleado)"
+          (keydown.space)="seleccionarEmpleado(empleado); $event.preventDefault()">
           <div class="avatar">{{ empleado.nombre?.charAt(0)?.toUpperCase() }}</div>
           <div class="info">
             <div class="nombre">{{ empleado.nombre }}</div>
             <div class="sub">{{ empleado.telefono || 'Sin teléfono' }}</div>
           </div>
-          <div class="comision-badge">{{ empleado.comision_porcentaje }}%</div>
+          <!-- Badge de estado en vez de la comisión: en la lista importa saber si
+               labra, no cuánto cobra. El % sigue en el panel de detalle. -->
+          <div class="estado-badge" [class.inactivo]="!empleado.activo">
+            {{ empleado.activo ? 'Activo' : 'Inactivo' }}
+          </div>
           <div class="arrow">›</div>
         </div>
         <div *ngIf="empleadosFiltrados.length === 0" class="vacio">No se encontraron empleados</div>

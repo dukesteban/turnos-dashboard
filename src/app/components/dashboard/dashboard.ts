@@ -36,7 +36,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   horarios: any[] = [];
   servicios: any[] = [];
   empleados: any[] = [];
-  puestos: any[] = [];
+  // Puestos de trabajo: RETIRADO. Las columnas de la agenda son empleados.
   ausencias: any[] = [];
   /** Telefono ACTUAL por cliente. El del turno es un snapshot y puede estar viejo. */
   telefonosPorCliente: Record<number, string> = {};
@@ -93,33 +93,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.servicios.find(s => s.id == Number(this.nuevoServicioId)) || null;
   }
 
-  /** Nombre del puesto del turno. Si falta puesto_id, lo deriva del empleado. */
-  puestoDeTurno(turno: any): any {
-    if (!turno) return null;
-    if (turno.puesto_id) return this.puestos.find((p: any) => p.id === turno.puesto_id) || null;
-    if (turno.empleado_id) return this.puestos.find((p: any) => p.empleado_id === turno.empleado_id) || null;
-    return null;
-  }
-
-  nombrePuestoDeTurno(turno: any): string {
-    return this.puestoDeTurno(turno)?.nombre || '—';
-  }
-
-  /** Nombre del empleado del turno, con fallback al empleado del puesto. */
+  /** Nombre del empleado del turno. */
   nombreEmpleadoDeTurno(turno: any): string {
     const id = this.empleadoDeTurno(turno);
-    if (!id) return '—';
-    return this.empleados.find((e: any) => e.id === id)?.nombre || '—';
+    if (!id) return 'Sin empleado';
+    return this.empleados.find((e: any) => e.id === id)?.nombre || 'Sin empleado';
   }
 
   /**
-   * ID del empleado del turno. Los turnos viejos tienen puesto_id pero empleado_id
-   * en null, asi que cuando falta se deriva del puesto que ya tiene asignado.
+   * ID del empleado del turno. Es OBLIGATORIO: define la columna de la agenda
+   * y es quien cobra la comisión. Ya no se deriva del puesto.
    */
   empleadoDeTurno(turno: any): number | null {
-    if (!turno) return null;
-    if (turno.empleado_id) return turno.empleado_id;
-    return this.puestoDeTurno(turno)?.empleado_id || null;
+    return turno?.empleado_id ?? null;
   }
 
   constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
@@ -128,7 +114,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     await this.cargarTurnos();
     this.metodosPago = await this.supabase.getMetodosPago();
     this.empleados = await this.supabase.getEmpleados();
-    this.puestos = await this.supabase.getPuestos();
     this.ausencias = await this.supabase.getAusencias();
     this.telefonosPorCliente = await this.supabase.getTelefonosPorCliente();
     this.subscription = this.supabase.suscribirTurnos(() => {
@@ -279,7 +264,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
     const servicio = this.atendidoServicio;
 
-    // Sin empleado no se puede guardar: se perderia la comision y el puesto quedaria huerfano.
+    // Sin empleado no se puede guardar: se perderia la comision y el turno
+    // no tendria columna en la agenda.
     if (!this.atendidoEmpleadoId) {
       this.errorAtendido = '❌ Elegí el empleado que atendió.';
       this.cdr.detectChanges();
@@ -301,16 +287,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // El empleado elegido no puede pisar a otro turno de su mismo puesto
-    const puestoId = await this.supabase.puestoDeEmpleado(this.atendidoEmpleadoId);
-    if (!puestoId) {
-      this.errorAtendido = '❌ Ese empleado no tiene un puesto asignado.';
-      this.cdr.detectChanges();
-      return;
-    }
+    // No puede pisar otro turno suyo en ese rango
     const dur = servicio?.duracion_minutos || this.turnoSeleccionado.duracion_minutos || 45;
-    const ocupado = await this.supabase.puestoEstaOcupado(
-      puestoId,
+    const ocupado = await this.supabase.empleadoEstaOcupado(
+      this.atendidoEmpleadoId,
       this.turnoSeleccionado.fecha,
       this.turnoSeleccionado.hora_inicio?.slice(0, 5) || this.turnoSeleccionado.hora?.slice(0, 5),
       dur,
@@ -419,19 +399,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
       }
 
       // Validar que el puesto elegido no este ocupado en ese rango
-      const puestoId = await this.supabase.puestoDeEmpleado(this.nuevoEmpleadoId);
-      if (puestoId) {
-        const ocupado = await this.supabase.puestoEstaOcupado(
-          puestoId, this.nuevaFecha, this.nuevaHora,
-          servicio.duracion_minutos, this.turnoSeleccionado.id
-        );
-        if (ocupado) {
-          const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
-          this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
-          return;
-        }
-      } else if (this.nuevoEmpleadoId) {
-        this.errorEditarTurno = '❌ Ese empleado no tiene un puesto asignado.';
+      // El empleado es obligatorio: define la columna de la agenda y la comision.
+      if (!this.nuevoEmpleadoId) {
+        this.errorEditarTurno = '❌ Elegí el empleado que atiende.';
+        return;
+      }
+      const ocupado = await this.supabase.empleadoEstaOcupado(
+        this.nuevoEmpleadoId, this.nuevaFecha, this.nuevaHora,
+        servicio.duracion_minutos, this.turnoSeleccionado.id
+      );
+      if (ocupado) {
+        const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
+        this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
         return;
       }
 
@@ -560,16 +539,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const servicio = this.servicios.find(s => s.id == this.nuevoTurnoServicioId);
     if (!servicio) return;
 
-    // Disponibilidad real por puesto. getPuestosDisponibles ya aplica jornada
-    // semanal y ausencias, asi que alcanza con mirar `puede_atender`.
-    const disponibles = await this.supabase.getPuestosDisponibles(
+    // Disponibilidad real por empleado. getEmpleadosDisponibles ya aplica jornada
+    // semanal y ausencias, asi que alcanza con mirar `puede_atender` + `libre`.
+    // El combo muestra SOLO estos: es lo que pediste (elegir de los que pueden).
+    const disponibles = await this.supabase.getEmpleadosDisponibles(
       this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos, this.ausencias
     );
 
-    this.empleadosLibres = this.empleados.filter((e: any) => {
-      const puesto = disponibles.find((p: any) => p.empleado_id === e.id);
-      return puesto && puesto.puede_atender && puesto.libre;
-    });
+    this.empleadosLibres = disponibles
+      .filter((d: any) => d.puede_atender && d.libre)
+      .map((d: any) => this.empleados.find((e: any) => e.id === d.empleado_id))
+      .filter(Boolean);
 
     // Si el empleado elegido quedo fuera de la lista, se limpia la seleccion
     if (this.nuevoTurnoEmpleadoId && !this.empleadosLibres.some((e: any) => e.id === this.nuevoTurnoEmpleadoId)) {
@@ -617,11 +597,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     // Lista APARTE: antes se reasignaba this.empleados con un filter y la
     // lista original se perdia para siempre.
-    const disponibles = await this.supabase.getPuestosDisponibles(
+    const disponibles = await this.supabase.getEmpleadosDisponibles(
       this.nuevaFecha, this.nuevaHora || '00:00', dur, this.ausencias
     );
     const puede = (e: any) =>
-      !!disponibles.some((p: any) => p.empleado_id === e.id && p.puede_atender);
+      !!disponibles.some((d: any) => d.empleado_id === e.id && d.puede_atender);
 
     // Se incluye igual al que ya esta asignado: si no, al guardar un turno que
     // no se toco se perderia el empleado.
@@ -708,54 +688,38 @@ export class DashboardComponent implements OnInit, OnDestroy {
       fin.setMinutes(fin.getMinutes() + servicio.duracion_minutos);
       const horaFin = `${String(fin.getHours()).padStart(2,'0')}:${String(fin.getMinutes()).padStart(2,'0')}`;
 
-      // Determinar el puesto: el elegido, o el primero libre
-      let puestoId: number | null = null;
-      let empleadoId: number | null = this.nuevoTurnoEmpleadoId;
+      // El empleado es OBLIGATORIO en la app. El modo "automático" (tomar el
+      // primero libre) queda solo en el servicio, para el agente de WhatsApp.
+      const empleadoId: number | null = this.nuevoTurnoEmpleadoId;
+      if (!empleadoId) {
+        this.errorNuevoTurno = '❌ Elegí el empleado que atiende.';
+        this.guardandoNuevoTurno = false;
+        this.cdr.detectChanges();
+        return;
+      }
 
-      if (empleadoId) {
-        const nombreEmp = this.empleados.find((e: any) => e.id === empleadoId)?.nombre;
+      const nombreEmp = this.empleados.find((e: any) => e.id === empleadoId)?.nombre;
 
-        // Jornada semanal + ausencias (antes solo se miraba si el puesto estaba libre)
-        const puede = await this.supabase.empleadoPuedeAtender(
-          empleadoId, this.nuevoTurnoFecha, this.nuevoTurnoHora,
-          servicio.duracion_minutos, this.ausencias
-        );
-        if (!puede.ok) {
-          this.errorNuevoTurno = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
-          this.guardandoNuevoTurno = false;
-          this.cdr.detectChanges();
-          return;
-        }
+      // Jornada semanal + ausencias
+      const puede = await this.supabase.empleadoPuedeAtender(
+        empleadoId, this.nuevoTurnoFecha, this.nuevoTurnoHora,
+        servicio.duracion_minutos, this.ausencias
+      );
+      if (!puede.ok) {
+        this.errorNuevoTurno = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
+        this.guardandoNuevoTurno = false;
+        this.cdr.detectChanges();
+        return;
+      }
 
-        puestoId = await this.supabase.puestoDeEmpleado(empleadoId);
-        if (!puestoId) {
-          this.errorNuevoTurno = '❌ Ese empleado no tiene un puesto asignado.';
-          this.guardandoNuevoTurno = false;
-          this.cdr.detectChanges();
-          return;
-        }
-        const ocupado = await this.supabase.puestoEstaOcupado(
-          puestoId, this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos, 0
-        );
-        if (ocupado) {
-          this.errorNuevoTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
-          this.guardandoNuevoTurno = false;
-          this.cdr.detectChanges();
-          return;
-        }
-      } else {
-        // Sin empleado elegido -> se ocupa el primer puesto agendable y libre
-        const libre = await this.supabase.getPrimerPuestoLibre(
-          this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos, this.ausencias
-        );
-        if (!libre) {
-          this.errorNuevoTurno = '❌ No hay puestos disponibles en ese horario.';
-          this.guardandoNuevoTurno = false;
-          this.cdr.detectChanges();
-          return;
-        }
-        puestoId = libre.puesto_id;
-        empleadoId = libre.empleado_id;
+      const ocupado = await this.supabase.empleadoEstaOcupado(
+        empleadoId, this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos, 0
+      );
+      if (ocupado) {
+        this.errorNuevoTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
+        this.guardandoNuevoTurno = false;
+        this.cdr.detectChanges();
+        return;
       }
 
       // Validar horario de atención
@@ -789,7 +753,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
         precio: servicio.precio,
         duracion_minutos: servicio.duracion_minutos,
         estado: 'pendiente',
-        puesto_id: puestoId,
         empleado_id: empleadoId
       });
       await this.cargarTurnos();

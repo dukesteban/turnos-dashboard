@@ -512,8 +512,8 @@ textarea {
 
   &:first-child { border-left: none; }
 
-  &.sin-asignar .ph-empleado { color: #94a3b8; font-style: italic; }
-  &.sin-gente .ph-empleado { color: #b45309; }
+  // RETIRADO con los puestos: .sin-asignar y .sin-gente ya no aplican.
+  // La columna es el empleado y siempre tiene nombre.
 
   /* Columna del empleado ausente: se sigue viendo (no se borra el historico)
      pero rayada para que se lea que ahi no se puede agendar. */
@@ -530,6 +530,14 @@ textarea {
     .ph-puesto { color: #94a3b8; }
   }
 
+  /* Turnos en riesgo: la jornada o una ausencia dejaron turnos sin cubrir.
+     No es lo mismo que "ausente": aqui PUEDE trabajar, pero tiene algo que
+     resolver. Se marca en ambar para que se distinga de un dia normal. */
+  &.en-riesgo {
+    background: rgba(251, 191, 36, 0.14);
+    border-left: 2px solid #f59e0b;
+  }
+
   .mini & {
     padding: 0 2px;
     justify-content: center;
@@ -542,6 +550,16 @@ textarea {
   display: inline-block;
   margin-right: 3px;
   font-size: 0.55rem;
+  font-weight: 700;
+  color: #b45309;
+  vertical-align: 1px;
+}
+
+/* Aviso de "tiene turnos en riesgo". Distinto del ✕ de ausente: el ⚠ es ámbar. */
+.ph-riesgo {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 0.6rem;
   font-weight: 700;
   color: #b45309;
   vertical-align: 1px;
