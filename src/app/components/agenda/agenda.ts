@@ -113,6 +113,12 @@ export class AgendaComponent implements OnInit, OnDestroy {
       this.jornadas[e.id] = normalizarJornada(e.jornada);
     }
     this.diasCerrados = await this.supabase.getDiasCerrados();
+    // IMPORTANTE: el getter columnasAgenda se evalua en el PRIMER render, cuando
+    // this.empleados todavia esta vacio, y cachea un [] para la fecha de hoy.
+    // Si no se limpia aca, la grilla queda sin columnas para siempre aunque los
+    // empleados ya hayan llegado. El build no lo ve y los tests tampoco: el
+    // getter depende del estado del componente, no es una funcion pura.
+    this.limpiarCacheColumnas();
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
     });
