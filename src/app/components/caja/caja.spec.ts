@@ -21,8 +21,12 @@ function montar(over: Record<string, any> = {}) {
   TestBed.configureTestingModule({
     providers: [{ provide: SupabaseService, useValue: mock }],
   });
-  const cmp = TestBed.createComponent(CajaComponent).componentInstance;
-  return { cmp, mock };
+  // Se devuelve el `fixture` y no solo la instancia: los tests de DOM necesitan
+  // `fixture.detectChanges()`. `cmp.cdr` es privado y no se puede tocar desde
+  // afuera.
+  const fixture = TestBed.createComponent(CajaComponent);
+  const cmp = fixture.componentInstance;
+  return { cmp, mock, fixture };
 }
 
 /** mocked sincrónico: el mock devuelve promesas ya resueltas. */
@@ -292,6 +296,228 @@ describe('Caja — registrar pago', () => {
     await cmp.eliminarPago(PAGO_JUAN(1000));
     expect(mock.llamadas).not.toContain('eliminarPagoEmpleado');
     spy.mockRestore();
+  });
+});
+
+// El error tiene que DESAPARECER apenas el usuario toca un campo. Si queda, la
+// pantalla dice "Elegí el empleado" con el empleado ya elegido al lado, y parece
+// que la app no se entera de nada.
+//
+// Estos tests TOCAN los campos de verdad y no buscan el `(ngModelChange)` en el
+// DOM: eso es un listener de Angular, no un atributo, así que no se puede
+// consultar con un selector. Y aunque se pudiera, verificar que el atributo
+// existe no dice que el error se borre.
+describe('Caja — el error se va cuando tocás un campo', () => {
+  const listo = async (over: Record<string, any> = {}) => {
+    const r = montar(over);
+    await r.cmp.cargarDatos();
+    return r;
+  };
+
+  /**
+   * Escribe en un input/select como lo haría la persona: setea el valor y
+   * dispara los eventos. Angular escucha `input` en los inputs y `change` en
+   * los selects.
+   *
+   * En los selects hay que usar el `value` REAL de una opción. Con `[ngValue]`
+   * Angular no escribe el número crudo sino su forma serializada ("0: 7"), así
+   * que poner `.value = '7'` no matchea ninguna opción y no dispara nada.
+   */
+  const tocar = (campo: any, valor?: string) => {
+    const el = campo as HTMLInputElement | HTMLSelectElement;
+    if (el.tagName === 'SELECT') {
+      const opciones = Array.from((el as HTMLSelectElement).options) as HTMLOptionElement[];
+      const conValor = opciones.find((o) => o.value !== '');
+      if (!conValor) return false;
+      el.value = conValor.value;
+    } else {
+      el.value = valor ?? 'x';
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  };
+
+  // Un test por popup: `TestBed.configureTestingModule` no se puede volver a
+  // llamar dentro del mismo test, así que un loop con varios `listo()` revienta.
+  const POPUPS = [
+    { abrir: 'abrirFormPago', cerrar: 'cerrarFormPago', campo: 'mensajeErrorPagos' },
+    { abrir: 'abrirFormCompra', cerrar: 'cerrarFormCompra', campo: 'mensajeError' },
+    { abrir: 'abrirFormProveedor', cerrar: 'cerrarFormProveedor', campo: 'mensajeError' },
+  ] as const;
+
+  for (const p of POPUPS) {
+    it(`${p.abrir} borra el error del intento anterior`, async () => {
+      const { cmp } = await listo();
+      (cmp as any)[p.campo] = '❌ de antes';
+      (cmp as any)[p.abrir]();
+      expect((cmp as any)[p.campo]).toBe('');
+      (cmp as any)[p.cerrar]();
+    });
+  }
+
+  it('cerrar NO borra el error: si se cerrara, se perdería la pista', async () => {
+    const { cmp } = await listo();
+    cmp.mensajeErrorPagos = '❌ Elegí el empleado.';
+    cmp.cerrarFormPago();
+    expect(cmp.mensajeErrorPagos).toBe('❌ Elegí el empleado.');
+  });
+
+  // Un test por campo, y no un loop dentro de un test: mutar el mismo componente
+  // varias veces en un test tira NG0100 (Angular compara el valor anterior con
+  // el nuevo en modo dev y se queja). Además un test que falla dice QUÉ campo
+  // falló, en vez de "falló el campo número 3".
+  const CAMPOS_PAGO = ['empleado', 'fecha', 'monto', 'metodo', 'notas'];
+
+  it('el popup de pago tiene 5 campos', async () => {
+    const { cmp, fixture } = await listo();
+    cmp.mostrarFormPago = true;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.popup-overlay select, .popup-overlay input').length)
+      .toBe(CAMPOS_PAGO.length);
+  });
+
+  for (const nombre of CAMPOS_PAGO) {
+    it(`tocar "${nombre}" borra el error del popup de pago`, async () => {
+      const { cmp, fixture } = await listo();
+      // El error se setea ANTES del primer detectChanges, en una sola pasada.
+      // Si se abre el popup, se detectChanges, y después se setea el error, el
+      // dev-check de Angular tira NG0100: leyó '' en una pasada y el valor nuevo
+      // en la de verificación. El orden importa en los tests, no en la app.
+      cmp.mostrarFormPago = true;
+      cmp.mensajeErrorPagos = '❌ Elegí el empleado.';
+      fixture.detectChanges();
+
+      const campos = fixture.nativeElement.querySelectorAll('.popup-overlay select, .popup-overlay input');
+      const indice = CAMPOS_PAGO.indexOf(nombre);
+
+      expect(tocar(campos[indice])).toBe(true);
+      fixture.detectChanges();
+
+      expect(cmp.mensajeErrorPagos).toBe('');
+    });
+  }
+
+  it('elegir el proveedor borra el error del popup de compra', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([{ id: 7, nombre: 'Químicas', activo: true }]),
+    });
+    cmp.mostrarFormCompra = true;
+    cmp.mensajeError = '❌ Elegí el proveedor.';
+    fixture.detectChanges();
+
+    const select = fixture.nativeElement.querySelector('.popup-overlay select');
+    tocar(select);
+    fixture.detectChanges();
+
+    expect(cmp.mensajeError).toBe('');
+  });
+
+  it('escribir el concepto borra el error del popup de compra', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([{ id: 7, nombre: 'Químicas', activo: true }]),
+    });
+    cmp.mostrarFormCompra = true;
+    cmp.mensajeError = '❌ Escribí el concepto.';
+    fixture.detectChanges();
+
+    const concepto = fixture.nativeElement.querySelector('.popup-overlay input[placeholder*="bidones"]');
+    tocar(concepto, '12 bidones de shampoo');
+    fixture.detectChanges();
+
+    expect(cmp.mensajeError).toBe('');
+  });
+
+  const CAMPOS_PROVEEDOR = ['nombre', 'contacto', 'telefono', 'notas'];
+
+  it('el popup de proveedor tiene 4 campos', async () => {
+    const { cmp, fixture } = await listo();
+    cmp.mostrarFormProveedor = true;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.popup-overlay input').length)
+      .toBe(CAMPOS_PROVEEDOR.length);
+  });
+
+  for (const nombre of CAMPOS_PROVEEDOR) {
+    it(`tocar "${nombre}" borra el error del popup de proveedor`, async () => {
+      const { cmp, fixture } = await listo();
+      cmp.mostrarFormProveedor = true;
+      cmp.mensajeError = '❌ El nombre es obligatorio.';
+      fixture.detectChanges();
+
+      const campos = fixture.nativeElement.querySelectorAll('.popup-overlay input');
+      const indice = CAMPOS_PROVEEDOR.indexOf(nombre);
+
+      tocar(campos[indice], 'Químicas del Sur');
+      fixture.detectChanges();
+
+      expect(cmp.mensajeError).toBe('');
+    });
+  }
+
+  it('el error NO aparece duplicado en la pestaña', async () => {
+    // El error vive dentro del popup. Si también estuviera en la pestaña, con
+    // el overlay puesto se vería el mismo texto dos veces.
+    const { cmp, fixture } = await listo();
+    cmp.cambiarTab('empleados');
+    cmp.mensajeErrorPagos = '❌ Elegí el empleado.';
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.tab-body .alerta.error').length).toBe(0);
+    expect(fixture.nativeElement.querySelectorAll('.tab-body .error-msg').length).toBe(0);
+  });
+
+  it('el mensaje de exito SÍ queda en la pestaña', async () => {
+    const { cmp, fixture } = await listo();
+    cmp.cambiarTab('empleados');
+    cmp.mensajePagos = '✅ Pago registrado.';
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.tab-body .alerta.exito').length).toBe(1);
+  });
+});
+
+describe('Caja — botones del popup iguales a los de Nuevo turno', () => {
+  const listo = async (over: Record<string, any> = {}) => {
+    const r = montar(over);
+    await r.cmp.cargarDatos();
+    return r;
+  };
+
+  it('el pie usa btn-atendido / btn-cancelado, no btn-primary / btn-secundario', async () => {
+    // Los nombres de clase del popup del Dashboard. Si un día divergen, este
+    // test dice cuál de los dos archivos se apartó del original.
+    const { cmp, fixture } = await listo();
+    cmp.mostrarFormPago = true;
+    fixture.detectChanges();
+    const pie = fixture.nativeElement.querySelector('.popup-acciones');
+    expect(pie).toBeTruthy();
+    expect(pie.querySelector('.btn-atendido')).toBeTruthy();
+    expect(pie.querySelector('.btn-cancelado')).toBeTruthy();
+    expect(pie.querySelector('.btn-primary')).toBeNull();
+    expect(pie.querySelector('.btn-secundario')).toBeNull();
+  });
+
+  // Un test por popup: en un solo test con un loop, TestBed deja los fixtures
+  // anteriores en el document y los selectores cuentan los tres a la vez.
+  for (const abrir of ['abrirFormPago', 'abrirFormCompra', 'abrirFormProveedor'] as const) {
+    it(`${abrir}: mismo pie de botones`, async () => {
+      const { cmp, fixture } = await listo();
+      (cmp as any)[abrir]();
+      fixture.detectChanges();
+      const pie = fixture.nativeElement.querySelector('.popup-acciones');
+      expect(pie.querySelectorAll('.btn-atendido').length).toBe(1);
+      expect(pie.querySelectorAll('.btn-cancelado').length).toBe(1);
+      expect(pie.querySelector('.btn-cancelado').textContent).toContain('Cancelar');
+    });
+  }
+
+  it('el error se muestra con error-msg, no con alerta', async () => {
+    const { cmp, fixture } = await listo();
+    cmp.mostrarFormPago = true;
+    cmp.mensajeErrorPagos = '❌ Elegí el empleado.';
+    fixture.detectChanges();
+    const body = fixture.nativeElement.querySelector('.popup-body');
+    expect(body.querySelectorAll('.error-msg').length).toBe(1);
+    expect(body.querySelectorAll('.alerta').length).toBe(0);
   });
 });
 

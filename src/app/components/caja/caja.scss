@@ -1,10 +1,19 @@
+// El pie de botones de los popups (.popup-acciones, .btn-atendido,
+// .btn-cancelado, .error-msg) viene de src/styles/_popup.scss y lo comparte con
+// el Dashboard. El `@use` va ARRIBA de todo porque Sass exige que las directivas
+// `@use` precedan a cualquier otra regla, y son TRES `..` para llegar a src/.
+@use '../../../styles/popup';
+
 .caja-page {
   padding: 24px;
   max-width: 1100px;
   margin: 0 auto;
 }
 
-.ganancias-page .seccion {
+.caja-page .seccion {
+  // `hidden` y no `auto`: la tabla tiene su propio wrapper con scroll
+  // (`.tabla-scroll`). Si la tarjeta scrolleara, haría scroll horizontal la
+  // página entera al arrastrar sobre cualquier lado de la tarjeta.
   overflow-x: hidden;
 }
 
@@ -631,15 +640,6 @@
     overflow-y: auto;
   }
 
-  .popup-footer {
-    display: flex;
-    gap: 10px;
-    padding: 14px 20px;
-    border-top: 1px solid #e2e8f0;
-
-    .btn-primary { flex: 1; }
-  }
-
   .btn-cerrar {
     background: none;
     border: none;
@@ -653,20 +653,9 @@
   }
 }
 
-.btn-secundario {
-  padding: 9px 14px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: white;
-  color: #475569;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-
-  &:hover:not(:disabled) { background: #f8fafc; }
-  &:disabled { opacity: 0.6; cursor: default; }
-}
+// El pie de botones (.popup-acciones, .btn-atendido, .btn-cancelado,
+// .error-msg) viene del partial compartido con el Dashboard: los dos popups
+// tienen que verse igual, y por eso no hay una segunda copia de los valores.
 
 // ── RESPONSIVE ───────────────────────────────────────────────
 @media (max-width: 700px) {

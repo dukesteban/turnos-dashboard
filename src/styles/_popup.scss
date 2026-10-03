@@ -1,0 +1,57 @@
+// ── PIE DE POPUP: botones de guardar y cancelar ─────────────
+//
+// Shared por Dashboard (modal de Nuevo turno) y Caja (registrar pago, compra y
+// proveedor). Vive en un partial y no duplicado por la misma razón que el de los
+// acordeones: dos copias de estos valores se desincronizan y un día un popup
+// guarda en verde y el otro en azul sin que nadie lo haya tocado.
+//
+// Uso:  @use '../../../styles/popup';
+//
+// Por qué el guardar es verde y el cancelar es rojo (y no gris): en un popup de
+// alta las dos acciones son "salió bien" / "salí sin hacer nada", no una
+//jerarquía de primaria/secundaria. Cancelar en rojo evita que alguien lo lea
+// como "la otra opción".
+
+.popup-acciones {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px 20px;
+
+  button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:disabled { opacity: 0.6; cursor: default; }
+  }
+}
+
+.btn-atendido {
+  background: #dcfce7;
+  color: #166534;
+
+  &:hover:not(:disabled) { background: #bbf7d0; }
+}
+
+.btn-cancelado {
+  background: #fee2e2;
+  color: #991b1b;
+
+  &:hover:not(:disabled) { background: #fecaca; }
+}
+
+// El mensaje de error de un popup. Sin el ❌/⚠️: el texto ya dice qué pasó y el
+// prefijo doble queda como ruido.
+.error-msg {
+  color: #991b1b;
+  font-size: 0.85rem;
+  background: #fee2e2;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-top: 8px;
+}

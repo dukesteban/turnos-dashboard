@@ -165,8 +165,9 @@
 
   <!-- ══════════ PESTAÑA 2: PAGOS A EMPLEADOS ══════════ -->
   <div *ngIf="esTab('empleados')" class="tab-body">
+    <!-- Solo el mensaje de éxito va acá. El de error vive DENTRO del popup: si
+         también estuviera en la pestaña, el mismo texto aparecería dos veces. -->
     <div *ngIf="mensajePagos" class="alerta exito">{{ mensajePagos }}</div>
-    <div *ngIf="mensajeErrorPagos" class="alerta error">{{ mensajeErrorPagos }}</div>
 
     <!--
       Sugerido vs pagado. El "sugerido" lo calcula el servicio aplicando el
@@ -258,12 +259,12 @@
       </div>
 
       <div class="popup-body">
-        <div *ngIf="mensajeErrorPagos" class="alerta error">{{ mensajeErrorPagos }}</div>
+        <div *ngIf="mensajeErrorPagos" class="error-msg">{{ mensajeErrorPagos }}</div>
 
         <div class="form-caja">
           <div class="campo">
             <label>Empleado</label>
-            <select [(ngModel)]="nuevoPago.empleado_id">
+            <select [(ngModel)]="nuevoPago.empleado_id" (ngModelChange)="mensajeErrorPagos = ''">
               <option [ngValue]="null">Elegí…</option>
               <option *ngFor="let e of empleadosParaPago" [ngValue]="e.id">{{ e.nombre }}</option>
             </select>
@@ -271,16 +272,17 @@
           <div class="fila">
             <div class="campo">
               <label>Fecha</label>
-              <input type="date" [(ngModel)]="nuevoPago.fecha" />
+              <input type="date" [(ngModel)]="nuevoPago.fecha" (ngModelChange)="mensajeErrorPagos = ''" />
             </div>
             <div class="campo">
               <label>Monto</label>
-              <input type="number" [(ngModel)]="nuevoPago.monto" min="0" step="0.01" placeholder="0" />
+              <input type="number" [(ngModel)]="nuevoPago.monto" min="0" step="0.01" placeholder="0"
+                     (ngModelChange)="mensajeErrorPagos = ''" />
             </div>
           </div>
           <div class="campo">
             <label>Método</label>
-            <select [(ngModel)]="nuevoPago.metodo">
+            <select [(ngModel)]="nuevoPago.metodo" (ngModelChange)="mensajeErrorPagos = ''">
               <option value="efectivo">Efectivo</option>
               <option value="transferencia">Transferencia</option>
               <option value="otro">Otro</option>
@@ -288,24 +290,25 @@
           </div>
           <div class="campo">
             <label>Notas <span class="opcional">(opcional)</span></label>
-            <input type="text" [(ngModel)]="nuevoPago.notas" placeholder="Ej: quincena de octubre" />
+            <input type="text" [(ngModel)]="nuevoPago.notas" placeholder="Ej: quincena de octubre"
+                   (ngModelChange)="mensajeErrorPagos = ''" />
           </div>
         </div>
       </div>
 
-      <div class="popup-footer">
-        <button class="btn-secundario" (click)="cerrarFormPago()">Cancelar</button>
-        <button class="btn-primary" [disabled]="guardandoPago" (click)="guardarPago()">
-          {{ guardandoPago ? 'Guardando…' : '💾 Guardar pago' }}
+      <div class="popup-acciones">
+        <button class="btn-atendido" [disabled]="guardandoPago" (click)="guardarPago()">
+          {{ guardandoPago ? 'Guardando...' : '💾 Guardar pago' }}
         </button>
+        <button class="btn-cancelado" (click)="cerrarFormPago()">↩️ Cancelar</button>
       </div>
     </div>
   </div>
 
   <!-- ══════════ PESTAÑA 3: PROVEEDORES ══════════ -->
   <div *ngIf="esTab('proveedores')" class="tab-body">
+    <!-- Ídem: el error va dentro del popup, el éxito queda en la pestaña. -->
     <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
-    <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
 
     <!-- Compras del período -->
     <div class="seccion">
@@ -407,12 +410,12 @@
       </div>
 
       <div class="popup-body">
-        <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
+        <div *ngIf="mensajeError" class="error-msg">{{ mensajeError }}</div>
 
         <div class="form-caja">
           <div class="campo">
             <label>Proveedor</label>
-            <select [(ngModel)]="nuevaCompra.proveedor_id">
+            <select [(ngModel)]="nuevaCompra.proveedor_id" (ngModelChange)="mensajeError = ''">
               <option [ngValue]="null">Elegí…</option>
               <option *ngFor="let p of proveedoresActivos" [ngValue]="p.id">{{ p.nombre }}</option>
             </select>
@@ -420,30 +423,32 @@
           <div class="fila">
             <div class="campo">
               <label>Fecha</label>
-              <input type="date" [(ngModel)]="nuevaCompra.fecha" />
+              <input type="date" [(ngModel)]="nuevaCompra.fecha" (ngModelChange)="mensajeError = ''" />
             </div>
             <div class="campo">
               <label>Cantidad</label>
-              <input type="number" [(ngModel)]="nuevaCompra.cantidad" min="0.01" step="0.01" />
+              <input type="number" [(ngModel)]="nuevaCompra.cantidad" min="0.01" step="0.01"
+                     (ngModelChange)="mensajeError = ''" />
             </div>
           </div>
           <div class="campo">
             <label>Concepto</label>
             <input type="text" [(ngModel)]="nuevaCompra.concepto"
-                   placeholder="Ej: 12 bidones de shampoo" />
+                   placeholder="Ej: 12 bidones de shampoo" (ngModelChange)="mensajeError = ''" />
           </div>
           <div class="campo">
             <label>Monto total</label>
-            <input type="number" [(ngModel)]="nuevaCompra.monto" min="0" step="0.01" placeholder="0" />
+            <input type="number" [(ngModel)]="nuevaCompra.monto" min="0" step="0.01" placeholder="0"
+                   (ngModelChange)="mensajeError = ''" />
           </div>
         </div>
       </div>
 
-      <div class="popup-footer">
-        <button class="btn-secundario" (click)="cerrarFormCompra()">Cancelar</button>
-        <button class="btn-primary" [disabled]="guardando" (click)="guardarCompra()">
-          {{ guardando ? 'Guardando…' : '💾 Guardar compra' }}
+      <div class="popup-acciones">
+        <button class="btn-atendido" [disabled]="guardando" (click)="guardarCompra()">
+          {{ guardando ? 'Guardando...' : '💾 Guardar compra' }}
         </button>
+        <button class="btn-cancelado" (click)="cerrarFormCompra()">↩️ Cancelar</button>
       </div>
     </div>
   </div>
@@ -457,37 +462,37 @@
       </div>
 
       <div class="popup-body">
-        <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
+        <div *ngIf="mensajeError" class="error-msg">{{ mensajeError }}</div>
 
         <div class="form-caja">
           <div class="campo">
             <label>Nombre</label>
             <input type="text" [(ngModel)]="nuevoProveedor.nombre"
-                   placeholder="Ej: Químicas del Sur" />
+                   placeholder="Ej: Químicas del Sur" (ngModelChange)="mensajeError = ''" />
           </div>
           <div class="fila">
             <div class="campo">
               <label>Contacto</label>
               <input type="text" [(ngModel)]="nuevoProveedor.contacto"
-                     placeholder="Quién atiende" />
+                     placeholder="Quién atiende" (ngModelChange)="mensajeError = ''" />
             </div>
             <div class="campo">
               <label>Teléfono</label>
-              <input type="text" [(ngModel)]="nuevoProveedor.telefono" />
+              <input type="text" [(ngModel)]="nuevoProveedor.telefono" (ngModelChange)="mensajeError = ''" />
             </div>
           </div>
           <div class="campo">
             <label>Notas <span class="opcional">(opcional)</span></label>
-            <input type="text" [(ngModel)]="nuevoProveedor.notas" />
+            <input type="text" [(ngModel)]="nuevoProveedor.notas" (ngModelChange)="mensajeError = ''" />
           </div>
         </div>
       </div>
 
-      <div class="popup-footer">
-        <button class="btn-secundario" (click)="cerrarFormProveedor()">Cancelar</button>
-        <button class="btn-primary" [disabled]="guardando" (click)="guardarProveedor()">
-          {{ guardando ? 'Guardando…' : '💾 Guardar proveedor' }}
+      <div class="popup-acciones">
+        <button class="btn-atendido" [disabled]="guardando" (click)="guardarProveedor()">
+          {{ guardando ? 'Guardando...' : '💾 Guardar proveedor' }}
         </button>
+        <button class="btn-cancelado" (click)="cerrarFormProveedor()">↩️ Cancelar</button>
       </div>
     </div>
   </div>

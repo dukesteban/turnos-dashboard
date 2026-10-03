@@ -1,3 +1,9 @@
+// El pie de botones de los popups (.popup-acciones, .btn-atendido,
+// .btn-cancelado, .error-msg) vive en src/styles/_popup.scss y lo comparte con
+// Caja. El `@use` va ARRIBA de todo porque Sass exige que las directivas `@use`
+// precedan a cualquier otra regla.
+@use '../../../styles/popup';
+
 .dashboard-page {
   padding: 24px;
   max-width: 1100px;
@@ -299,24 +305,10 @@ tr.vencido td { background: #fff7ed; }
   margin-left: 6px;
 }
 
-.popup-acciones {
-  display: flex;
-  gap: 8px;
-  padding: 12px 20px 20px;
-  button {
-    flex: 1;
-    padding: 10px;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.88rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-}
+// `.popup-acciones`, `.btn-atendido`, `.btn-cancelado` y `.error-msg` viven en
+// src/styles/_popup.scss: los comparte con Caja para que los dos popups tengan
+// exactamente el mismo pie de botones. Ver el `@use` arriba de este archivo.
 
-.btn-atendido { background: #dcfce7; color: #166534; &:hover { background: #bbf7d0; } }
-.btn-cancelado { background: #fee2e2; color: #991b1b; &:hover { background: #fecaca; } }
 .btn-editarTurno { background: #ede9fe; color: #6d28d9; &:hover { background: #ddd6fe; } }
 .btn-editar { background: #fef9c3; color: #334155; &:hover { background: #feefc3; } }
 
@@ -370,14 +362,7 @@ tr.vencido td { background: #fff7ed; }
   }
 }
 
-.error-msg {
-  color: #991b1b;
-  font-size: 0.85rem;
-  background: #fee2e2;
-  padding: 8px 12px;
-  border-radius: 8px;
-  margin-top: 8px;
-}
+// `.error-msg` vive en src/styles/_popup.scss (compartido con Caja).
 
 .popup-grande {
   max-width: 460px;
