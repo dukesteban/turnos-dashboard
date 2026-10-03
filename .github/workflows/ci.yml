@@ -34,8 +34,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # 2) Los 52 tests de lógica pura: disponibilidad (jornada + ausencias) y
-      #    validación de teléfono. No tocan la base: son funciones puras.
+      # 2) Tests: 87 en total.
+      #    · `src/app/utils/*.spec.ts`  → lógica pura (jornada, ausencias, teléfono)
+      #    · `src/app/components/*/*.spec.ts` → COMPONENTES con TestBed
+      #
+      #    Los de componente son los que importan: los 15 bugs anteriores y el de
+      #    la cache de columnas eran estado de componente, y ninguna función pura
+      #    los ve. El mock de Supabase vive en `src/testing/` (excluido de
+      #    tsconfig.app.json, así que no entra al bundle).
       - name: Tests
         run: npm run test:ci
 

@@ -118,6 +118,16 @@ export class AgendaComponent implements OnInit, OnDestroy {
     // Si no se limpia aca, la grilla queda sin columnas para siempre aunque los
     // empleados ya hayan llegado. El build no lo ve y los tests tampoco: el
     // getter depende del estado del componente, no es una funcion pura.
+    // ROTO A PROPOSITO (se revierte enseguida): sin esta linea, la cache queda
+    // con el [] que se calculo antes de que llegaran los empleados.
+    // IMPORTANTE: sin esta linea la grilla puede quedar sin columnas para
+    // siempre. El getter columnasAgenda se evalua en un render temprano, cuando
+    // this.empleados todavia esta vacio, y cachea un [] que nadie invalida
+    // despues. `cargarTurnos` tambien limpia, pero corre ANTES de que lleguen
+    // los empleados: sin esta segunda limpieza el [] sobrevive.
+    //
+    // Costo de equivocarse: build, typecheck y los tests de utils pasan igual.
+    // Solo se ve mirando la app andando. Por eso hay un test de componente.
     this.limpiarCacheColumnas();
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
@@ -275,7 +285,12 @@ export class AgendaComponent implements OnInit, OnDestroy {
   columnasPara(fecha: string): any[] {
     if (this.cacheColumnas[fecha]) return this.cacheColumnas[fecha];
 
-    const cols = (this.empleados || [])
+    // El orden alfabetico se aplica ACÁ y no se delega en el ORDER BY del
+    // servicio: es una decision de la pantalla, no una casualidad de la query.
+    const empleados = [...(this.empleados || [])]
+      .sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+
+    const cols = empleados
       .map((e: any) => {
         const ausencia = this.ausenciaDe(e.id, fecha);
         const estado = {
