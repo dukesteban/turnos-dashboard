@@ -199,9 +199,8 @@
             <span>{{ f.turnos }}</span>
             <span>${{ f.sugerido | number:'1.0-0' }}</span>
             <span>${{ f.pagado | number:'1.0-0' }}</span>
-            <span [class.verde]="f.diferencia === 0"
-                  [class.rojo]="f.diferencia !== 0">
-              {{ f.diferencia === 0 ? '—' : (f.diferencia > 0 ? '+' : '') + (f.diferencia | number:'1.0-0') }}
+            <span [ngClass]="claseDiferencia(f.diferencia)" class="celda-diferencia">
+              {{ f.diferencia === 0 ? '—' : signoDiferencia(f.diferencia) + '$' + (absDiferencia(f.diferencia) | number:'1.0-0') }}
             </span>
           </div>
           <div class="tr tr-total">

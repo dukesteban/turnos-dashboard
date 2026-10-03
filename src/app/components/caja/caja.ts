@@ -80,6 +80,49 @@ export class CajaComponent implements OnInit {
 
   constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
 
+  /**
+   * Columna "Diferencia" de "Sugerido vs pagado".
+   *
+   * `diferencia = pagado - sugerido`, así que:
+   *   · positiva = se pagó MÁS de lo sugerido  -> verde, `$19.000`
+   *   · negativa = se pagó MENOS de lo sugerido -> rojo, `-$19.000`
+   *   · cero     = cuadró exacto                -> verde, `—`
+   *
+   * Dos decisiones que parecen arbitrarias y no lo son:
+   *
+   * **El `+` no se muestra.** Acá todos los números son plata que salió de la
+   * caja, no variaciones de la ganancia: un `+$19.000` se lee como "ganó 19 mil"
+   * cuando en realidad es "se le pagó 19 mil más de lo que le correspondía", que
+   * es justo lo que hay que mirar para decidir si el porcentaje está mal.
+   *
+   * **El menos va antes del `$`.** `-$19.000` y no `$-19.000`: es como se
+   * escribe un saldo en negativo, y `$-` se lee como un signo de moneda.
+   *
+   * El signo y el color van en MÉTODOS y no en el `[class.x]` del template: son
+   * la misma condición con dos resultados opuestos, y con dos `[class.x]`
+   * Angular se queja (TS2367). El número en sí lo sigue poniendo el pipe
+   * `number`, así que no quedan dos formas de escribir un monto en la app.
+   *
+   * NO se inyecta `DecimalPipe` para armar el string entero acá: los `imports` de
+   * un componente standalone dan pipes a su TEMPLATE pero no a su inyector, y
+   * `DecimalPipe` no es `providedIn: 'root'`. Inyectarlo tira NG0201.
+   */
+
+  /** El signo va adelante del `$`. Vacío en positivo. */
+  signoDiferencia(d: number): string {
+    return d < 0 ? '-' : '';
+  }
+
+  /** Para que el pipe `number` no reciba el negativo y saque el menos solo. */
+  absDiferencia(d: number): number {
+    return Math.abs(d);
+  }
+
+  /** Verde si se pagó de más (o justo), rojo si se pagó de menos. */
+  claseDiferencia(d: number): string {
+    return d >= 0 ? 'verde' : 'rojo';
+  }
+
   async ngOnInit() {
     await this.cargarHorarios();
     await this.cargarDatos();

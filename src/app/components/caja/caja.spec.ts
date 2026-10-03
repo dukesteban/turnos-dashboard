@@ -234,6 +234,119 @@ describe('Caja — sugerido vs pagado', () => {
   });
 });
 
+describe('Caja — cómo se muestra la diferencia', () => {
+  // `diferencia = pagado - sugerido`. La columna se lee de un vistazo:
+  // verde = se pagó de más, rojo = se pagó de menos. Y NUNCA lleva `+`.
+  //
+  // El `+$19.000` de antes era peor que un detalle de formato: se leía como
+  // "ganó 19 mil" cuando en realidad es "se le pagó 19 mil más de lo que le
+  // correspondía", que es justo el número que hay que mirar para saber si el
+  // porcentaje de comisión está mal.
+  //
+  // Estos tests assertan el TEXTO RENDERIZADO, no un método: el signo y el color
+  // se arman en el template y un método que los devuelva probaría una función
+  //helper que nadie usa.
+
+  /** Suggestions + pagos para ver las tres filas: +, -, 0. */
+  const ARMADO = {
+    getComisionesPeriodo: () => Promise.resolve([
+      SUGERIDO(1, 'Se pagó de más', 6000),
+      SUGERIDO(2, 'Se pagó de menos', 40000),
+      SUGERIDO(3, 'Cuadrado exacto', 15000),
+    ]),
+    getPagosEmpleado: () => Promise.resolve([
+      PAGO_JUAN(25000),                                                    // +19.000
+      { id: 2, empleado_id: 2, fecha: '2026-10-05', monto: 10000, metodo: 'efectivo', empleados: null },  // -30.000
+      { id: 3, empleado_id: 3, fecha: '2026-10-05', monto: 15000, metodo: 'efectivo', empleados: null },  // 0
+    ]),
+  };
+
+  /**
+   * Sin el separador de miles.
+   *
+   * El pipe `number` usa el locale del runtime: **jsdom corre en `en-US` y
+   * escribe `19,000`, el browser en `es-AR` y escribe `19.000`**. Un test que
+   * afirme el separador pasa en un lado y falla en el otro. Lo que importa
+   * acás es el signo, el `$` y el orden de las filas.
+   */
+  const norm = (t: string) => t.replace(/[.,]/g, '');
+
+  async function renderizado() {
+    const r = montar(ARMADO);
+    await r.cmp.cargarDatos();
+    // La tabla vive dentro de la pestaña "empleados": sin esto no hay ni una celda.
+    r.cmp.cambiarTab('empleados');
+    r.fixture.detectChanges();
+    const celdas: HTMLElement[] = Array.from(
+      r.fixture.nativeElement.querySelectorAll('.celda-diferencia')
+    );
+    return {
+      cmp: r.cmp,
+      crudos: celdas.map((c) => (c.textContent || '').trim()),
+      // Orden por sugerido de mayor a menor: 40.000, 15.000, 6.000.
+      textos: celdas.map((c) => norm((c.textContent || '').trim())),
+      clases: celdas.map((c) => (c.classList.contains('verde') ? 'verde'
+        : c.classList.contains('rojo') ? 'rojo' : 'sin-clase')),
+    };
+  }
+
+  it('la tabla tiene una celda de diferencia por empleado', async () => {
+    const { textos } = await renderizado();
+    expect(textos.length).toBe(3);
+  });
+
+  it('positivo: SIN signo +, en verde', async () => {
+    const { textos, clases } = await renderizado();
+    expect(textos[2]).toBe('$19000');
+    expect(textos.some((t) => t.includes('+'))).toBe(false);
+    expect(clases[2]).toBe('verde');
+  });
+
+  it('negativo: con el menos ANTES del $, en rojo', async () => {
+    const { textos, clases } = await renderizado();
+    expect(textos[0]).toBe('-$30000');
+    expect(textos.some((t) => t.includes('$-'))).toBe(false);
+    expect(clases[0]).toBe('rojo');
+  });
+
+  it('cero: raya, en verde (cuadró exacto)', async () => {
+    const { textos, clases } = await renderizado();
+    expect(textos[1]).toBe('—');
+    expect(clases[1]).toBe('verde');
+  });
+
+  it('el signo menos nunca queda atrás del $', async () => {
+    const { crudos } = await renderizado();
+    const negativos = crudos.filter((t) => t.startsWith('-'));
+    expect(negativos.length).toBe(1);
+    expect(negativos[0].indexOf('-')).toBe(0);
+    expect(negativos[0].indexOf('-')).toBeLessThan(negativos[0].indexOf('$'));
+  });
+
+  it('la celda va en negrita: es la columna que hay que mirar', async () => {
+    // `getComputedStyle` no lee SCSS en jsdom, así que el grosor no se puede
+    // verificar acá. Lo que sí se verifica es que la celda tiene la clase que
+    // lo lleva; si alguien la saca del template, este test falla.
+    const r = montar(ARMADO);
+    await r.cmp.cargarDatos();
+    r.cmp.cambiarTab('empleados');
+    r.fixture.detectChanges();
+    expect(r.fixture.nativeElement.querySelectorAll('.celda-diferencia').length).toBe(3);
+  });
+
+  it('el pipe recibe el valor en positivo, no el negativo', () => {
+    // Si el pipe recibiera el negativo, Angular sacaría el menos solo y
+    // quedaría `-$-30.000`.
+    const { cmp } = montar();
+    expect(cmp.signoDiferencia(-30000)).toBe('-');
+    expect(cmp.signoDiferencia(19000)).toBe('');
+    expect(cmp.absDiferencia(-30000)).toBe(30000);
+    expect(cmp.claseDiferencia(-30000)).toBe('rojo');
+    expect(cmp.claseDiferencia(19000)).toBe('verde');
+    expect(cmp.claseDiferencia(0)).toBe('verde');
+  });
+});
+
 describe('Caja — registrar pago', () => {
   const listo = async (over: Record<string, any> = {}) => {
     const r = montar(over);

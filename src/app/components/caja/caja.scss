@@ -468,6 +468,11 @@
   .celda-concepto  { color: #475569; overflow: hidden; text-overflow: ellipsis; }
   .celda-chica     { color: #64748b; font-size: 0.82rem; }
 
+  // La diferencia es lo que hay que mirar al cerrar el mes, así que va en
+  // negrita siempre: el color dice si se pagó de más o de menos, el grosor
+  // dice "esta es la columna que importa".
+  .celda-diferencia { font-weight: 700; }
+
   // Los botones de acción van juntos en una celda. Si cada `<button>` fuera una
   // celda por separado, la grilla los cuenta como columnas y se caen de lado.
   .celda-acciones {
