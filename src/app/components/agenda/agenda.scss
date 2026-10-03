@@ -123,9 +123,17 @@
  * los `.bloque-turno`, que son `position: absolute`. Al scrollear hacia abajo
  * se perdía de quién es cada columna.
  *
- * Se reproduce la grilla del header con la MISMA técnica (`flex: 1 1 0` +
- * `margin: 0 3px`, sin padding) y no copiando el `calc()` de `posicionTurno`.
- * Dos copias de la matemática eventually no coinciden; dos flex nunca.
+ * Se reproduce la grilla del header con la MISMA técnica (`flex: 1 1 0` sin
+ * padding) y no copiando el `calc()` de `posicionTurno`. Dos copias de la
+ * matemática un día no coinciden; dos flex nunca.
+ *
+ * **SIN margen.** El margen de 3px de cada lado le corresponde al BLOQUE del
+ * turno, que se posiciona con `calc(pct * i% + 3px)` y `calc(pct% - 6px)`. Si
+ * el fondo también lo tuviera, entre una columna azul y una blanca quedaba una
+ * franja blanca de 6px en el medio que se leía como un hueco: entre dos columnas
+ * blancas no se nota, pero al alternar el color se vuelve evidente. El fondo
+ * tiene que ser la columna COMPLETA, de borde a borde, y el bloque va adentro
+ * con su aire.
  *
  * `z-index: 0` porque los bloques van con `z-index: 1` y tienen que quedar
  * arriba y clickeables. `pointer-events: none` por si acaso.
@@ -142,7 +150,6 @@
 .columna-fondo-celda {
   flex: 1 1 0;
   min-width: 0;
-  margin: 0 3px;
 
   /* Cada par de columnas una blanca y una con un azul apenas perceptible.
      `#f5f9fe` es azul de verdad (canal azul arriba de gris), no un gris más
@@ -552,15 +559,16 @@ textarea {
 }
 
 .columna-header {
-  /* flex:1 1 0 + margin = reproduce exactamente el calc() de posicionTurno */
+  /* flex:1 1 0 SIN margen, igual que `.columna-fondo-celda`: el header y la
+     banda tienen que ser la columna completa y de borde a borde. Con margen en
+     los dos, entre una columna azul y una blanca quedaba una franja blanca de
+     6px en el medio que parecía un hueco. El aire de 3px lo lleva el bloque del
+     turno, que se posiciona con `calc(pct * i% + 3px)`.
+     El separador `border-left` es lo que marca dónde termina una columna. */
   flex: 1 1 0;
   min-width: 0;
-  margin: 0 3px;
   padding: 5px 3px;
   text-align: center;
-  /* El separador entre columnas era #f1f5f9 sobre blanco: no se veía. Con las
-     bandas alternadas del cuerpo ya se distinguen, pero la línea es lo que
-     ata el header con la columna de abajo. */
   border-left: 1px solid #dbe3ec;
   box-sizing: border-box;
   overflow: hidden;

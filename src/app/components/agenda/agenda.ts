@@ -448,7 +448,9 @@ export class AgendaComponent implements OnInit, OnDestroy {
       // El +8 replica el margen de topParaHora: sin esto el bloque cae arriba de la linea.
       top: minutosDesdeInicio * PX_POR_MINUTO + offset + 8,
       height: Math.max(duracion * PX_POR_MINUTO - 6, 22),
-      // El header usa flex:1 1 0 + margin 0 2px => misma geometria exacta que esto.
+      // El header y la banda usan `flex: 1 1 0` SIN margen: cada uno es 1/n del
+      // ancho. El bloque va 3px adentro de su columna para que no toque el
+      // borde, y por eso el ancho es `pct% - 6px`.
       left: `calc(${pct * col}% + ${GAP_COLUMNA}px)`,
       width: `calc(${pct}% - ${GAP_COLUMNA * 2}px)`
     };
