@@ -273,8 +273,10 @@
 }
 
 .col-dia-header {
-  flex: 1;
-  min-width: 0; /* se sobreescribe con [style.min-width] del HTML */
+  /* `0 0 auto`, no `1`: cada dia mide lo que necesita (`anchoDeDia`). Con
+     flex-grow el navegador los estira todos igual y el ancho del HTML se
+     ignora, que es justo lo que hacia que quedaran desparejos. */
+  flex: 0 0 auto;
   padding: 10px 0;
   text-align: center;
   border-left: 1px solid #f1f5f9;
@@ -299,8 +301,8 @@
 }
 
 .col-dia-cuerpo {
-  flex: 1;
-  min-width: 0;
+  /* Igual que el header: el ancho lo manda `anchoDeDia`, no el flex. */
+  flex: 0 0 auto;
   position: relative;
   border-left: 1px solid #f1f5f9;
   box-sizing: border-box;

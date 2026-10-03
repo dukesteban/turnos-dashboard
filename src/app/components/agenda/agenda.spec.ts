@@ -198,15 +198,17 @@ describe('Agenda — columna de un turno', () => {
   });
 });
 
-describe('Agenda - la semana tiene TODOS los dias con las mismas columnas', () => {
-  // Que cada dia resuelva su propio set parece correcto y no lo es: el ancho
-  // de la grilla semanal se calculaba con las columnas del dia SELECCIONADO, asi
-  // que un dia con menos gente dejaba columnas en blanco al final y los dias no
-  // alineaban entre si. En un calendario eso se lee como que la semana esta rota.
+describe('Agenda - la semana: cada dia con SU gente y SU ancho', () => {
+  // Dos cosas que se confundieron y hay que fijar por separado:
   //
-  // Ahora la semana usa la UNION de las columnas de todos sus dias: grilla
-  // rectangular, y cada empleado cae siempre en la misma columna de toda la
-  // semana. El que no labra un dia dado no desaparece: queda rayado.
+  // 1. **Quién aparece.** Cada día muestra SOLO a quien atiende ese día. El que
+  //    no labra no tiene columna: así se lee de un vistazo quién trabaja cuándo.
+  //    (Había una versión que mostraba la unión de la semana y rayaba a los que
+  //    no labran; al usuario lo mortificaba ver gente en gris con una ✕.)
+  //
+  // 2. **Cuánto mide.** El hueco del final venía de que todos los días reservaban
+  //    el ancho del día más lleno. Cada día mide lo que necesita, y la grilla
+  //    total es la SUMA de esos anchos.
 
   const listo = async (over: Record<string, any> = {}) => {
     const r = montar(over);
@@ -219,113 +221,126 @@ describe('Agenda - la semana tiene TODOS los dias con las mismas columnas', () =
     return r;
   };
 
-  it('la union trae a un empleado que solo trabaja algunos dias', async () => {
-    // Esteban = L,M,J,V. Juan = L-V. Los dos labran el lunes, así que la unión
-    // de la semana tiene que traer a los dos aunque algún día no trabajen.
-    const { cmp } = await listo();
-    const nombres = cmp.columnasSemana.map((c: any) => c.empleado.nombre);
-    expect(cmp.columnasSemana.length).toBeGreaterThanOrEqual(2);
-    for (const n of nombres) expect(typeof n).toBe('string');
-  });
+  const nombresDe = (cmp: any, dia: Date) =>
+    cmp.columnasDe(dia).map((c: any) => c.empleado.nombre);
 
-  it('todos los dias de la semana tienen la MISMA cantidad de columnas', async () => {
-    const { cmp } = await listo();
-    const total = cmp.columnasSemana.length;
-    expect(total).toBeGreaterThan(0);
-    for (const dia of cmp.diasDeSemana) {
-      expect(cmp.columnasPara(cmp.fechaISOde(dia)).length)
-        .toBeLessThanOrEqual(total);
-    }
-    // Y el ancho del día se calcula con la unión, no con el set del día.
-    const esperado = `${total * (cmp.anchoColEmpleado + cmp.gapColumna)}px`;
-    expect(cmp.anchoColumnasSemana).toBe(esperado);
-  });
-
-  it('el ancho de la grilla semanal usa la union, no el dia elegido', async () => {
-    // El bug: `nCols` venía de `columnasAgenda`, o sea del día que estás
-    // mirando. AlMoved de día, el ancho total de la semana cambiaba.
-    const { cmp } = await listo();
-    const conUnion = cmp.anchoGrillaSemana;
-
-    // Mismo ancho desde cualquier día de la semana.
-    for (const d of [1, 3, 5]) {
-      irA(cmp, 2026, 12, d);
-      expect(cmp.anchoGrillaSemana).toBe(conUnion);
-    }
-  });
-
-  it('el turno de la vista semanal se ubica por la union, no por el set del dia', async () => {
-    // Con `mini`, `posicionTurno` cuenta columnas con el total de la semana. Si
-    // usara el del día, un turno caería en la columna 0 de un día con menos
-    // gente y se vería corrido.
-    const { cmp } = await listo();
-    const t = turno({ empleado_id: EMP_JUAN.id, fecha: cmp.fechaISO, hora: '10:00', hora_inicio: '10:00' });
-
-    const idx = cmp.columnasSemana.findIndex(
-      (c: any) => c.empleado.id === EMP_JUAN.id
-    );
-    expect(idx).toBeGreaterThanOrEqual(0);
-
-    const pos = cmp.posicionTurno(t, null, true);
-    const total = cmp.columnasSemana.length;
-    const esperado = `calc(${(100 / total) * idx}% + 3px)`;
-    expect(pos.left).toBe(esperado);
-  });
-
-  it('el mismo empleado cae en la MISMA columna los 7 dias', async () => {
-    const { cmp } = await listo();
-    const total = cmp.columnasSemana.length;
-    for (const dia of cmp.diasDeSemana) {
-      const cols = cmp.columnasSemana;
-      const i = cols.findIndex((c: any) => c.empleado.id === EMP_JUAN.id);
-      const t = turno({
-        empleado_id: EMP_JUAN.id,
-        fecha: cmp.fechaISOde(dia),
-        hora: '10:00',
-        hora_inicio: '10:00',
-      });
-      const pos = cmp.posicionTurno(t, null, true);
-      expect(pos.left).toBe(`calc(${(100 / total) * i}% + 3px)`);
-    }
-  });
-
-  it('el estado de la columna sigue siendo POR DIA, no de la semana', async () => {
-    // Que Esteban no labra el miércoles no lo hace ausente toda la semana: la
-    // lista es la unión, pero el estado se pregunta día por día.
+  it('el miercoles solo aparece Juan: Esteban no labra y no tiene columna', async () => {
+    // Esteban = L,M,J,V (no miércoles). Juan = L-V.
     const { cmp } = await listo();
     const miercoles = new Date(2026, 11, 2);
-    const estadoMiercoles = cmp.estadoColumnaEn(EMP_ESTEBAN.id, miercoles);
-    const estadoLunes = cmp.estadoColumnaEn(EMP_ESTEBAN.id, new Date(2026, 11, 7));
+    expect(nombresDe(cmp, miercoles)).toEqual([EMP_JUAN.nombre]);
+    expect(nombresDe(cmp, miercoles)).not.toContain(EMP_ESTEBAN.nombre);
+  });
 
-    // El miercoles no tiene columna propia (no labra, no hay ausencia ni turnos
-    // en riesgo), asi que no hay estado: null.
-    expect(estadoMiercoles).toBeNull();
-    // Pero la celda existe igual y tiene que verse RAYADA: si quedara normal
-    // seria indistinguible de un dia que si trabaja.
-    expect(cmp.claseColumnaEn(EMP_ESTEBAN.id, miercoles)).toBe('ausente');
+  it('el que no labra no aparece NUNCA, ni rayado ni con x', async () => {
+    const { cmp } = await listo();
+    for (const dia of cmp.diasDeSemana) {
+      const cols = cmp.columnasDe(dia);
+      for (const col of cols) {
+        // Si aparece, tiene que haber un motivo: o labra, o tiene ausencia, o
+        // tiene turnos en riesgo. Nunca "aparece porque sí".
+        expect(col.trabaja || col.ausente || col.enRiesgo).toBe(true);
+      }
+    }
+  });
 
-    // El lunes si tiene estado y si trabaja: celda normal.
-    expect(estadoLunes).toBeTruthy();
-    expect(estadoLunes!.trabaja).toBe(true);
-    expect(cmp.claseColumnaEn(EMP_ESTEBAN.id, new Date(2026, 11, 7))).toBe('');
+  it('cada dia mide lo que necesita su gente, no el maximo de la semana', async () => {
+    const { cmp } = await listo();
+    const miercoles = new Date(2026, 11, 2);
+    const lunes = new Date(2026, 11, 7);
 
-    // Y el mismo empleado esta en las dos: la lista de la semana no lo borra.
-    const ids = cmp.columnasSemana.map((c: any) => c.empleado.id);
-    expect(ids).toContain(EMP_ESTEBAN.id);
+    const anchoMiercoles = cmp.columnasDe(miercoles).length;
+    const anchoLunes = cmp.columnasDe(lunes).length;
+    expect(anchoMiercoles).toBeLessThan(anchoLunes);
+
+    const px = (n: number) => `${n * (cmp.anchoColEmpleado + cmp.gapColumna)}px`;
+    expect(cmp.anchoDeDia(miercoles)).toBe(px(anchoMiercoles));
+    expect(cmp.anchoDeDia(lunes)).toBe(px(anchoLunes));
+  });
+
+  it('NO hay ancho reservado: el total es la SUMA de los dias', async () => {
+    // El bug del hueco: el ancho total se multiplicaba por el maximo de columnas
+    // de la semana. Un dia con menos gente dejaba columnas en blanco al final.
+    const { cmp } = await listo();
+    // Un dia SIN NINGUNA columna igual mide una columna, no cero: si no, el
+    // nombre del dia (SAB 12/12) quedaria con ancho cero y no se podria ni
+    // leer ni tocar. Es un piso de legibilidad, no un ancho reservado.
+    const suma = cmp.diasDeSemana.reduce((s: number, d: Date) => {
+      const n = Math.max(cmp.columnasDe(d).length, 1);
+      return s + n * (cmp.anchoColEmpleado + cmp.gapColumna);
+    }, 0);
+    expect(cmp.anchoGrillaSemana).toBe(`${40 + suma}px`);
+
+    // Y da MENOS que el maximo por todos los dias: si no, sigue reservando de
+    // mas y vuelven las columnas en blanco.
+    const maximo = Math.max(...cmp.diasDeSemana.map((d: Date) => cmp.columnasDe(d).length));
+    const porElMaximo = 40 + cmp.diasDeSemana.length * maximo * (cmp.anchoColEmpleado + cmp.gapColumna);
+    expect(parseInt(cmp.anchoGrillaSemana, 10)).toBeLessThan(porElMaximo);
+  });
+
+  it('un dia sin nadie tiene ancho de UNA columna, no de cero', async () => {
+    // El piso de legibilidad: el nombre del dia tiene que seguir viéndose.
+    const { cmp } = await listo();
+    const sabado = new Date(2026, 11, 12);
+    expect(cmp.columnasDe(sabado).length).toBe(0);
+    expect(cmp.anchoDeDia(sabado)).toBe(`${1 * (cmp.anchoColEmpleado + cmp.gapColumna)}px`);
+  });
+
+  it('el ancho no cambia al moverse de dia, solo al cambiar la gente', async () => {
+    const { cmp } = await listo();
+    const conDos = cmp.anchoDeDia(new Date(2026, 11, 2));   // 1 empleado
+    const conTodos = cmp.anchoDeDia(new Date(2026, 11, 7));  // 2 empleados
+    expect(conDos).not.toBe(conTodos);
+
+    // Dos días con la misma gente miden igual.
+    expect(cmp.anchoDeDia(new Date(2026, 11, 7))).toBe(cmp.anchoDeDia(new Date(2026, 11, 3)));
+  });
+
+  it('el turno de la vista semanal usa las columnas de SU dia', async () => {
+    // `posicionTurno` con mini tiene que contar columnas del día del turno. Con
+    // el total equivocado el bloque sale más angosto que su columna, porque el
+    // ancho es un porcentaje.
+    const { cmp } = await listo();
+    const miercoles = new Date(2026, 11, 2);
+    const cols = cmp.columnasDe(miercoles);
+    const total = cols.length;
+    const i = cols.findIndex((c: any) => c.empleado.id === EMP_JUAN.id);
+
+    const t = turno({
+      empleado_id: EMP_JUAN.id,
+      fecha: cmp.fechaISOde(miercoles),
+      hora: '10:00',
+      hora_inicio: '10:00',
+    });
+    const pos = cmp.posicionTurno(t, null, true);
+    expect(total).toBe(1);
+    expect(i).toBe(0);
+    expect(pos.left).toBe('calc(0% + 3px)');
+    expect(pos.width).toBe('calc(100% - 6px)');
   });
 
   it('un inactivo no aparece en la semana aunque labre todos los dias', async () => {
     const { cmp } = montar({
-      getEmpleados: () => Promise.resolve([
-        EMP_JUAN, EMP_ESTEBAN, EMP_INACTIVO,
-      ]),
+      getEmpleados: () => Promise.resolve([EMP_JUAN, EMP_ESTEBAN, EMP_INACTIVO]),
     });
     await cmp.ngOnInit();
     await settle();
     cmp.vista = 'semana';
     irA(cmp, 2026, 12, 7);
 
-    const ids = cmp.columnasSemana.map((c: any) => c.empleado.id);
-    expect(ids).not.toContain(EMP_INACTIVO.id);
+    for (const dia of cmp.diasDeSemana) {
+      const ids = cmp.columnasDe(dia).map((c: any) => c.empleado.id);
+      expect(ids).not.toContain(EMP_INACTIVO.id);
+    }
+  });
+
+  it('un dia cerrado tampoco inventa columnas', async () => {
+    const { cmp } = await listo({
+      getDiasCerrados: () => Promise.resolve([{ fecha: '2026-12-07' }]),
+    });
+    // Aunque el día esté cerrado, las columnas son las de la jornada: el filtro
+    // es de la grilla, no del negocio. Lo que se marca es el fondo.
+    expect(cmp.esDiaCerrado(new Date(2026, 11, 7))).toBe(true);
+    expect(cmp.columnasDe(new Date(2026, 11, 7)).length).toBe(2);
   });
 });

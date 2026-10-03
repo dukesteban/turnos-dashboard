@@ -46,8 +46,6 @@ export class AgendaComponent implements OnInit, OnDestroy {
    * siete; sin cache se recalculan en cada change detection.
    */
   private cacheColumnas: Record<string, any[]> = {};
-  /** Union de columnas de la semana. Se limpia junto con `cacheColumnas`. */
-  private cacheColumnasSemana: any[] | null = null;
 
   horaInicio = 8;
   horaFin = 20;
@@ -323,25 +321,6 @@ export class AgendaComponent implements OnInit, OnDestroy {
    * rectangular), pero que un empleado este ausente el LUNES no quiere decir
    * que lo este el MARTES: el estado se sigue preguntando dia por dia.
    */
-  estadoColumnaEn(empleadoId: number, dia: Date): any {
-    const cols = this.columnasPara(this.fechaISOde(dia));
-    return cols.find((c: any) => c.empleado.id === empleadoId) || null;
-  }
-
-  /** Rayada si no atiende ese dia; ambar si tiene turnos en riesgo. */
-  claseColumnaEn(empleadoId: number, dia: Date): string {
-    const e = this.estadoColumnaEn(empleadoId, dia);
-    // Esta en la union de la semana pero NO tiene columna ese dia: no labra, no
-    // tiene ausencia ni turnos en riesgo. La celda existe igual (si no la
-    // grilla no seria rectangular), asi que se raya: si quedara normal seria
-    // indistinguible de un dia que si trabaja, que es justo el error que hay
-    // que evitar.
-    if (!e) return "ausente";
-    if (e.ausente || !e.trabaja) return "ausente";
-    if (e.enRiesgo) return "en-riesgo";
-    return "";
-  }
-
   /** Columnas de la vista Dia. */
   get columnasAgenda(): any[] {
     return this.columnasPara(this.fechaISO);
@@ -350,7 +329,6 @@ export class AgendaComponent implements OnInit, OnDestroy {
   /** La cache se invalida cuando cambian los datos que la sostienen. */
   private limpiarCacheColumnas() {
     this.cacheColumnas = {};
-    this.cacheColumnasSemana = null;
   }
 
   /** Ausencia del empleado en esa fecha, o null. */
@@ -419,12 +397,8 @@ export class AgendaComponent implements OnInit, OnDestroy {
    * fue dado de baja despues de agendar), el turno cae en la ultima columna
    * para que al menos se vea en vez de desaparecer.
    */
-  columnaDeTurno(turno: any, fecha?: string, mini = false): number {
-    // En la vista Semana todas las dias comparten el mismo set (la union), asi
-    // que el indice se busca contra esa lista y no contra la del dia suelto.
-    const cols = mini
-      ? this.columnasSemana
-      : this.columnasPara(fecha || turno?.fecha || this.fechaISO);
+  columnaDeTurno(turno: any, fecha?: string, _mini = false): number {
+    const cols = this.columnasPara(fecha || turno?.fecha || this.fechaISO);
     if (!cols.length) return 0;
     const idx = cols.findIndex((c: any) => c.empleado.id === turno?.empleado_id);
     return idx >= 0 ? idx : cols.length - 1;
@@ -438,9 +412,12 @@ export class AgendaComponent implements OnInit, OnDestroy {
     const minutosDesdeInicio = (h - this.horaInicio) * 60 + m;
     const offset = mini ? H_HEADER_MINI : H_HEADER_COLUMNAS;
 
-    // En Semana el total es el de la semana (la union). Si se usara el del dia,
-    // un turno caeria en la columna 0 de un dia con menos gente.
-    const total = Math.max(mini ? this.columnasSemana.length : this.columnasAgenda.length, 1);
+    // Cada dia se mide con SU PROPIA gente. En la vista Semana un martes con
+    // dos empleados no puede usar el total del lunes con tres: el ancho del
+    // bloque se calcula como porcentaje, asi que con el total equivocado el
+    // turno queda mas angosto que su columna.
+    const cols = this.columnasDe(turno, mini);
+    const total = Math.max(cols.length, 1);
     const col = Math.min(this.columnaDeTurno(turno, undefined, mini), total - 1);
     const pct = 100 / total;
 
@@ -507,9 +484,29 @@ claseBloque(turno: any, mini: boolean): string {
     return `${n * (this.anchoColEmpleado + this.gapColumna)}px`;
   }
 
-  /** Ancho de UNA columna de día en la vista Semana: el de la unión semanal. */
-  get anchoColumnasSemana(): string {
-    const n = Math.max(this.columnasSemana.length, 1);
+  /**
+   * Columnas de un dia de la semana. Cada dia muestra SOLO a quien trabaja
+   * ese dia (o tiene ausencia, o turnos en riesgo): una persona que no labra
+   * no tiene columna, asi que se lee de un vistazo quienes atienden.
+   */
+  columnasDe(diaOrTurno: any, _mini = false): any[] {
+    // Acepta un Date o un turno: es lo unico que cambia entre el template y
+    // el posicionamiento.
+    const fecha = diaOrTurno instanceof Date
+      ? this.fechaISOde(diaOrTurno)
+      : (diaOrTurno?.fecha || this.fechaISO);
+    return this.columnasPara(fecha);
+  }
+
+  /**
+   * Ancho de un dia de la semana: el de SU gente, no el del dia mas lleno.
+   *
+   * Este era el bug del hueco: todos los dias reservaban el ancho del maximo y
+   * los que labran menos dejaban columnas en blanco al final. Cada dia mide lo
+   * que necesita y se termina el espacio de reserva.
+   */
+  anchoDeDia(dia: Date): string {
+    const n = Math.max(this.columnasDe(dia).length, 1);
     return `${n * (this.anchoColEmpleado + this.gapColumna)}px`;
   }
 
@@ -518,50 +515,18 @@ claseBloque(turno: any, mini: boolean): string {
    * y el cuerpo midan EXACTAMENTE lo mismo (si no, los turnos se salen del dia).
    */
   get anchoGrillaSemana(): string {
-    const nDias = this.diasDeSemana.length || 1;
-    const nCols = Math.max(this.columnasSemana.length, 1);
-    return `${40 + nDias * nCols * (this.anchoColEmpleado + this.gapColumna)}px`;
+    // 40 = la columna de horas. El resto es la SUMA de los anchos de cada dia,
+    // no el maximo por 7: asi el contenedor no reserva de mas.
+    const dias = this.diasDeSemana.length
+      ? this.diasDeSemana
+      : [this.fechaActual];
+    const total = dias.reduce((sum: number, d: Date) => {
+      const n = Math.max(this.columnasDe(d).length, 1);
+      return sum + n * (this.anchoColEmpleado + this.gapColumna);
+    }, 0);
+    return `${40 + total}px`;
   }
 
-  /**
-   * Las columnas de la vista Semana: la UNION de las de cada dia visible.
-   *
-   * Antes cada dia resolvia su propio set y el ancho se calculaba con el del dia
-   * seleccionado. Con un dia donde solo labra una persona, el contenedor
-   * reservaba tres columnas y sobraban dos de blanco: se veia un hueco al final
-   * de la semana, y los dias tampoco alineaban entre si.
-   *
-   * Con la union, todos los dias tienen la misma cantidad de columnas y la
-   * grilla queda rectangular. El que no labra ese dia no desaparece: queda con
-   * la raya de `.ausente`, que es justamente para poder ver que no trabaja.
-   *
-   * El orden es el mismo que en la vista Dia (alfabetico por nombre), asi que
-   * un empleado cae en la MISMA columna en toda la semana y se puede leer a lo
-   * largo.
-   */
-  get columnasSemana(): any[] {
-    if (this.cacheColumnasSemana) return this.cacheColumnasSemana;
-    const porId = new Map<number, any>();
-    for (const dia of this.diasDeSemana) {
-      for (const col of this.columnasPara(this.fechaISOde(dia))) {
-        // Si el mismo empleado aparece en varios dias, el estado se acumula:
-        // que se lo raye si tiene ausencia en ALGUN dia, y no solo porque no
-        // le toque labrar en otro.
-        const previo = porId.get(col.empleado.id);
-        if (!previo) {
-          porId.set(col.empleado.id, { ...col });
-        } else {
-          previo.ausente = col.ausente || previo.ausente;
-          previo.trabaja = previo.trabaja || col.trabaja;
-          previo.enRiesgo = previo.enRiesgo || col.enRiesgo;
-        }
-      }
-    }
-    this.cacheColumnasSemana = [...porId.values()].sort((a: any, b: any) =>
-      (a.empleado.nombre || "").localeCompare(b.empleado.nombre || "", "es")
-    );
-    return this.cacheColumnasSemana;
-  }
 
   /** Offset vertical que dejan los headers de columnas. */
   get offsetHeader(): number {
