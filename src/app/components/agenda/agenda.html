@@ -119,16 +119,17 @@
         </div>
 
         <!-- Columnas por día: dentro de cada día, una columna por EMPLEADO.
-             Cada día resuelve su propio set, así que un lunes puede tener 3
-             columnas y un sábado ninguna: los anchos quedan desparejos a
-             propósito, porque así se ve quién labra cada día. -->
-        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.min-width]="anchoColumnas" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
+             Todos los días usan el MISMO set (`columnasSemana`, la unión de la
+             semana) para que la grilla quede rectangular y un empleado caiga
+             siempre en la misma columna de toda la semana. El que no labra ese
+             día no desaparece: queda rayado. Antes cada día resolvía el suyo y
+             sobraban columnas en blanco al final. -->
+        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.min-width]="anchoColumnasSemana" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
           <!-- Mini header con los empleados de ESE día -->
           <div class="columnas-header mini">
-            <div *ngFor="let col of columnasPara(fechaISOde(dia))"
+            <div *ngFor="let col of columnasSemana"
                  class="columna-header"
-                 [class.ausente]="col.ausente || !col.trabaja"
-                 [class.en-riesgo]="col.enRiesgo && !col.ausente"
+                 [ngClass]="claseColumnaEn(col.empleado.id, dia)"
                  [title]="motivoColumnaAusente(col.empleado.id, fechaISOde(dia)) || ''">
               <span class="ph-marcas">
                 {{ col.empleado.nombre }}
