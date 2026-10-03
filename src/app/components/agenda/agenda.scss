@@ -87,7 +87,7 @@
   height: 8px;
 }
 
-// VISTA DÃA
+// VISTA DÍA
 .grilla-dia {
   display: flex;
   min-width: 320px;
@@ -115,6 +115,51 @@
 .col-turnos {
   flex: 1;
   position: relative;
+}
+
+/* Bandas alternadas de fondo, una por columna de empleado.
+ *
+ * El cuerpo de la grilla no tiene columnas: solo líneas de hora horizontales y
+ * los `.bloque-turno`, que son `position: absolute`. Al scrollear hacia abajo
+ * se perdía de quién es cada columna.
+ *
+ * Se reproduce la grilla del header con la MISMA técnica (`flex: 1 1 0` +
+ * `margin: 0 3px`, sin padding) y no copiando el `calc()` de `posicionTurno`.
+ * Dos copias de la matemática eventually no coinciden; dos flex nunca.
+ *
+ * `z-index: 0` porque los bloques van con `z-index: 1` y tienen que quedar
+ * arriba y clickeables. `pointer-events: none` por si acaso.
+ */
+.columnas-fondo {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.columna-fondo-celda {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0 3px;
+
+  /* Cada par de columnas una blanca y una con un azul apenas perceptible.
+     `#f5f9fe` es azul de verdad (canal azul arriba de gris), no un gris más
+     claro: a simple vista gris y azul se confunden, y lo que se busca es que
+     el ojo capte "columna / hueco / columna" sin poder decir de qué color es. */
+  &:nth-child(even) { background: #f5f9fe; }
+
+  /* Un empleado ausente se rayaba solo en el header, así que scrolleando no
+     se sabía qué columna era la de la ausencia. Se replica acá con la misma
+     raya. Va DESPUÉS del alternado para ganar en empate de especificidad. */
+  &.ausente {
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(148, 163, 184, 0.13) 0 7px,
+      rgba(148, 163, 184, 0.03) 7px 14px
+    );
+  }
 }
 
 .linea-hora {
@@ -485,7 +530,11 @@ textarea {
   right: 0;
   height: 42px;
   display: flex;
-  padding: 0 2px;
+  /* SIN padding. Antes tenía `0 2px`, que corría el header 2px a la derecha
+     respecto de los `.bloque-turno` y de las bandas de fondo: los tres son
+     hijos de `.col-turnos` y se posicionan con `calc(pct * i% + 3px)`, sin
+     padding. Con el padding, el título quedaba 2px corrida respecto de la
+     columna que rotula. */
   box-sizing: border-box;
   background: white;
   border-bottom: 1px solid #e2e8f0;
@@ -503,7 +552,10 @@ textarea {
   margin: 0 3px;
   padding: 5px 3px;
   text-align: center;
-  border-left: 1px solid #f1f5f9;
+  /* El separador entre columnas era #f1f5f9 sobre blanco: no se veía. Con las
+     bandas alternadas del cuerpo ya se distinguen, pero la línea es lo que
+     ata el header con la columna de abajo. */
+  border-left: 1px solid #dbe3ec;
   box-sizing: border-box;
   overflow: hidden;
   display: flex;
@@ -511,6 +563,10 @@ textarea {
   justify-content: center;
 
   &:first-child { border-left: none; }
+
+  /* Mismo alternado que el cuerpo, para que el header y la columna de abajo se
+     lean como la MISMA columna y no como dos cosas distintas. */
+  &:nth-child(even) { background: #f5f9fe; }
 
   // RETIRADO con los puestos: .sin-asignar y .sin-gente ya no aplican.
   // La columna es el empleado y siempre tiene nombre.
@@ -565,12 +621,20 @@ textarea {
   vertical-align: 1px;
 }
 
-/*Replica .dia-nombre / .dia-fecha del header de dias*/
+/* Réplica .dia-nombre / .dia-fecha del header de días.
+ *
+ * El nombre del empleado es lo que define la columna, así que va en negrita y
+ * oscuro. Antes era 0.68rem en #64748b sin peso: se leía como una etiqueta
+ * placeable, no como el título de una columna. El uppercase se mantiene porque
+ * en una grilla de N columnas lo que se busca es escanear los nombres de un
+ * vistazo, y las mayúsculas lo consiguen mejor que el interletraje.
+ */
 .ph-nombre {
-  font-size: 0.68rem;
-  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1e293b;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

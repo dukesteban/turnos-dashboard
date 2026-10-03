@@ -37,6 +37,25 @@
 
       <!-- Columna de turnos: UNA sola, con el header de puestos adentro -->
       <div class="col-turnos" [style.min-width]="anchoColumnas" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(fechaActual)">
+        <!--
+          FONDO de columnas, alternado.
+
+          El cuerpo de la grilla no tiene columnas: solo hay líneas de hora
+          horizontales y los `.bloque-turno`, que son absolutos. Así que al
+          scrollear hacia abajo se pierde de quién es cada columna y no hay
+          forma de saber a qué empleado pertenece un turno sin subir el mouse.
+
+          Esta capa reproduce la misma grilla que el header (`flex: 1 1 0` +
+          `margin: 0 3px`, sin padding) para que las bandas calcen exacto con
+          los bloques. Va con `z-index: 0` y `pointer-events: none`: los turnos
+          van con `z-index: 1` y tienen que seguir siendo clickeables.
+        -->
+        <div class="columnas-fondo" [style.top.px]="offsetHeader + 8" [style.bottom.px]="0">
+          <div *ngFor="let col of columnasAgenda"
+               class="columna-fondo-celda"
+               [class.ausente]="col.ausente || !col.trabaja"></div>
+        </div>
+
         <!-- Header: una columna por EMPLEADO -->
         <div class="columnas-header">
           <div *ngFor="let col of columnasAgenda"
