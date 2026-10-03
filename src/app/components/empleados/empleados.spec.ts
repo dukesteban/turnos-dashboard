@@ -26,6 +26,97 @@ function montar(over: Record<string, any> = {}) {
 
 const settle = () => new Promise(r => setTimeout(r, 0));
 
+describe('Empleados — acordeones del detalle', () => {
+  // El detalle tiene 5 bloques y juntos ocupan varias pantallas. Cada uno es un
+  // acordeón: cerrado salvo "Datos".
+  const flags = (c: any) => ({
+    datos: c.acordeonDatos,
+    jornada: c.acordeonJornada,
+    ausencias: c.acordeonAusencias,
+    riesgo: c.acordeonRiesgo,
+    comisiones: c.acordeonComisiones,
+  });
+
+  it('arranca con solo Datos abierto', async () => {
+    const { cmp } = montar();
+    await cmp.seleccionarEmpleado(cloneEmpleado(EMP_JUAN));
+    expect(flags(cmp)).toEqual({
+      datos: true, jornada: false, ausencias: false, riesgo: false, comisiones: false,
+    });
+  });
+
+  it('seleccionar OTRO empleado resetea los acordeones', async () => {
+    // Sin el reset, el empleado anterior deja los cinco paneles como los dejó y
+    // el que viene se abre con 4 pantallas sin que nadie lo haya pedido.
+    const { cmp } = montar();
+    await cmp.seleccionarEmpleado(cloneEmpleado(EMP_JUAN));
+    cmp.acordeonJornada = true;
+    cmp.acordeonRiesgo = true;
+
+    await cmp.seleccionarEmpleado(cloneEmpleado(EMP_ESTEBAN));
+
+    expect(flags(cmp)).toEqual({
+      datos: true, jornada: false, ausencias: false, riesgo: false, comisiones: false,
+    });
+  });
+
+  it('cerrar y volver a abrir el MISMO empleado también resetea', async () => {
+    const { cmp } = montar();
+    await cmp.seleccionarEmpleado(cloneEmpleado(EMP_JUAN));
+    cmp.acordeonComisiones = true;
+    cmp.cerrarDetalle();
+
+    await cmp.seleccionarEmpleado(cloneEmpleado(EMP_JUAN));
+    expect(cmp.acordeonComisiones).toBe(false);
+  });
+
+  it('cada acordeón se puede abrir y cerrar sin tocar los otros', async () => {
+    const { cmp } = montar();
+    await cmp.seleccionarEmpleado(cloneEmpleado(EMP_JUAN));
+
+    cmp.acordeonJornada = !cmp.acordeonJornada;
+    expect(flags(cmp)).toEqual({
+      datos: true, jornada: true, ausencias: false, riesgo: false, comisiones: false,
+    });
+
+    cmp.acordeonRiesgo = !cmp.acordeonRiesgo;
+    expect(flags(cmp)).toEqual({
+      datos: true, jornada: true, ausencias: false, riesgo: true, comisiones: false,
+    });
+  });
+
+  // El body del acordeón usa `display`, NO `*ngIf`. Con `*ngIf` Angular
+  // destruye el contenido y se pierde la edición a medio hacer.
+  it('colapsar NO borra la edición de jornada sin guardar', async () => {
+    const { cmp } = montar();
+    await cmp.seleccionarEmpleado(cloneEmpleado(EMP_JUAN));
+
+    cmp.empleadoSeleccionado.editandoJornada = true;
+    cmp.empleadoSeleccionado.jornada[2].hora_fin = '14:00';   // martes, sin guardar
+
+    cmp.acordeonJornada = false;
+    expect(cmp.acordeonJornada).toBe(false);
+
+    cmp.acordeonJornada = true;
+    expect(cmp.empleadoSeleccionado.jornada[2].hora_fin).toBe('14:00');
+  });
+
+  it('el contador de riesgo sobrevive al colapso', async () => {
+    // El contador vive en el HEADER, no en el body: hay que ver cuántos hay
+    // sin abrir el panel.
+    // TURNO_RIESGO es de ESTEBAN (miércoles, que no trabaja), por eso el
+    // empleado a seleccionar es Esteban y no Juan.
+    const { cmp } = montar({
+      getTurnosPendientesDe: () => Promise.resolve([TURNO_RIESGO]),
+    });
+    await cmp.seleccionarEmpleado(cloneEmpleado(EMP_ESTEBAN));
+    expect(cmp.turnosEnRiesgoLista.length).toBe(1);
+
+    cmp.acordeonRiesgo = false;
+    expect(cmp.turnosEnRiesgoLista.length).toBe(1);   // la lista sigue en el componente
+  });
+});
+
 /** Un turno de Juan el martes 01/12 (día que trabaja). */
 const TURNO_OK = turno({ id: 1, fecha: '2026-12-01', empleado_id: EMP_JUAN.id });
 /** Un turno de Esteban el MIÉRCOLES 02/12 (día que NO trabaja) → en riesgo. */

@@ -1,3 +1,11 @@
+// El detalle del empleado son 5 bloques y quedan muy largos: cada uno es un
+// acordeón, cerrado salvo el primero. Las reglas vienen del partial compartido
+// con Configuración para que las dos copias no se desincronicen.
+//
+// Ojo con la ruta: TRES `..` para llegar a src/ (mismo path que Configuración,
+// porque los dos componentes están en src/app/components/<nombre>/).
+@use '../../../styles/acordeon';
+
 .empleados-page {
   padding: 24px;
   max-width: 1100px;

@@ -29,6 +29,32 @@ function AusenciaVacia() {
   styleUrls: ['./empleados.scss']
 })
 export class EmpleadosComponent implements OnInit {
+  // ── Acordeones del detalle ──
+  // El detalle tiene 5 bloques y juntos ocupan varias pantallas. Cada uno es un
+  // acordeón: cerrado salvo "Datos", que arranca abierto (mismo criterio que
+  // Configuración, donde `acordeonDatos = true`).
+  //
+  // `Inactivar empleado` NO entra en un acordeón a propósito: es una acción
+  // destructiva y tiene que quedar a la vista, no escondida detrás de un click.
+  //
+  // El body del acordeón usa `display`, no `*ngIf`, así que colapsar NO pierde
+  // la edición a medio hacer (media jornada sin guardar, formulario de ausencia
+  // abierto). Si alguna vez se cambia a `*ngIf`, eso se pierde.
+  acordeonDatos = true;
+  acordeonJornada = false;
+  acordeonAusencias = false;
+  acordeonRiesgo = false;
+  acordeonComisiones = false;
+
+  /** Estado de acordeón limpio: solo "Datos" abierto. Se llama al seleccionar. */
+  private abrirSoloDatos() {
+    this.acordeonDatos = true;
+    this.acordeonJornada = false;
+    this.acordeonAusencias = false;
+    this.acordeonRiesgo = false;
+    this.acordeonComisiones = false;
+  }
+
   empleados: any[] = [];
   empleadoSeleccionado: any = null;
   mensaje = '';
@@ -142,6 +168,10 @@ export class EmpleadosComponent implements OnInit {
       _jornadaOrig: JSON.parse(JSON.stringify(jornada)),
       editando: false,
     };
+    // Cada empleado arranca con solo "Datos" abierto. Sin esto, el empleado
+    // anterior deja los cinco acordeones como los dejó y el que viene queda con
+    // un panel de 4 pantallas abierto sin haberlo pedido.
+    this.abrirSoloDatos();
     await this.cargarComisiones();
     await this.cargarComisionesPorServicio();
     await this.cargarAusencias();

@@ -46,36 +46,43 @@
         <button class="btn-cerrar" (click)="cerrarDetalle()">✕</button>
       </div>
 
-      <!-- Nombre -->
-      <div class="detalle-bloque">
-        <h4>Nombre</h4>
-        <div class="campo-editable">
-          <input type="text" [(ngModel)]="empleadoSeleccionado.nombre"
-            [readonly]="!empleadoSeleccionado.editando"
-            class="input-nombre" />
-          <button *ngIf="!empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = true">✏️</button>
-          <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarNombre()">💾</button>
-          <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = false">↩️</button>
-          <span *ngIf="empleadoSeleccionado.guardando" class="guardando-celda">⏳ Guardando…</span>
+      <!-- DATOS (nombre + teléfono) -->
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonDatos = !acordeonDatos">
+          <span>Datos</span>
+          <span class="chevron" [class.abierto]="acordeonDatos">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonDatos">
+          <div class="campo-editable">
+            <label class="label-campo">Nombre</label>
+            <input type="text" [(ngModel)]="empleadoSeleccionado.nombre"
+              [readonly]="!empleadoSeleccionado.editando"
+              class="input-nombre" />
+            <button *ngIf="!empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = true">✏️</button>
+            <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarNombre()">💾</button>
+            <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = false">↩️</button>
+            <span *ngIf="empleadoSeleccionado.guardando" class="guardando-celda">⏳ Guardando…</span>
+          </div>
+
+          <div class="campo-editable">
+            <label class="label-campo">Teléfono</label>
+            <input type="text" [(ngModel)]="empleadoSeleccionado.telefono"
+              [readonly]="!empleadoSeleccionado.editandoTelefono"
+              class="input-nombre" />
+            <button *ngIf="!empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = true">✏️</button>
+            <button *ngIf="empleadoSeleccionado.editandoTelefono && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarTelefono()">💾</button>
+            <button *ngIf="empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = false">↩️</button>
+          </div>
         </div>
       </div>
 
-      <!-- Teléfono -->
-      <div class="detalle-bloque">
-        <h4>Teléfono</h4>
-        <div class="campo-editable">
-          <input type="text" [(ngModel)]="empleadoSeleccionado.telefono"
-            [readonly]="!empleadoSeleccionado.editandoTelefono"
-            class="input-nombre" />
-          <button *ngIf="!empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = true">✏️</button>
-          <button *ngIf="empleadoSeleccionado.editandoTelefono && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarTelefono()">💾</button>
-          <button *ngIf="empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = false">↩️</button>
+      <!-- JORNADA -->
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonJornada = !acordeonJornada">
+          <span>Jornada</span>
+          <span class="chevron" [class.abierto]="acordeonJornada">›</span>
         </div>
-      </div>
-
-      <!-- Jornada -->
-      <div class="detalle-bloque">
-        <h4>Jornada</h4>
+        <div class="acordeon-body" [class.visible]="acordeonJornada">
         <div *ngIf="!empleadoSeleccionado.editandoJornada" class="dias-display">
           <span *ngFor="let dia of diasCompletos; let i = index"
             class="dia-badge"
@@ -118,19 +125,24 @@
             <button class="btn-icon" (click)="cancelarJornada()">↩️</button>
           </div>
         </div>
+        </div>
       </div>
 
-      <!-- Ausencias -->
-      <div class="detalle-bloque">
+      <!-- AUSENCIAS -->
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonAusencias = !acordeonAusencias">
+          <span>Ausencias</span>
+          <span class="chevron" [class.abierto]="acordeonAusencias">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonAusencias">
         <div class="bloque-header">
-          <h4>Ausencias</h4>
           <button class="btn-icon" (click)="mostrarFormAusencia ? mostrarFormAusencia = false : abrirFormAusencia()">
             {{ mostrarFormAusencia ? '↩️' : '➕' }}
           </button>
+          <span class="texto-ayuda">
+            Fechas donde no atiende. Con horario, bloquea solo esa franja del día.
+          </span>
         </div>
-        <p class="ayuda-jornada">
-          Fechas donde no atiende. Con horario, bloquea solo esa franja del día.
-        </p>
 
         <div *ngIf="mostrarFormAusencia" class="ausencia-form">
           <div class="fila">
@@ -184,15 +196,20 @@
           </div>
           <div *ngIf="ausencias.length === 0" class="vacio-sm">Sin ausencias cargadas</div>
         </div>
+        </div>
       </div>
 
-      <!-- Turnos en riesgo -->
-      <div class="detalle-bloque">
-        <div class="bloque-header">
-          <h4>
+      <!-- TURNOS EN RIESGO -->
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonRiesgo = !acordeonRiesgo">
+          <span>
             Turnos en riesgo
             <span *ngIf="turnosEnRiesgoLista.length" class="riesgo-contador">{{ turnosEnRiesgoLista.length }}</span>
-          </h4>
+          </span>
+          <span class="chevron" [class.abierto]="acordeonRiesgo">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonRiesgo">
+        <div class="bloque-header">
           <button class="btn-icon" (click)="cargarTurnosEnRiesgo()" title="Recalcular" [disabled]="cargandoRiesgo">🔄</button>
         </div>
         <p class="ayuda-jornada">
@@ -218,11 +235,16 @@
             Sin turnos en riesgo ✅
           </div>
         </div>
+        </div>
       </div>
 
-      <!-- Comisión por servicio -->
-      <div class="detalle-bloque">
-        <h4>Comisión por servicio</h4>
+      <!-- COMISIÓN POR SERVICIO -->
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonComisiones = !acordeonComisiones">
+          <span>Comisión por servicio</span>
+          <span class="chevron" [class.abierto]="acordeonComisiones">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonComisiones">
         <div class="campo-editable comision-general">
           <span class="label-general">General</span>
           <span *ngIf="!empleadoSeleccionado.editandoComision" class="comision-grande">{{ empleadoSeleccionado.comision_porcentaje }}%</span>
@@ -299,9 +321,11 @@
             </div>
           </div>
         </div>
+        </div>
       </div>
 
-      <!-- Inactivar -->
+      <!-- Inactivar: FUERA de los acordeones a propósito. Es una acción
+           destructiva y no puede quedar escondida detrás de un click. -->
       <div class="detalle-bloque eliminar-bloque" *ngIf="empleadoSeleccionado?.activo !== false">
         <button class="btn-eliminar" (click)="inactivarEmpleado()">🚫 Inactivar empleado</button>
       </div>

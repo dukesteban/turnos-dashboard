@@ -1,3 +1,16 @@
+// Las reglas de acordeón (.acordeon, .acordeon-header, .chevron,
+// .acordeon-body) viven en src/styles/_acordeon.scss y las comparte también
+// Empleados, para que las dos copias no se desincronicen.
+//
+// El `@use` tiene que estar ARRIBA de todo: Sass exige que las directivas
+// `@use` precedan a cualquier otra regla. Ponerlo junto a la sección que lo usa
+// compila mal con "rules must be written before any other rules".
+//
+// Son TRES `..` porque desde src/app/components/configuracion hay que subir a
+// src/app/components, después a src/app, y después a src. Con dos `..` el Sass
+// busca en src/app/styles/ y falla con "Can't find stylesheet to import".
+@use '../../../styles/acordeon';
+
 .config-page {
   padding: 24px;
   max-width: 800px;
@@ -402,45 +415,8 @@
 }
 
 // ── ACORDEONES ──────────────────────────────────────────────
-.acordeon {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-  margin-bottom: 12px;
-  overflow: hidden;
-}
-
-.acordeon-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: #1e293b;
-  user-select: none;
-  transition: background 0.15s;
-
-  &:hover { background: #f8fafc; }
-
-  .chevron {
-    font-size: 1.2rem;
-    color: #94a3b8;
-    transform: rotate(90deg);
-    transition: transform 0.2s;
-    display: inline-block;
-
-    &.abierto { transform: rotate(-90deg); }
-  }
-}
-
-.acordeon-body {
-  display: none;
-  padding: 0 20px 20px;
-
-  &.visible { display: block; }
-}
+// Las reglas vienen del partial compartido (ver el `@use` arriba de este
+// archivo): .acordeon, .acordeon-header, .chevron y .acordeon-body.
 
 .cambios-restantes {
   font-size: 0.85rem;
