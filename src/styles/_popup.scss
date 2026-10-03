@@ -56,6 +56,23 @@
   margin-top: 8px;
 }
 
+// Botón azul principal. Vive acá porque los popups lo usan y cada pantalla
+// mantenía su propia copia.
+.btn-primary {
+  padding: 9px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #1d4ed8;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover:not(:disabled) { background: #1e40af; }
+  &:disabled { opacity: 0.6; cursor: default; }
+}
+
 // ── BUSCAR Y CREAR DENTRO DE UN POPUP ───────────────────────
 //
 // El combo de clientes de "Nuevo turno": se escribe, sale una lista, y si no

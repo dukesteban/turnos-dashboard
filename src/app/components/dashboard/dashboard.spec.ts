@@ -447,3 +447,248 @@ describe('Dashboard — no consulta lo retirado', () => {
     expect(mock.llamadas.filter((c: string) => /puesto/i.test(c))).toEqual([]);
   });
 });
+
+describe('Dashboard — buscador de cliente del modal de Nuevo turno', () => {
+  // Este buscador antes llamaba `supabase.buscarClientes()`, que era una
+  // consulta a la base POR CADA TECLA con `.ilike()`. El `.ilike()` de Postgres
+  // además no ignora acentos, así que "maria" no encontraba a "María Gómez":
+  // un bug de búsqueda con un costo de red por pulsación.
+  //
+  // Ahora carga la lista una vez con `getClientes()` y filtra en memoria con
+  // `contiene`. Estos tests fijan las dos cosas.
+
+  const CLIENTES = [
+    { id: 1, nombre: 'Daniel Prueba', telefonos: [{ id: 10, telefono: '3764123456' }], activo: true },
+    { id: 2, nombre: 'María Gómez', telefonos: [{ id: 20, telefono: '3815550000' }], activo: true },
+    { id: 3, nombre: 'Jose Luis Diaz', telefonos: [], activo: true },
+    { id: 4, nombre: 'Cliente Inactivo', telefonos: [], activo: false },
+  ];
+
+  /** Monta con fixture, para poder afirmar sobre el DOM. */
+  function montarBuscador(over: Record<string, any> = {}) {
+    const mock = crearSupabaseMock({ getClientes: () => Promise.resolve(CLIENTES), ...over });
+    TestBed.configureTestingModule({
+      providers: [{ provide: SupabaseService, useValue: mock }],
+    });
+    const fixture = TestBed.createComponent(DashboardComponent);
+    return { cmp: fixture.componentInstance, mock, fixture };
+  }
+
+  async function listo(over: Record<string, any> = {}) {
+    const r = montarBuscador(over);
+    r.cmp.abrirModalNuevoTurno();
+    await settle();
+    return r;
+  }
+
+  /**
+   * Escribe en el campo DE VERDAD. Asignarle la propiedad al componente tira
+   * NG0100: el [(ngModel)] ya fue chequeado y al cambiar el valor de un
+   * detectChanges al siguiente Angular lo detecta como cambio en vivo.
+   */
+  function tocar(fixture: any, valor: string) {
+    const input = fixture.nativeElement.querySelector(
+      '.popup-overlay input[placeholder*="Buscar cliente"]'
+    );
+    input.value = valor;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  it('abrir el modal carga los clientes UNA vez', async () => {
+    const { cmp, mock } = await listo();
+    expect(cmp.todosLosClientes.length).toBe(3);
+    expect(mock.llamadas.filter((c: string) => c === 'getClientes').length).toBe(1);
+  });
+
+  it('al reabrirlo NO vuelve a pedir la lista', async () => {
+    // Reabrir el modal es la operación más común de la pantalla: pedir la lista
+    // entera cada vez es justo lo que había que evitar.
+    const { cmp, mock } = await listo();
+    cmp.abrirModalNuevoTurno();
+    await settle();
+    expect(mock.llamadas.filter((c: string) => c === 'getClientes').length).toBe(1);
+  });
+
+  it('NO consulta la base por tecla', async () => {
+    const { cmp, mock } = await listo();
+    const antes = mock.llamadas.filter((c: string) => c === 'getClientes').length;
+    for (const q of ['d', 'da', 'dan', 'danie', 'daniel']) {
+      cmp.busquedaCliente = q;
+      cmp.clientesBuscados;
+    }
+    expect(mock.llamadas.filter((c: string) => c === 'getClientes').length).toBe(antes);
+  });
+
+  it('filtra por fragmento del nombre', async () => {
+    const { cmp } = await listo();
+    cmp.busquedaCliente = 'dan';
+    expect(cmp.clientesBuscados.map((c: any) => c.id)).toEqual([1]);
+  });
+
+  it('ignora acentos y mayúsculas, a diferencia del .ilike() de Postgres', async () => {
+    const { cmp } = await listo();
+    for (const q of ['maria', 'MARIA', 'María', 'jose', 'JOSE', 'DIAZ', 'díaz']) {
+      cmp.busquedaCliente = q;
+      expect(cmp.clientesBuscados.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('busca también por teléfono', async () => {
+    const { cmp } = await listo();
+    cmp.busquedaCliente = '3815';
+    expect(cmp.clientesBuscados.map((c: any) => c.id)).toEqual([2]);
+  });
+
+  it('NO ofrece clientes inactivos', async () => {
+    const { cmp } = await listo();
+    cmp.busquedaCliente = 'inactivo';
+    expect(cmp.clientesBuscados).toEqual([]);
+  });
+
+  it('sin texto no hay resultados', async () => {
+    const { cmp } = await listo();
+    cmp.busquedaCliente = '   ';
+    expect(cmp.clientesBuscados).toEqual([]);
+  });
+
+  it('el resultado se limita a 8 para no alargar el popup', async () => {
+    const muchos = Array.from({ length: 30 }, (_, i) => ({
+      id: i + 1, nombre: 'Cliente ' + i, telefonos: [], activo: true,
+    }));
+    const { cmp } = await listo({ getClientes: () => Promise.resolve(muchos) });
+    cmp.busquedaCliente = 'cliente';
+    expect(cmp.clientesBuscados.length).toBe(8);
+  });
+
+  it('si la carga falla, se puede igual crear el cliente', async () => {
+    // Si reventara, el modal de Nuevo turno quedaría inutilizable sin poder dar
+    // de alta al cliente que estabas buscando.
+    const { cmp } = await listo({ getClientes: () => Promise.reject(new Error('red')) });
+    expect(cmp.todosLosClientes).toEqual([]);
+    expect(cmp.cargandoClientesBusqueda).toBe(false);
+  });
+
+  it('el cliente recién creado aparece al buscarlo de nuevo', async () => {
+    // Como el buscador filtra contra la lista en memoria, si el nuevo no se
+    // suma no aparece hasta recargar la página.
+    let guardado: any = null;
+    const { cmp } = await listo({
+      crearCliente: (d: any) => { guardado = d; return Promise.resolve({ id: 99, nombre: d }); },
+    });
+    cmp.nombreNuevoCliente = 'Daniel Nuevo';
+    await cmp.crearYSeleccionarCliente();
+
+    expect(guardado).toBeTruthy();
+    expect(cmp.todosLosClientes.some((c: any) => c.nombre === guardado)).toBe(true);
+    // El punto: aparece al buscarlo.
+    cmp.busquedaCliente = 'daniel nue';
+    expect(cmp.clientesBuscados.map((c: any) => c.id)).toContain(99);
+    // Y la lista sigue ordenada por nombre.
+    const nombres = cmp.todosLosClientes.map((c: any) => c.nombre);
+    expect(nombres).toEqual([...nombres].sort((a: string, b: string) => a.localeCompare(b, 'es')));
+  });
+
+  it('elegir un cliente NO borra el texto, solo lo completa', async () => {
+    // Si se limpiara, habría que escribir de nuevo para cambiar de cliente.
+    const { cmp } = await listo();
+    cmp.seleccionarClienteNuevo({ id: 2, nombre: 'María Gómez', telefonos: [] });
+    expect(cmp.clienteSeleccionadoNuevo.id).toBe(2);
+    expect(cmp.busquedaCliente).toBe('María Gómez');
+  });
+
+  it('el DOM muestra los resultados filtrados, sin consulta nueva', async () => {
+    const { fixture, mock } = await listo();
+    fixture.detectChanges();
+    const antes = mock.llamadas.length;
+
+    // Se escribe en el campo de verdad, no se le asigna la propiedad: asignarla
+    // dispara NG0100 porque el `[(ngModel)]` ya se había chequeado.
+    const input = fixture.nativeElement.querySelector(
+      '.popup-overlay input[placeholder*="Buscar cliente"]'
+    );
+    input.value = 'maria';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const popup = fixture.nativeElement.querySelector('.popup-overlay');
+    expect(popup.querySelectorAll('.dropdown-busqueda .dropdown-item').length).toBe(1);
+    expect(popup.textContent).toContain('María Gómez');
+    // Lo importante: ni una llamada más a la base.
+    expect(mock.llamadas.length).toBe(antes);
+  });
+
+  it('elegir un cliente OCULTA el campo, no deja el nombre editable', async () => {
+    // Si el input quedara editable con el nombre ya cargado se desincronizaba
+    // de `clienteSeleccionadoNuevo`: se veía "el cliente elegido" y se escribia otra
+    // cosa, pero se guardaba Pamela.
+    const { cmp, fixture } = await listo();
+    fixture.detectChanges();
+    cmp.seleccionarClienteNuevo({ id: 1, nombre: 'Pamela Agüero', telefonos: [] });
+    fixture.detectChanges();
+
+    const popup = fixture.nativeElement.querySelector('.popup-overlay');
+    expect(popup.querySelectorAll('input[placeholder*="Buscar cliente"]').length).toBe(0);
+    expect(popup.querySelectorAll('.seleccionado-ok').length).toBe(1);
+    // Y el desplegable no queda abierto abajo del OK.
+    expect(popup.querySelectorAll('.dropdown-busqueda').length).toBe(0);
+    expect(popup.querySelectorAll('.crear-inline').length).toBe(0);
+  });
+
+  it('"Cambiar" vuelve al buscador y deselecciona', async () => {
+    const { cmp, fixture } = await listo();
+    fixture.detectChanges();
+    cmp.seleccionarClienteNuevo({ id: 1, nombre: 'Pamela Agüero', telefonos: [] });
+    fixture.detectChanges();
+
+    const popup = fixture.nativeElement.querySelector('.popup-overlay');
+    popup.querySelector('.seleccionado-ok button').click();
+    fixture.detectChanges();
+
+    expect(cmp.clienteSeleccionadoNuevo).toBeNull();
+    expect(cmp.busquedaCliente).toBe('');
+    expect(popup.querySelectorAll('input[placeholder*="Buscar cliente"]').length).toBe(1);
+  });
+
+  it('el desplegable muestra el telefono y al elegir queda el nombre', async () => {
+    // El desplegable muestra el telefono; al elegir desaparece, asi que el
+    // nombre solo tiene que quedar legible en el OK.
+    const { cmp, fixture } = await listo();
+    fixture.detectChanges();
+    tocar(fixture, 'daniel');
+
+    const popup = fixture.nativeElement.querySelector('.popup-overlay');
+    expect(popup.textContent).toContain('3764123456');
+
+    cmp.seleccionarClienteNuevo(cmp.clientesBuscados[0]);
+    fixture.detectChanges();
+    expect(popup.textContent).toContain('Daniel Prueba');
+  });
+
+  it('crear un cliente lo deja ELEGIDO y cierra el buscador', async () => {
+    // Mismo criterio que el proveedor del popup de compra: crear no obliga a
+    // buscarlo de nuevo.
+    let creado: any = null;
+    const { cmp, fixture } = await listo({
+      crearCliente: (d: any) => { creado = d; return Promise.resolve({ id: 99, nombre: d }); },
+    });
+    // Sin detectChanges en el medio a proposito: si se renderiza el form
+    // abierto y despues el metodo lo cierra, Angular ve el cambio como
+    // pasando en medio de un ciclo y tira NG0100 en modo desarrollo.
+    cmp.busquedaCliente = 'Cliente Inexistente';
+    cmp.mostrarFormNuevoCliente = true;
+    cmp.nombreNuevoCliente = 'Cliente Inexistente';
+
+    await cmp.crearYSeleccionarCliente();
+    fixture.detectChanges();
+
+    const popup = fixture.nativeElement.querySelector('.popup-overlay');
+    expect(creado).toBeTruthy();
+    expect(cmp.clienteSeleccionadoNuevo.id).toBe(99);
+    // El buscador desaparece y queda el OK con el nombre: no hay que buscarlo
+    // de nuevo para seguir con el turno.
+    expect(popup.querySelectorAll('input[placeholder*="Buscar cliente"]').length).toBe(0);
+    expect(popup.querySelectorAll('.seleccionado-ok').length).toBe(1);
+    expect(cmp.mostrarFormNuevoCliente).toBe(false);
+  });
+});

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
 import { nombreMes } from '../../utils/fechas';
+import { contiene } from '../../utils/texto';
 
 @Component({
   selector: 'app-dashboard',
@@ -75,7 +76,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // Nuevo turno
   mostrarModalNuevoTurno = false;
-  clientesBuscados: any[] = [];
+  /** Lista completa para filtrar en memoria. La carga `cargarClientesBusqueda`. */
+  todosLosClientes: any[] = [];
+  cargandoClientesBusqueda = false;
   clienteSeleccionadoNuevo: any = null;
   busquedaCliente = '';
   nuevoTurnoFecha = '';
@@ -490,19 +493,63 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.servicios.find(s => s.id == this.nuevoTurnoServicioId) || null;
   }
 
-  async buscarClientesNuevo() {
-    if (!this.busquedaCliente.trim()) {
-      this.clientesBuscados = [];
-      return;
+  /**
+   * Resultados de la búsqueda de cliente del modal de Nuevo turno.
+   *
+   * Es un GETTER y no un campo: filtra contra `todosLosClientes` cada vez que se
+   * lee. Con un campo había que acordarse de recalcularlo, y si la lista se
+   * cargaba tarde el dropdown quedaba vacío aunque el cliente estuviera.
+   *
+   * Filtra por NOMBRE y por TELÉFONO, sin acentos. Antes-usaba
+   * `supabase.buscarClientes()`, que era una consulta a la base **por cada tecla**
+   * con `.ilike()`, que además no ignora acentos: buscar "maria" no encontraba a
+   * "María Gómez".
+   */
+  get clientesBuscados(): any[] {
+    const q = this.busquedaCliente.trim();
+    if (!q) return [];
+    return this.todosLosClientes
+      .filter((c: any) =>
+        contiene(c.nombre, q) ||
+        c.telefonos?.some((t: any) => contiene(t.telefono, q))
+      )
+      .slice(0, 8);
+  }
+
+  /**
+   * Carga la lista completa de clientes UNA vez, para poder filtrar en memoria.
+   *
+   * Solo trae los activos: el alta de un turno para un cliente dado de baja no
+   * tiene sentido. Es la misma lista que usa la pantalla de Clientes.
+   */
+  async cargarClientesBusqueda(forzar = false) {
+    if (this.todosLosClientes.length && !forzar) return;
+    this.cargandoClientesBusqueda = true;
+    this.cdr.detectChanges();
+    try {
+      this.todosLosClientes = (await this.supabase.getClientes())
+        .filter((c: any) => c.activo !== false);
+    } catch (e) {
+      // Si falla, el buscador queda sin resultados y se puede crear el cliente.
+      this.todosLosClientes = [];
     }
-    this.clientesBuscados = await this.supabase.buscarClientes(this.busquedaCliente);
+    this.cargandoClientesBusqueda = false;
     this.cdr.detectChanges();
   }
 
   seleccionarClienteNuevo(cliente: any) {
     this.clienteSeleccionadoNuevo = cliente;
     this.busquedaCliente = cliente.nombre;
-    this.clientesBuscados = [];
+    this.cdr.detectChanges();
+  }
+
+  /** Deseleccionar, para elegir o crear otro cliente. */
+  quitarClienteNuevo() {
+    this.clienteSeleccionadoNuevo = null;
+    this.busquedaCliente = '';
+    this.errorNuevoTurno = '';
+    this.mostrarFormNuevoCliente = false;
+    this.nombreNuevoCliente = '';
     this.cdr.detectChanges();
   }
 
@@ -510,7 +557,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.mostrarModalNuevoTurno = true;
     this.clienteSeleccionadoNuevo = null;
     this.busquedaCliente = '';
-    this.clientesBuscados = [];
     this.nuevoTurnoFecha = '';
     this.nuevoTurnoHora = '';
     this.nuevoTurnoServicioId = null;
@@ -521,6 +567,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (!this.servicios.length) this.supabase.getServicios().then(s => { this.servicios = s; this.cdr.detectChanges(); });
     if (!this.horarios.length) this.supabase.getHorarios().then(h => { this.horarios = h; this.cdr.detectChanges(); });
     if (!this.empleados.length) this.supabase.getEmpleados().then(e => { this.empleados = e; this.cdr.detectChanges(); });
+    // Los clientes se cargan una vez y después se filtra en memoria. La segunda
+    // vez que se abre el modal no vuelve a pedir la lista.
+    this.cargarClientesBusqueda();
     this.cargarComisionesPorServicio();
     this.cdr.detectChanges();
   }
@@ -780,9 +829,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     try {
       const cliente = await this.supabase.crearCliente(nombreNorm);
-      this.seleccionarClienteNuevo({ ...cliente, telefonos: [] });
+      const nuevo = { ...cliente, telefonos: [], activo: true };
+      // Se suma a la lista en memoria: como el buscador filtra contra ella, si no
+      // el cliente recién creado no aparecería al buscarlo de nuevo hasta
+      // recargar la página.
+      this.todosLosClientes = [...this.todosLosClientes, nuevo]
+        .sort((a: any, b: any) => a.nombre.localeCompare(b.nombre, 'es'));
+      // El form inline se cierra ANTES de seleccionar. Al revés, `seleccionar`
+      // dispara un detectChanges con el form todavía abierto y Angular lo
+      // detecta como cambio en vivo (NG0100) en modo desarrollo.
       this.mostrarFormNuevoCliente = false;
       this.nombreNuevoCliente = '';
+      this.seleccionarClienteNuevo(nuevo);
     } catch (e) {
       this.errorNuevoTurno = '❌ Error al crear el cliente.';
     }

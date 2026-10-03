@@ -106,7 +106,6 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
     ]),
     getTelefonosPorCliente: () => Promise.resolve({}),
     calcularComisiones: vacio,
-    buscarClientes: () => Promise.resolve([]),
 
     // --- disponibilidad ---
     getEmpleadosDisponibles: () => Promise.resolve([]),

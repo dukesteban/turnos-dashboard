@@ -561,20 +561,7 @@
   font-family: inherit;
 }
 
-.btn-primary {
-  padding: 9px 14px;
-  border: none;
-  border-radius: 8px;
-  background: #1d4ed8;
-  color: white;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-
-  &:hover:not(:disabled) { background: #1e40af; }
-  &:disabled { opacity: 0.6; cursor: default; }
-}
+// `.btn-primary` vive en `src/styles/_popup.scss` (partial compartido).
 
 .btn-icon {
   background: none;

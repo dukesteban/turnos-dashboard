@@ -620,16 +620,6 @@ export class SupabaseService {
     if (error2) throw error2;
   }
 
-  async buscarClientes(query: string) {
-    const { data, error } = await this.supabase
-      .from('clientes')
-      .select('*, telefonos(*)')
-      .ilike('nombre', `%${query}%`)
-      .limit(5);
-    if (error) throw error;
-    return data;
-  }
-
   async fusionarClientes(principalId: number, duplicadoId: number) {
     // 1. Obtener teléfonos del principal para evitar duplicados
     const { data: telsPrincipal } = await this.supabase
