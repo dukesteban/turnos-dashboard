@@ -465,7 +465,11 @@
                   <input type="text" [(ngModel)]="nombreNuevoProveedor"
                          (ngModelChange)="mensajeError = ''"
                          placeholder="Nombre del proveedor" />
-                  <button class="btn-atendido" [disabled]="guardando"
+                  <!-- `.btn-primary` (azul), NO `.btn-atendido`: ese verde es el
+                       del pie del popup, el de "Guardar compra". Acá el botón
+                       crea una fila en un form embebido, y tiene que verse igual
+                       al "Crear" del cliente en "Nuevo turno". -->
+                  <button class="btn-primary" [disabled]="guardando"
                           (click)="crearYSeleccionarProveedor()">Crear</button>
                   <button class="btn-secundario-sm"
                           (click)="mostrarFormNuevoProveedor = false; mensajeError = ''">Cancelar</button>

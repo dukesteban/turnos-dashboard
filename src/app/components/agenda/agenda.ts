@@ -450,8 +450,19 @@ claseBloque(turno: any, mini: boolean): string {
     return this.vista === 'dia' ? 240 : 92;
   }
 
+  /**
+   * Cuánto ocupa CADA columna de empleado, contando el margen de los dos lados.
+   *
+   * El margen real lo ponen `.columna-header` y `.columna-fondo-celda` con
+   * `margin: 0 GAP_COLUMNApx`, o sea 3px de cada lado = 6px. Antes esta cuenta
+   * decía 4, y por eso `anchoColumnas` pedía 2px menos por columna de los que
+   * la grilla necesita de verdad: al llegar al tope del scroll horizontal las
+   * columnas quedaban 2px más angostas de lo que el cálculo promete.
+   *
+   * Sale del MISMO número que usa `posicionTurno`, no de un literal suelto.
+   */
   get gapColumna(): number {
-    return 4;
+    return GAP_COLUMNA * 2;
   }
 
   get anchoColumnas(): string {

@@ -528,7 +528,13 @@ textarea {
   top: 0;
   left: 0;
   right: 0;
-  height: 42px;
+  /* 44 y 20, los MISMOS números que `H_HEADER_COLUMNAS` / `H_HEADER_MINI` en el
+     componente. Antes el CSS decía 42 y 22: 2px de diferencia, y como el
+     `offsetHeader` de TypeScript es el que ubica los turnos y las bandas de
+     fondo, quedaba una franja blanca entre el borde del header y el primer
+     turno. La constante manda porque es la que participa del cálculo de
+     posiciones; el CSS tiene que acompañar. */
+  height: 44px;
   display: flex;
   /* SIN padding. Antes tenía `0 2px`, que corría el header 2px a la derecha
      respecto de los `.bloque-turno` y de las bandas de fondo: los tres son
@@ -541,7 +547,7 @@ textarea {
   z-index: 5;
 
   &.mini {
-    height: 22px;
+    height: 20px;
   }
 }
 
