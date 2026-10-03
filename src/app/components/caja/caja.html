@@ -47,8 +47,11 @@
     </div>
     <div class="caja-fila total" [class.negativo]="balance < 0">
       <span class="caja-label">Queda en caja</span>
-      <span class="caja-valor" [class.verde]="balance >= 0" [class.rojo]="balance < 0">
-        ${{ balance | number }}
+      <!-- El signo va por `signoDiferencia` y no por el pipe: el pipe pone el menos
+           donde le queda, que es `$-42.000`. Con el signo adelante queda
+           `−$42.000`, igual que las dos filas de arriba. -->
+      <span class="caja-valor" [ngClass]="claseDiferencia(balance)">
+        {{ signoDiferencia(balance) }}${{ absDiferencia(balance) | number }}
       </span>
     </div>
     <p *ngIf="balance < 0" class="caja-nota">
@@ -208,7 +211,12 @@
             <span></span>
             <span>${{ totalSugerido | number:'1.0-0' }}</span>
             <span>${{ totalPagadoEmpleados | number:'1.0-0' }}</span>
-            <span></span>
+            <!-- Antes vacía, y se notaba al lado de las otras tres columnas con
+                 número. Usa los mismos getters que las filas, así que no puede
+                 desincronizarse del detalle. -->
+            <span class="celda-diferencia" [ngClass]="claseDiferencia(totalDiferencia)">
+              {{ totalDiferencia === 0 ? '—' : signoDiferencia(totalDiferencia) + '$' + (absDiferencia(totalDiferencia) | number:'1.0-0') }}
+            </span>
           </div>
         </div>
       </div>

@@ -110,7 +110,10 @@ export class CajaComponent implements OnInit {
 
   /** El signo va adelante del `$`. Vacío en positivo. */
   signoDiferencia(d: number): string {
-    return d < 0 ? '-' : '';
+    // Signo tipográfico U+2212, el mismo que usan las filas del resumen. El
+    // guion ASCII se vería casi igual pero es otro carácter: si someday se
+    // busca el texto o se compara, no matchean.
+    return d < 0 ? '−' : '';
   }
 
   /** Para que el pipe `number` no reciba el negativo y saque el menos solo. */
@@ -302,6 +305,17 @@ export class CajaComponent implements OnInit {
   /** Total de lo sugerido. Aparece en la fila total de la tabla. */
   get totalSugerido(): number {
     return this.comisionesPeriodo.reduce((s: number, c: any) => s + (Number(c.sugerido) || 0), 0);
+  }
+
+  /**
+   * La diferencia de TODOS los empleados, para la fila de Total.
+   *
+   * Se arma con los mismos dos getters que ya summing las filas de arriba, así
+   * que no puede desincronizarse de la tabla: si el detalle no cierra, el total
+   * tampoco.
+   */
+  get totalDiferencia(): number {
+    return this.totalPagadoEmpleados - this.totalSugerido;
   }
 
   /** Compras agrupadas por proveedor, de mayor a menor. */

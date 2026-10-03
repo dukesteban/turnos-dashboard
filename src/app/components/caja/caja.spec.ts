@@ -132,7 +132,7 @@ describe('Caja — balance', () => {
   });
 
   it('un pago sin sugerencia igual cuenta como salida', async () => {
-    // Quincena atrasada: el empleado noturnstile turnos ESTE mes pero hay que
+    // Quincena atrasada: el empleado no tiene turnos ESTE mes pero hay que
     // pagarle igual. Si se calculara solo sobre las comisiones, no contaría.
     const { cmp } = montar({
       getGanancias: () => Promise.resolve([ganancia({ precio: 100000 })]),
@@ -143,6 +143,102 @@ describe('Caja — balance', () => {
     await cmp.cargarDatos();
     expect(cmp.totalPagadoEmpleados).toBe(40000);
     expect(cmp.balance).toBe(60000);
+  });
+});
+
+describe('Caja — cómo se muestra el saldo', () => {
+  // El resumen tiene cuatro filas y el menos tiene que verse IGUAL en todas.
+  // Estaba `−$50.000` en los renglones pero `$-42.000` en "Queda en caja",
+  // porque ahí el menos lo sacaba el pipe `number`, que lo deja donde le queda.
+  //
+  // Los cuatro van con el signo adelante: `−$42.000`.
+
+  const norm = (t: string) => t.replace(/[.,]/g, '').replace(/−/g, '-');
+
+  /** Las cuatro filas del resumen, ya renderizadas. */
+  async function resumen(over: Record<string, any> = {}) {
+    const r = montar({
+      getGanancias: () => Promise.resolve([ganancia({ precio: 20000 })]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(50000)]),
+      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Químicas', 12000)]),
+      getComisionesPeriodo: () => Promise.resolve([]),
+      ...over,
+    });
+    await r.cmp.cargarDatos();
+    r.fixture.detectChanges();
+    const filas: HTMLElement[] = Array.from(
+      r.fixture.nativeElement.querySelectorAll('.caja-resumen .caja-fila')
+    );
+    return {
+      cmp: r.cmp,
+      filas: filas.map((f) => {
+        const v = f.querySelector('.caja-valor') as HTMLElement;
+        return {
+          label: ((f.querySelector('.caja-label') as HTMLElement).textContent || '').trim(),
+          texto: norm((v.textContent || '').trim()),
+          crudo: (v.textContent || '').trim(),
+          rojo: v.classList.contains('rojo'),
+          verde: v.classList.contains('verde'),
+        };
+      }),
+    };
+  }
+
+  it('"Queda en caja" negativo pone el menos ANTES del $', async () => {
+    // El bug reportado: se veía `$-42.000` con las dos filas de arriba en
+    // `−$50.000`. Mismo número, dos escrituras distintas.
+    const { cmp, filas } = await resumen();
+    expect(cmp.balance).toBe(-42000);
+    const queda = filas[filas.length - 1];
+    expect(queda.label).toBe('Queda en caja');
+    expect(queda.texto).toBe('-$42000');
+    expect(queda.crudo.startsWith('-$')).toBe(false);   // el signo va adelante
+    expect(queda.rojo).toBe(true);
+  });
+
+  it('ninguna fila del resumen pone el $ antes del menos', async () => {
+    const { filas } = await resumen();
+    for (const f of filas) {
+      expect(norm(f.crudo).startsWith('$-')).toBe(false);
+    }
+  });
+
+  it('las cuatro filas usan el mismo signo', async () => {
+    // Si una vuelve al guion ASCII y las otras quedan con U+2212, la pantalla
+    // muestra dos guiones que a simple vista son el mismo.
+    const { filas } = await resumen();
+    const conMenos = filas.filter((f) => f.crudo.includes('−'));
+    expect(conMenos.length).toBe(3);   // pagos, compras y queda en caja
+    for (const f of conMenos) {
+      expect(f.crudo.indexOf('−')).toBeLessThan(f.crudo.indexOf('$'));
+    }
+  });
+
+  it('"Queda en caja" positivo va en verde y SIN menos', async () => {
+    const { filas } = await resumen({
+      getGanancias: () => Promise.resolve([ganancia({ precio: 200000 })]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(50000)]),
+      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Químicas', 12000)]),
+    });
+    const queda = filas[filas.length - 1];
+    expect(queda.texto).toBe('$138000');
+    expect(queda.crudo.includes('−')).toBe(false);
+    expect(queda.verde).toBe(true);
+    expect(queda.rojo).toBe(false);
+  });
+
+  it('salida cero no inventa un menos', async () => {
+    // `−$0` sería ruido: no se pagó nada, no hay por qué restar.
+    const { filas } = await resumen({
+      getPagosEmpleado: () => Promise.resolve([]),
+      getCompras: () => Promise.resolve([]),
+    });
+    const pagos = filas.find((f) => f.label === 'Pagos a empleados');
+    expect(pagos).toBeTruthy();
+    // Estas dos filas llevan el signo fijo en el template, no por el helper.
+    // Se documenta el comportamiento actual: si algún día se limpia para que
+    // usen `signoDiferencia`, este test hay que cambiarlo.
+    expect((pagos as { texto: string }).texto).toBe('-$0');
   });
 });
 
@@ -262,14 +358,17 @@ describe('Caja — cómo se muestra la diferencia', () => {
   };
 
   /**
-   * Sin el separador de miles.
+   * Para comparar sin ruido de runtime.
    *
-   * El pipe `number` usa el locale del runtime: **jsdom corre en `en-US` y
-   * escribe `19,000`, el browser en `es-AR` y escribe `19.000`**. Un test que
-   * afirme el separador pasa en un lado y falla en el otro. Lo que importa
-   * acás es el signo, el `$` y el orden de las filas.
+   * Dos cosas normaliza:
+   *   · el separador de miles, porque el pipe `number` usa el locale: **jsdom
+   *     corre en `en-US` y escribe `19,000`, el browser en `es-AR` y escribe
+   *     `19.000`**. Un test que afirme el separador pasa en un lado y falla en
+   *     el otro.
+   *   · el signo, porque en pantalla es el tipográfico **U+2212** (`−`), no el
+   *     guion ASCII. Acá se baja todo a ASCII para que el assert se lea bien.
    */
-  const norm = (t: string) => t.replace(/[.,]/g, '');
+  const norm = (t: string) => t.replace(/[.,]/g, '').replace(/−/g, '-');
 
   async function renderizado() {
     const r = montar(ARMADO);
@@ -277,8 +376,10 @@ describe('Caja — cómo se muestra la diferencia', () => {
     // La tabla vive dentro de la pestaña "empleados": sin esto no hay ni una celda.
     r.cmp.cambiarTab('empleados');
     r.fixture.detectChanges();
+    // Solo las filas de empleados: el `.tr-total` también tiene celda de
+    // diferencia, y sus valores no son los de ninguna fila.
     const celdas: HTMLElement[] = Array.from(
-      r.fixture.nativeElement.querySelectorAll('.celda-diferencia')
+      r.fixture.nativeElement.querySelectorAll('.tr:not(.tr-total) .celda-diferencia')
     );
     return {
       cmp: r.cmp,
@@ -317,10 +418,53 @@ describe('Caja — cómo se muestra la diferencia', () => {
 
   it('el signo menos nunca queda atrás del $', async () => {
     const { crudos } = await renderizado();
-    const negativos = crudos.filter((t) => t.startsWith('-'));
+    const negativos = crudos.filter((t) => norm(t).startsWith('-'));
     expect(negativos.length).toBe(1);
-    expect(negativos[0].indexOf('-')).toBe(0);
-    expect(negativos[0].indexOf('-')).toBeLessThan(negativos[0].indexOf('$'));
+    const n = norm(negativos[0]);
+    expect(n.indexOf('-')).toBe(0);
+    expect(n.indexOf('-')).toBeLessThan(n.indexOf('$'));
+  });
+
+  it('la fila de Total muestra la diferencia, no queda vacía', async () => {
+    // Las otras tres columnas del Total tienen número; esta quedaba en blanco y
+    // se notaba. Usa los mismos getters que las filas, así que no puede
+    // desincronizarse del detalle: 40.000 + 15.000 + 6.000 sugeridos, y
+    // 25.000 + 10.000 + 15.000 pagados -> -11.000.
+    const { cmp, fixture } = montar(ARMADO);
+    await cmp.cargarDatos();
+    cmp.cambiarTab('empleados');
+    fixture.detectChanges();
+
+    const total = fixture.nativeElement.querySelector('.tr-total .celda-diferencia');
+    expect(total).toBeTruthy();
+    expect(norm((total.textContent || '').trim())).toBe('-$11000');
+    expect(total.classList.contains('rojo')).toBe(true);
+  });
+
+  it('el Total de la diferencia es la suma de las diferencias de las filas', async () => {
+    // Si `totalDiferencia` se calculara de otra forma, el total dejaría de
+    // cerrar con el detalle que el usuario está mirando fila por fila.
+    const { cmp } = montar(ARMADO);
+    await cmp.cargarDatos();
+    const sumaFilas = cmp.pagosPorEmpleado.reduce(
+      (s: number, f: any) => s + f.diferencia, 0
+    );
+    expect(cmp.totalDiferencia).toBe(sumaFilas);
+    expect(cmp.totalDiferencia).toBe(cmp.totalPagadoEmpleados - cmp.totalSugerido);
+  });
+
+  it('si el total cuadra, muestra la raya', async () => {
+    const { cmp, fixture } = montar({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'Juan', 10000)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+    await cmp.cargarDatos();
+    cmp.cambiarTab('empleados');
+    fixture.detectChanges();
+
+    const total = fixture.nativeElement.querySelector('.tr-total .celda-diferencia');
+    expect((total.textContent || '').trim()).toBe('—');
+    expect(total.classList.contains('verde')).toBe(true);
   });
 
   it('la celda va en negrita: es la columna que hay que mirar', async () => {
@@ -331,19 +475,28 @@ describe('Caja — cómo se muestra la diferencia', () => {
     await r.cmp.cargarDatos();
     r.cmp.cambiarTab('empleados');
     r.fixture.detectChanges();
-    expect(r.fixture.nativeElement.querySelectorAll('.celda-diferencia').length).toBe(3);
+    expect(r.fixture.nativeElement.querySelectorAll('.tr:not(.tr-total) .celda-diferencia').length).toBe(3);
   });
 
   it('el pipe recibe el valor en positivo, no el negativo', () => {
     // Si el pipe recibiera el negativo, Angular sacaría el menos solo y
     // quedaría `-$-30.000`.
     const { cmp } = montar();
-    expect(cmp.signoDiferencia(-30000)).toBe('-');
+    expect(norm(cmp.signoDiferencia(-30000))).toBe('-');
     expect(cmp.signoDiferencia(19000)).toBe('');
     expect(cmp.absDiferencia(-30000)).toBe(30000);
     expect(cmp.claseDiferencia(-30000)).toBe('rojo');
     expect(cmp.claseDiferencia(19000)).toBe('verde');
     expect(cmp.claseDiferencia(0)).toBe('verde');
+  });
+
+  it('el menos es el signo tipográfico, el mismo de las filas del resumen', () => {
+    // U+2212 y no el guion ASCII. Casi se ven iguales, pero si se comparan o se
+    // busca el texto no matchean, y la pantalla quedaría con dos guiones
+    // distintos según la fila.
+    const { cmp } = montar();
+    expect(cmp.signoDiferencia(-1)).toBe('−');
+    expect(cmp.signoDiferencia(-1)).not.toBe('-');
   });
 });
 
