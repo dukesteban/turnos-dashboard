@@ -323,6 +323,18 @@
   }
 }
 
+// Las secciones de cada pestaña. El gap va acá y NO en `.seccion`, porque
+// `.grid-inferior` (pestaña de Ingresos) ya tiene su propio `gap: 20px` y
+//anuts una margen ahí sumaría espacio de más entre las tarjetas.
+//
+// Sin esto las tarjetas quedaban pegadas: `.seccion` nunca tuvo margin-bottom y
+// en Ingresos no hacía falta porque vivían dentro de un grid con gap.
+.tab-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 // ── RESUMEN DE CAJA ──────────────────────────────────────────
 // Va arriba de las pestañas, no dentro de ninguna: el balance es el motivo de la
 // pantalla y tiene que estar visible desde las tres.
@@ -373,10 +385,28 @@
 // ── TABLAS ───────────────────────────────────────────────────
 // Rejilla y no <table>: cada tabla tiene columnas distintas y así cada una
 // define las suyas sin pelearse por un colspan.
-.tabla-caja {
+// ── SCROLL HORIZONTAL DE TABLAS ─────────────────────────────
+// En celular la tabla NO se apila: se scrollea.
+//
+// La primera versión pasaba las filas a 2 columnas en el celu y el resultado
+// era ilegible (los números arriba del nombre, la diferencia suelta). Con scroll
+// la tabla sigue siendo una tabla y los importes quedan alineados, que es lo
+// que hay que leer en una caja.
+//
+// El borde y el radio quedan en el wrapper, no en `.tabla-caja`: si el radio
+// estuviera en la caja, `overflow` la recortaría y el scroll no podría scrollear.
+.tabla-scroll {
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  overflow: hidden;
+  overflow-x: auto;
+  // Para que el scroll con el dedo no dispare el scroll de la página en iOS.
+  -webkit-overflow-scrolling: touch;
+}
+
+.tabla-caja {
+  border: none;
+  border-radius: 0;
+  overflow: visible;
 
   .tr {
     display: grid;
@@ -394,7 +424,6 @@
   .tr:has(> span:nth-child(6)) {
     grid-template-columns: 1.8fr 1fr 2fr 0.5fr 0.9fr 34px;
   }
-
   .tr-cabecera {
     background: #f8fafc;
     font-weight: 600;
@@ -556,6 +585,89 @@
   }
 }
 
+// ── POPUP DE ALTA ───────────────────────────────────────────
+// Mismo patrón que el popup de "Nuevo turno" del Dashboard: overlay + tarjeta
+// centrada. Se replica en vez de inventar uno nuevo para que todos los formularios
+// de la app se cierren igual (click afuera, ✕, Esc).
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.popup {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+
+  .popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px;
+    border-bottom: 1px solid #e2e8f0;
+
+    h3 {
+      margin: 0;
+      font-size: 1rem;
+      color: #1e293b;
+    }
+  }
+
+  .popup-body {
+    padding: 20px;
+    // Con muchos campos (3 filas) el popup se pasa de alto en un celu; el body
+    // scrollea y el header queda fijo con el ✕ siempre alcanzable.
+    overflow-y: auto;
+  }
+
+  .popup-footer {
+    display: flex;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid #e2e8f0;
+
+    .btn-primary { flex: 1; }
+  }
+
+  .btn-cerrar {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: #64748b;
+    padding: 4px 8px;
+    border-radius: 6px;
+
+    &:hover { background: #f1f5f9; }
+  }
+}
+
+.btn-secundario {
+  padding: 9px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  color: #475569;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover:not(:disabled) { background: #f8fafc; }
+  &:disabled { opacity: 0.6; cursor: default; }
+}
+
 // ── RESPONSIVE ───────────────────────────────────────────────
 @media (max-width: 700px) {
   .tabs {
@@ -564,12 +676,11 @@
     button { white-space: nowrap; padding: 10px 12px; }
   }
 
-  // Las tablas dejan de ser rejilla y pasan a filas apiladas: en un celu no
-  // entran 5 columnas y los números importan más que las etiquetas.
-  .tabla-caja .tr {
-    grid-template-columns: 1fr 1fr !important;
-    row-gap: 2px;
-  }
+  // La fila no baja del ancho mínimo: si se comprime, los importes se parten en
+  // dos líneas y la tabla deja de poder leerse. El scroll hace el resto.
+  .tabla-caja .tr { min-width: 460px; }
+  .tabla-caja .tr:has(> span:nth-child(6)) { min-width: 540px; }
 
-  .tabla-caja .tr-cabecera { display: none; }
+  // Menos padding en celular: la tabla tiene que dejar lugar al scroll.
+  .tabla-caja .tr { padding: 10px 12px; }
 }

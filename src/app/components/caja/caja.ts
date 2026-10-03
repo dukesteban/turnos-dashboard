@@ -259,6 +259,49 @@ export class CajaComponent implements OnInit {
     return [...mapa.values()].sort((a, b) => b.total - a.total);
   }
 
+  // ── ABRIR / CERRAR LOS POPUPS ─────────────────────────────
+  //
+  // Los formularios son popups, no bloques inline. Antes cada "agregar" desplegaba
+  // el form dentro de la tarjeta y empujaba la tabla hacia abajo; con el popup la
+  // lista no se mueve y el ✕ queda siempre a mano.
+  //
+  // Al abrir se limpian los mensajes de error: si el usuario abrió, corrigió,
+  // cerró sin guardar y volvió a abrir, no tiene que seguir viendo el error
+  // viejo del intento anterior.
+
+  abrirFormPago() {
+    this.mensajeErrorPagos = '';
+    this.mostrarFormPago = true;
+    this.cdr.detectChanges();
+  }
+
+  cerrarFormPago() {
+    this.mostrarFormPago = false;
+    this.cdr.detectChanges();
+  }
+
+  abrirFormCompra() {
+    this.mensajeError = '';
+    this.mostrarFormCompra = true;
+    this.cdr.detectChanges();
+  }
+
+  cerrarFormCompra() {
+    this.mostrarFormCompra = false;
+    this.cdr.detectChanges();
+  }
+
+  abrirFormProveedor() {
+    this.mensajeError = '';
+    this.mostrarFormProveedor = true;
+    this.cdr.detectChanges();
+  }
+
+  cerrarFormProveedor() {
+    this.mostrarFormProveedor = false;
+    this.cdr.detectChanges();
+  }
+
   // ── PAGOS A EMPLEADOS: alta y borrado ──────────────────────
 
   async guardarPago() {
@@ -288,7 +331,7 @@ export class CajaComponent implements OnInit {
         notas: this.nuevoPago.notas || null,
       });
       this.nuevoPago = { empleado_id: null, fecha: '', monto: null, metodo: 'efectivo', notas: '' };
-      this.mostrarFormPago = false;
+      this.cerrarFormPago();
       await this.cargarDatos();
       this.mostrarMensajePagos('✅ Pago registrado.');
     } catch (e) {
@@ -334,7 +377,7 @@ export class CajaComponent implements OnInit {
         notas: this.nuevoProveedor.notas.trim() || null,
       });
       this.nuevoProveedor = { nombre: '', contacto: '', telefono: '', notas: '' };
-      this.mostrarFormProveedor = false;
+      this.cerrarFormProveedor();
       await this.cargarDatos();
       this.mostrarMensaje('✅ Proveedor agregado.');
     } catch (e) {
@@ -389,7 +432,7 @@ export class CajaComponent implements OnInit {
         notas: this.nuevaCompra.notas || null,
       });
       this.nuevaCompra = { proveedor_id: null, fecha: '', concepto: '', cantidad: 1, monto: null, notas: '' };
-      this.mostrarFormCompra = false;
+      this.cerrarFormCompra();
       await this.cargarDatos();
       this.mostrarMensaje('✅ Compra registrada.');
     } catch (e) {
