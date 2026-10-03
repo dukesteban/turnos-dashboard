@@ -275,29 +275,29 @@
           <input type="text" [(ngModel)]="busquedaCliente"
             (ngModelChange)="errorNuevoTurno = ''; buscarClientesNuevo()"
             placeholder="Buscar cliente..." />
-          <div *ngIf="clientesBuscados.length > 0" class="dropdown-clientes">
+          <div *ngIf="clientesBuscados.length > 0" class="dropdown-busqueda">
             <div *ngFor="let c of clientesBuscados"
               class="dropdown-item"
               (click)="seleccionarClienteNuevo(c); errorNuevoTurno = ''">
               <span class="dropdown-nombre">{{ c.nombre }}</span>
-              <span class="dropdown-tel">{{ c.telefonos?.[0]?.telefono }}</span>
+              <span class="dropdown-extra">{{ c.telefonos?.[0]?.telefono }}</span>
             </div>
           </div>
-          <div *ngIf="clienteSeleccionadoNuevo" class="cliente-seleccionado">
+          <div *ngIf="clienteSeleccionadoNuevo" class="seleccionado-ok">
             ✅ {{ clienteSeleccionadoNuevo.nombre }}
           </div>
           <!-- Crear cliente nuevo -->
-          <div *ngIf="!clienteSeleccionadoNuevo && busquedaCliente.length > 0 && clientesBuscados.length === 0" class="crear-cliente">
+          <div *ngIf="!clienteSeleccionadoNuevo && busquedaCliente.length > 0 && clientesBuscados.length === 0" class="crear-inline">
             <span>No se encontró el cliente.</span>
-            <button class="btn-crear-cliente" (click)="mostrarFormNuevoCliente = true; errorNuevoTurno = ''" *ngIf="!mostrarFormNuevoCliente">
+            <button class="btn-crear-inline" (click)="mostrarFormNuevoCliente = true; errorNuevoTurno = ''" *ngIf="!mostrarFormNuevoCliente">
               + Crear "{{ busquedaCliente }}"
             </button>
-            <div *ngIf="mostrarFormNuevoCliente" class="form-nuevo-cliente">
+            <div *ngIf="mostrarFormNuevoCliente" class="form-crear-inline">
               <input type="text" [(ngModel)]="nombreNuevoCliente"
                 (ngModelChange)="errorNuevoTurno = ''"
                 placeholder="Nombre completo" />
               <button class="btn-primary" (click)="crearYSeleccionarCliente()">Crear</button>
-              <button class="btn-secondary-sm" (click)="mostrarFormNuevoCliente = false; errorNuevoTurno = ''">Cancelar</button>
+              <button class="btn-secundario-sm" (click)="mostrarFormNuevoCliente = false; errorNuevoTurno = ''">Cancelar</button>
             </div>
           </div>
         </div>

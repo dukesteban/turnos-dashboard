@@ -425,18 +425,28 @@ describe('Caja — el error se va cuando tocás un campo', () => {
   }
 
   it('elegir el proveedor borra el error del popup de compra', async () => {
+    // El proveedor ya no es un <select>: se escribe y se hace click en el
+    // resultado. El error se borra al escribir Y al elegir.
     const { cmp, fixture } = await listo({
-      getProveedores: () => Promise.resolve([{ id: 7, nombre: 'Químicas', activo: true }]),
+      getProveedores: () => Promise.resolve([{ id: 7, nombre: 'Quimicas', activo: true }]),
     });
     cmp.mostrarFormCompra = true;
     cmp.mensajeError = '❌ Elegí el proveedor.';
     fixture.detectChanges();
 
-    const select = fixture.nativeElement.querySelector('.popup-overlay select');
-    tocar(select);
+    const input = fixture.nativeElement.querySelector('.popup-overlay input[placeholder*="Buscar proveedor"]');
+    tocar(input, 'quim');
     fixture.detectChanges();
-
+    // Escribir ya lo borra.
     expect(cmp.mensajeError).toBe('');
+
+    // Y elegir de la lista también.
+    cmp.mensajeError = '❌ Elegí el proveedor.';
+    const item = fixture.nativeElement.querySelector('.dropdown-busqueda .dropdown-item');
+    item.click();
+    fixture.detectChanges();
+    expect(cmp.mensajeError).toBe('');
+    expect(cmp.proveedorSeleccionado.id).toBe(7);
   });
 
   it('escribir el concepto borra el error del popup de compra', async () => {
@@ -825,6 +835,220 @@ describe('Caja — el pie de acciones está en la fila', () => {
     expect(spy).toHaveBeenCalled();
     expect(mock.llamadas).not.toContain('eliminarCompra');
     spy.mockRestore();
+  });
+});
+
+describe('Caja — buscador de proveedor del popup', () => {
+  const listo = async (over: Record<string, any> = {}) => {
+    const r = montar(over);
+    await r.cmp.cargarDatos();
+    return r;
+  };
+
+  const PROVEEDORES = [
+    { id: 1, nombre: 'Quimicas del Sur', contacto: 'Ana', telefono: '111', activo: true },
+    { id: 2, nombre: 'Ledesma SA', contacto: 'Beto', telefono: '222', activo: true },
+    { id: 3, nombre: 'Quimicas del Norte', contacto: 'Caro', telefono: '333', activo: true },
+    { id: 4, nombre: 'Proveedor Inactivo', contacto: null, telefono: null, activo: false },
+  ];
+
+  const conTodos = (over: Record<string, any> = {}) =>
+    listo({ getProveedores: () => Promise.resolve(PROVEEDORES), ...over });
+
+  it('sin texto escrito no hay resultados', async () => {
+    const { cmp } = await conTodos();
+    cmp.busquedaProveedorPopup = '';
+    expect(cmp.resultadosBusquedaProveedor).toEqual([]);
+  });
+
+  it('filtra por fragmento del nombre', async () => {
+    const { cmp } = await conTodos();
+    cmp.busquedaProveedorPopup = 'ledes';
+    expect(cmp.resultadosBusquedaProveedor.map(p => p.id)).toEqual([2]);
+  });
+
+  // El de Dashboard usa `.ilike()` en Postgres, que NO ignora acentos. Este
+  // filtra en memoria con `contiene`, así que "quimicas" encuentra "Químicas".
+  it('ignora acentos, a diferencia del .ilike() del Dashboard', async () => {
+    const { cmp } = await conTodos();
+    for (const q of ['quimicas', 'QUIMICAS', 'Químicas', 'del norte']) {
+      cmp.busquedaProveedorPopup = q;
+      expect(cmp.resultadosBusquedaProveedor.length).toBeGreaterThan(0);
+    }
+    cmp.busquedaProveedorPopup = 'del norte';
+    expect(cmp.resultadosBusquedaProveedor.map(p => p.id)).toEqual([3]);
+  });
+
+  it('NO ofrece proveedores inactivos', async () => {
+    const { cmp } = await conTodos();
+    cmp.busquedaProveedorPopup = 'inactivo';
+    expect(cmp.resultadosBusquedaProveedor).toEqual([]);
+  });
+
+  it('no consulta la base: filtra la lista que ya está en memoria', async () => {
+    // El de Dashboard hace `buscarClientes()` en cada tecla. Este no debe.
+    const { cmp, mock } = await conTodos();
+    const antes = mock.llamadas.filter((c: string) => c === 'getProveedores').length;
+    cmp.busquedaProveedorPopup = 'qui';
+    cmp.resultadosBusquedaProveedor;
+    cmp.busquedaProveedorPopup = 'quim';
+    cmp.resultadosBusquedaProveedor;
+    expect(mock.llamadas.filter((c: string) => c === 'getProveedores').length).toBe(antes);
+  });
+
+  it('el resultado se limita a 8 para no alargar el popup', async () => {
+    const muchos = Array.from({ length: 30 }, (_, i) => ({
+      id: i + 1, nombre: 'Quimica ' + i, activo: true,
+    }));
+    const { cmp } = await conTodos({ getProveedores: () => Promise.resolve(muchos) });
+    cmp.busquedaProveedorPopup = 'quimica';
+    expect(cmp.resultadosBusquedaProveedor.length).toBe(8);
+  });
+
+  it('elegir uno lo selecciona, llena el id y limpia la búsqueda', async () => {
+    const { cmp } = await conTodos();
+    cmp.busquedaProveedorPopup = 'ledes';
+    cmp.seleccionarProveedorPopup(cmp.resultadosBusquedaProveedor[0]);
+    expect(cmp.proveedorSeleccionado.nombre).toBe('Ledesma SA');
+    expect(cmp.nuevaCompra.proveedor_id).toBe(2);
+    expect(cmp.busquedaProveedorPopup).toBe('');
+  });
+
+  it('la búsqueda y el id NO se desincronizan', async () => {
+    // Si se desincronizan, el popup muestra un proveedor y se guarda otro.
+    const { cmp } = await conTodos();
+    cmp.seleccionarProveedorPopup({ id: 2, nombre: 'Ledesma SA' });
+    expect(cmp.proveedorSeleccionado.id).toBe(cmp.nuevaCompra.proveedor_id);
+    cmp.quitarProveedorPopup();
+    expect(cmp.proveedorSeleccionado).toBeNull();
+    expect(cmp.nuevaCompra.proveedor_id).toBeNull();
+  });
+
+  it('con texto y sin resultados, ofrece crear', async () => {
+    const { cmp } = await conTodos();
+    cmp.busquedaProveedorPopup = 'Uno Que No Existe';
+    expect(cmp.puedeCrearProveedorDesdePopup).toBe(true);
+  });
+
+  it('con resultados, NO ofrece crear', async () => {
+    const { cmp } = await conTodos();
+    cmp.busquedaProveedorPopup = 'ledes';
+    expect(cmp.puedeCrearProveedorDesdePopup).toBe(false);
+  });
+
+  it('con algo YA elegido, no ofrece crear aunque el texto matchee', async () => {
+    const { cmp } = await conTodos();
+    cmp.seleccionarProveedorPopup({ id: 2, nombre: 'Ledesma SA' });
+    cmp.busquedaProveedorPopup = 'otro';
+    expect(cmp.puedeCrearProveedorDesdePopup).toBe(false);
+  });
+
+  it('crear desde el popup lo deja ELEGIDO y listo para cargar la compra', async () => {
+    const creados: any[] = [];
+    const nuevos = [...PROVEEDORES];
+    const { cmp } = await conTodos({
+      getProveedores: () => Promise.resolve(nuevos),
+      crearProveedor: (d: any) => {
+        const nuevo = { id: 99, nombre: d.nombre, contacto: null, telefono: null, activo: true };
+        nuevos.push(nuevo);
+        creados.push(d);
+        return Promise.resolve(nuevo);
+      },
+    });
+    cmp.busquedaProveedorPopup = 'Quimicas del Este';
+    cmp.nombreNuevoProveedor = 'Quimicas del Este';
+
+    await cmp.crearYSeleccionarProveedor();
+
+    expect(creados.length).toBe(1);
+    expect(creados[0].nombre).toBe('Quimicas del Este');
+    // Queda elegido: el usuario no tiene que volver a buscarlo.
+    expect(cmp.proveedorSeleccionado.nombre).toBe('Quimicas del Este');
+    expect(cmp.nuevaCompra.proveedor_id).toBe(99);
+    expect(cmp.busquedaProveedorPopup).toBe('');
+    expect(cmp.mostrarFormNuevoProveedor).toBe(false);
+  });
+
+  it('crear uno que YA existe avisa y no llama a la base', async () => {
+    let creados = 0;
+    const { cmp } = await conTodos({
+      crearProveedor: () => { creados++; return Promise.resolve({}); },
+    });
+    cmp.busquedaProveedorPopup = ' ledesma sa ';
+    await cmp.crearYSeleccionarProveedor();
+    expect(creados).toBe(0);
+    expect(cmp.mensajeError).toMatch(/ya existe/i);
+  });
+
+  it('crear sin nombre avisa', async () => {
+    const { cmp } = await conTodos();
+    cmp.busquedaProveedorPopup = '   ';
+    await cmp.crearYSeleccionarProveedor();
+    expect(cmp.mensajeError).toMatch(/nombre/i);
+  });
+
+  it('EDITAR una compra deja preseleccionado su proveedor', async () => {
+    // Sin esto se abre con el id cargado en el modelo y el buscador vacío:
+    // "no hay proveedor elegido" con uno ya asignado.
+    const { cmp } = await conTodos();
+    cmp.abrirFormCompra({
+      id: 5, proveedor_id: 2, fecha: '2026-03-15', concepto: 'X', cantidad: 1, monto: 100,
+      proveedores: { nombre: 'Ledesma SA', activo: true },
+    });
+    expect(cmp.proveedorSeleccionado.nombre).toBe('Ledesma SA');
+    expect(cmp.nuevaCompra.proveedor_id).toBe(2);
+    expect(cmp.busquedaProveedorPopup).toBe('');
+  });
+
+  it('abrir un ALTA arranca sin proveedor elegido', async () => {
+    const { cmp } = await conTodos();
+    cmp.abrirFormCompra();
+    expect(cmp.proveedorSeleccionado).toBeNull();
+    expect(cmp.nuevaCompra.proveedor_id).toBeNull();
+  });
+
+  it('cerrar el popup limpia el buscador y la selección', async () => {
+    const { cmp } = await conTodos();
+    cmp.abrirFormCompra();
+    cmp.seleccionarProveedorPopup({ id: 2, nombre: 'Ledesma SA' });
+    cmp.mostrarFormNuevoProveedor = true;
+    cmp.nombreNuevoProveedor = 'algo';
+
+    cmp.cerrarFormCompra();
+
+    expect(cmp.busquedaProveedorPopup).toBe('');
+    expect(cmp.proveedorSeleccionado).toBeNull();
+    expect(cmp.mostrarFormNuevoProveedor).toBe(false);
+    expect(cmp.nombreNuevoProveedor).toBe('');
+  });
+
+  it('el popup usa el buscador, no un <select>', async () => {
+    const { cmp, fixture } = await conTodos();
+    cmp.abrirFormCompra();
+    fixture.detectChanges();
+    const popup = fixture.nativeElement.querySelector('.popup-overlay');
+    expect(popup.querySelectorAll('select').length).toBe(0);
+    expect(popup.querySelector('input[placeholder*="Buscar proveedor"]')).toBeTruthy();
+  });
+
+  it('con resultados, el popup los lista y NO muestra "crear"', async () => {
+    const { cmp, fixture } = await conTodos();
+    cmp.abrirFormCompra();
+    cmp.busquedaProveedorPopup = 'quimicas';
+    fixture.detectChanges();
+    const popup = fixture.nativeElement.querySelector('.popup-overlay');
+    expect(popup.querySelectorAll('.dropdown-busqueda .dropdown-item').length).toBe(2);
+    expect(popup.querySelectorAll('.crear-inline').length).toBe(0);
+  });
+
+  it('sin resultados, el popup muestra "crear"', async () => {
+    const { cmp, fixture } = await conTodos();
+    cmp.abrirFormCompra();
+    cmp.busquedaProveedorPopup = 'nada de esto';
+    fixture.detectChanges();
+    const popup = fixture.nativeElement.querySelector('.popup-overlay');
+    expect(popup.querySelectorAll('.dropdown-busqueda').length).toBe(0);
+    expect(popup.querySelectorAll('.crear-inline').length).toBe(1);
   });
 });
 

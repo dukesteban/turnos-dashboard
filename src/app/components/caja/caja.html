@@ -424,13 +424,49 @@
         <div *ngIf="mensajeError" class="error-msg">{{ mensajeError }}</div>
 
         <div class="form-caja">
+          <!-- Proveedor: buscador, no combo. Mismo patrón que el cliente de
+               "Nuevo turno": se escribe, sale la lista, y si no aparece se crea
+               ahí mismo en vez de tener que cerrar, ir a la lista y volver. -->
           <div class="campo">
             <label>Proveedor</label>
-            <select [(ngModel)]="nuevaCompra.proveedor_id" (ngModelChange)="mensajeError = ''">
-              <option [ngValue]="null">Elegí…</option>
-              <option *ngFor="let p of proveedoresActivos" [ngValue]="p.id">{{ p.nombre }}</option>
-            </select>
+
+            <div *ngIf="proveedorSeleccionado" class="seleccionado-ok">
+              ✅ {{ proveedorSeleccionado.nombre }}
+              <button class="btn-secundario-sm" (click)="quitarProveedorPopup()">Cambiar</button>
+            </div>
+
+            <ng-container *ngIf="!proveedorSeleccionado">
+              <input type="text" [(ngModel)]="busquedaProveedorPopup"
+                     (ngModelChange)="mensajeError = ''"
+                     placeholder="Buscar proveedor..." />
+
+              <div *ngIf="resultadosBusquedaProveedor.length > 0" class="dropdown-busqueda">
+                <div *ngFor="let p of resultadosBusquedaProveedor" class="dropdown-item"
+                     (click)="seleccionarProveedorPopup(p)">
+                  <span class="dropdown-nombre">{{ p.nombre }}</span>
+                  <span class="dropdown-extra">{{ p.contacto || '—' }}</span>
+                </div>
+              </div>
+
+              <div *ngIf="puedeCrearProveedorDesdePopup" class="crear-inline">
+                <span>No se encontró el proveedor.</span>
+                <button class="btn-crear-inline" *ngIf="!mostrarFormNuevoProveedor"
+                        (click)="mostrarFormNuevoProveedor = true; mensajeError = ''">
+                  ➕ Crear "{{ busquedaProveedorPopup.trim() }}"
+                </button>
+                <div *ngIf="mostrarFormNuevoProveedor" class="form-crear-inline">
+                  <input type="text" [(ngModel)]="nombreNuevoProveedor"
+                         (ngModelChange)="mensajeError = ''"
+                         placeholder="Nombre del proveedor" />
+                  <button class="btn-atendido" [disabled]="guardando"
+                          (click)="crearYSeleccionarProveedor()">Crear</button>
+                  <button class="btn-secundario-sm"
+                          (click)="mostrarFormNuevoProveedor = false; mensajeError = ''">Cancelar</button>
+                </div>
+              </div>
+            </ng-container>
           </div>
+
           <div class="fila">
             <div class="campo">
               <label>Fecha</label>

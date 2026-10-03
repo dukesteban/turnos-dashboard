@@ -64,6 +64,16 @@ export class CajaComponent implements OnInit {
   mostrarFormCompra = false;
   nuevaCompra: any = { proveedor_id: null, fecha: '', concepto: '', cantidad: 1, monto: null, notas: '' };
   compraEditando: any = null;
+  // Buscador de proveedor del popup, igual que el de cliente de "Nuevo turno":
+  // se escribe, sale la lista, y si no hay resultados se crea ahí mismo.
+  //
+  // `proveedorSeleccionado` es el objeto elegido (para mostrar el nombre);
+  // `nuevaCompra.proveedor_id` es el id que se guarda. Van juntos: si se
+  // desincronizan, el popup muestra un proveedor y se guarda otro.
+  busquedaProveedorPopup = '';
+  proveedorSeleccionado: any = null;
+  mostrarFormNuevoProveedor = false;
+  nombreNuevoProveedor = '';
   guardando = false;
   mensaje = '';
   mensajeError = '';
@@ -326,6 +336,16 @@ export class CajaComponent implements OnInit {
           notas: c.notas || '',
         }
       : { proveedor_id: null, fecha: '', concepto: '', cantidad: 1, monto: null, notas: '' };
+    // El buscador arranca limpio siempre, y al editar queda preseleccionado el
+    // proveedor de la compra. Sin esto se abría con un id en el modelo y el
+    // campo de búsqueda vacío: "no hay proveedor elegido" con uno ya asignado.
+    this.busquedaProveedorPopup = '';
+    this.mostrarFormNuevoProveedor = false;
+    this.nombreNuevoProveedor = '';
+    this.proveedorSeleccionado = c
+      ? this.proveedores.find((p: any) => p.id === c.proveedor_id)
+        || { id: c.proveedor_id, nombre: c.proveedores?.nombre || `#${c.proveedor_id}`, activo: true }
+      : null;
     this.mostrarFormCompra = true;
     this.cdr.detectChanges();
   }
@@ -334,11 +354,92 @@ export class CajaComponent implements OnInit {
     this.mostrarFormCompra = false;
     this.compraEditando = null;
     this.mensajeError = '';
+    this.busquedaProveedorPopup = '';
+    this.proveedorSeleccionado = null;
+    this.mostrarFormNuevoProveedor = false;
+    this.nombreNuevoProveedor = '';
     this.cdr.detectChanges();
   }
 
   get editandoCompra(): boolean {
     return this.compraEditando !== null;
+  }
+
+  // ── BUSCADOR DE PROVEEDOR DEL POPUP ───────────────────────
+  //
+  // A diferencia del de clientes de "Nuevo turno", este NO consulta la base en
+  // cada tecla: filtra la lista que ya está en memoria con `contiene`. Dos
+  // razones:
+  //   · sin una ida a la base por tecla
+  //   · `contiene` ignora acentos, y el `.ilike()` de Postgres no
+  //
+  // Solo busca entre los ACTIVOS: cargar una compra a un proveedor dado de baja
+  // no tiene sentido.
+
+  /** Resultados del buscador del popup. Vacío si no hay nada escrito. */
+  get resultadosBusquedaProveedor(): any[] {
+    const q = this.busquedaProveedorPopup.trim();
+    if (!q) return [];
+    return this.proveedoresActivos
+      .filter((p: any) => contiene(p.nombre, q))
+      .slice(0, 8);
+  }
+
+  /** No se encontró nada y hay texto: se puede crear. */
+  get puedeCrearProveedorDesdePopup(): boolean {
+    const q = this.busquedaProveedorPopup.trim();
+    return !!q
+      && !this.proveedorSeleccionado
+      && this.resultadosBusquedaProveedor.length === 0;
+  }
+
+  /** Elegir uno de la lista. */
+  seleccionarProveedorPopup(p: any) {
+    this.proveedorSeleccionado = p;
+    this.nuevaCompra.proveedor_id = p.id;
+    this.busquedaProveedorPopup = '';
+    this.mostrarFormNuevoProveedor = false;
+    this.mensajeError = '';
+    this.cdr.detectChanges();
+  }
+
+  /** Deseleccionar, para elegir otro. */
+  quitarProveedorPopup() {
+    this.proveedorSeleccionado = null;
+    this.nuevaCompra.proveedor_id = null;
+    this.busquedaProveedorPopup = '';
+    this.cdr.detectChanges();
+  }
+
+  /** Crear el proveedor desde el popup y dejarlo elegido. */
+  async crearYSeleccionarProveedor() {
+    const nombre = (this.nombreNuevoProveedor || this.busquedaProveedorPopup).trim();
+    if (!nombre) {
+      this.mensajeError = '❌ Escribí el nombre del proveedor.';
+      return;
+    }
+    // Mismo chequeo que el alta desde la lista: el índice único de la base es
+    // `lower(btrim(nombre))` y conviene avisar acá y no con un error de Postgres.
+    if (this.proveedores.some((p: any) => paraComparar(p.nombre) === paraComparar(nombre))) {
+      this.mensajeError = '⚠️ Ya existe un proveedor con ese nombre.';
+      return;
+    }
+    this.guardando = true;
+    try {
+      const nuevo = await this.supabase.crearProveedor({ nombre });
+      await this.cargarDatos();
+      // `cargarDatos` reemplaza `this.proveedores`: se busca el recién creado en
+      // la lista nueva, no se usa el objeto devuelto (que viene sin `activo`).
+      const creado = this.proveedores.find((p: any) => p.id === nuevo.id) || { ...nuevo, activo: true };
+      this.seleccionarProveedorPopup(creado);
+      this.nombreNuevoProveedor = '';
+      this.mostrarFormNuevoProveedor = false;
+      this.mensaje = '✅ Proveedor creado.';
+    } catch (e) {
+      this.mensajeError = '❌ No se pudo crear el proveedor.';
+    }
+    this.guardando = false;
+    this.cdr.detectChanges();
   }
 
   // ── PAGOS A EMPLEADOS: alta y borrado ──────────────────────
