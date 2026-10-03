@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
 import { AuthService } from '../../services/auth';
+import { paraComparar } from '../../utils/texto';
 
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -378,7 +379,7 @@ export class ConfiguracionComponent implements OnInit {
       this.diasCerrados.sort((a, b) => a.fecha.localeCompare(b.fecha));
       this.mostrarFormDiaCerrado = false;
       this.nuevoDiaCerrado = { fecha: '', fecha_hasta: '', motivo: '' };
-      this.mostrarMensaje('✅ Día/período de cierre agregado.', 'diasCerrados' as any);
+      this.mostrarMensaje('✅ Día/período de cierre agregado.', 'diasCerrados');
     } catch (e) {
       this.mensajeErrorDiasCerrados = '❌ Error al agregar.';
       this.cdr.detectChanges();
@@ -416,7 +417,7 @@ export class ConfiguracionComponent implements OnInit {
       await this.supabase.updateDiasCerrados(dia.id, dia.fecha, dia.fecha_hasta || null, dia.motivo);
       dia.editando = false;
       dia.guardando = false;
-      this.mostrarMensaje('✅ Día/período actualizado.', 'diasCerrados' as any);
+      this.mostrarMensaje('✅ Día/período actualizado.', 'diasCerrados');
     } catch (e) {
       dia.guardando = false;
       this.mensajeErrorDiasCerrados = '❌ Error al actualizar.';
@@ -603,9 +604,12 @@ export class ConfiguracionComponent implements OnInit {
     this.cdr.detectChanges();
     try {
       const servicios = await this.supabase.getServicios();
+      // `paraComparar` y no `trim().toLowerCase()`: con trim solo, "Lavado
+      //  Simple" (doble espacio) pasaba como un servicio NUEVO y quedaban dos
+      // filas que en pantalla se ven idénticas.
       const exist = servicios.some(
         (s: any) =>
-          s.nombre.trim().toLowerCase() === servicio.nombre.trim().toLowerCase() &&
+          paraComparar(s.nombre) === paraComparar(servicio.nombre) &&
           s.id !== servicio.id
       );
 
@@ -668,7 +672,7 @@ export class ConfiguracionComponent implements OnInit {
       const servicios = await this.supabase.getServicios();
       const exist = servicios.some(
         (s: any) =>
-          s.nombre.trim().toLowerCase() === this.nuevoServicio.nombre.trim().toLowerCase() &&
+          paraComparar(s.nombre) === paraComparar(this.nuevoServicio.nombre) &&
           s.id !== this.nuevoServicio.id
       );
 
@@ -708,7 +712,7 @@ export class ConfiguracionComponent implements OnInit {
     this.mensajeErrorServicios = '';
   }
 
-    // ── METODOS DE PAGO ──────────────────────────────────────────────
+  // ── METODOS DE PAGO ───────────────────────────────────────
 
   async agregarMetodoPago() {
     this.mensajeErrorMetodosPago = '';
@@ -846,7 +850,10 @@ export class ConfiguracionComponent implements OnInit {
       this.passwordActual = '';
       this.passwordNueva = '';
       this.passwordRepetir = '';
-      this.mensajePassword = `✅ Contraseña cambiada. Te quedan ${2 - this.cambiosHoy} cambio(s) hoy.`;
+      // Siempre queda 1: esta linea solo se alcanza cuando `cambiosHoy` es 0 o
+      // 1 (con 2 ya se bloquea arriba). El mensaje era "Te quedan 1 cambio(s)",
+      // a medio hacer. No hay rama plural porque no hay caso que la alcance.
+      this.mensajePassword = '✅ Contraseña cambiada. Te queda 1 cambio hoy.';
       setTimeout(() => { this.mensajePassword = ''; this.cdr.detectChanges(); }, 3000);
     } catch (e) {
       this.mensajeErrorPassword = '❌ Error al cambiar la contraseña.';

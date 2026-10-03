@@ -104,7 +104,11 @@ export class GananciasComponent implements OnInit {
     if (!this.turnos.length) return '-';
     const conteo: { [key: string]: number } = {};
     this.turnos.forEach(t => {
-      conteo[t.metodo_pago] = (conteo[t.metodo_pago] || 0) + 1;
+      // Sin `|| 'Sin registrar'` la clave del objeto era la string "null" y la
+      // tarjeta mostraba literalmente la palabra null. `totalPorMetodoPago` ya
+      // lo hacia bien; este getters se habia quedado atras.
+      const metodo = t.metodo_pago || 'Sin registrar';
+      conteo[metodo] = (conteo[metodo] || 0) + 1;
     });
     return Object.entries(conteo).sort((a, b) => b[1] - a[1])[0][0];
   }
@@ -113,7 +117,7 @@ export class GananciasComponent implements OnInit {
     if (!this.turnos.length) return '-';
     const conteo: { [key: string]: number } = {};
     this.turnos.forEach(t => {
-      const nombre = t.servicio_nombre_final || t.servicio_nombre;
+      const nombre = t.servicio_nombre_final || t.servicio_nombre || 'Sin especificar';
       conteo[nombre] = (conteo[nombre] || 0) + 1;
     });
     return Object.entries(conteo).sort((a, b) => b[1] - a[1])[0][0];
@@ -185,13 +189,20 @@ export class GananciasComponent implements OnInit {
 
   // NAVEGACION
   navegar(dir: number) {
-    const d = new Date(this.fechaActual);
     if (this.vista === 'dia') {
+      const d = new Date(this.fechaActual);
       d.setDate(d.getDate() + dir);
+      this.fechaActual = d;
     } else {
-      d.setMonth(d.getMonth() + dir);
+      // `setMonth` con overflow salta de mes: 31 de enero + 1 mes es "31 de
+      // febrero", que Date normaliza a 3 de marzo. El usuario ve un salto de
+      // enero a marzo. Se clampea al ultimo dia del mes destino.
+      const y = this.fechaActual.getFullYear();
+      const m = this.fechaActual.getMonth() + dir;
+      const ultimoDestino = new Date(y, m + 1, 0).getDate();
+      const dia = Math.min(this.fechaActual.getDate(), ultimoDestino);
+      this.fechaActual = new Date(y, m, dia);
     }
-    this.fechaActual = d;
     this.cargarDatos();
   }
 
@@ -230,7 +241,6 @@ export class GananciasComponent implements OnInit {
       if (barras[idx]) {
         const el = barras[idx] as HTMLElement;
         grafico.scrollLeft = el.offsetLeft - grafico.clientWidth / 2 + el.clientWidth / 2;
-        console.log('scroll', grafico.scrollLeft, el.offsetLeft, grafico.clientWidth);
       }
     }, 800);
   }
