@@ -528,10 +528,8 @@ tr.vencido td { background: #fff7ed; }
   font-weight: 500;
 }
 
-.celda-puesto {
-  color: #64748b;
-  white-space: nowrap;
-}
+/* .celda-puesto: RETIRADO con la columna Puesto de las tablas (migracion 011).
+   La tabla ahora muestra Empleado en su lugar, con .celda-empleado. */
 
 /* ── RESPONSIVE ──────────────────────────────────────────────
    En celular las tablas tienen 7-8 columnas y no entran: se ocultan
@@ -560,8 +558,8 @@ tr.vencido td { background: #fff7ed; }
   }
 
   /* La hora y el precio no deben partirse en dos lineas */
-  .tabla td:first-child,
-  .celda-puesto { white-space: nowrap; }
+  .tabla td:first-child { white-space: nowrap; }
+  .celda-empleado { white-space: nowrap; }
 }
 
 @media (max-width: 480px) {

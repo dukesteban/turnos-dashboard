@@ -16,8 +16,8 @@ const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Vier
 export class ConfiguracionComponent implements OnInit {
 
   // Acordeones
+  // (acordeonPuestos se fue con la tabla `puestos`, migracion 011)
   acordeonDatos = true;
-  acordeonPuestos = false;
   acordeonHorarios = false;
   acordeonServicios = false;
   acordeonPassword = false;

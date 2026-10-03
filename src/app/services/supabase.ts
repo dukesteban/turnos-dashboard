@@ -118,10 +118,10 @@ export class SupabaseService {
     if (error) throw error;
   }
 
-  // ── PUESTOS: retirado ───────────────────────────────────────
+  // ── PUESTOS: la tabla ya NO EXISTE (migracion 011) ─────────
   //
-  // La agenda usa una columna por EMPLEADO, no por puesto. Estas funciones
-  // quedaron sin uso; se borran en la migracion 011 junto con la tabla.
+  // La agenda usa una columna por EMPLEADO. Estas funciones quedaron sin uso y
+  // su tabla fue borrada: si alguna vez hacen falta, no alcanza con descomentarlas.
   //
   //   async asignarPuestoATurno(turnoId, puestoId, empleadoId) {...}
   //   async puestoDeEmpleado(empleadoId) {...}
@@ -219,11 +219,11 @@ export class SupabaseService {
     if (error) throw error;
   }
 
-  // ── PUESTOS DE TRABAJO: RETIRADO ───────────────────────────
+  // ── PUESTOS: la tabla ya NO EXISTE (migracion 011) ─────────
   //
-  // La agenda ya no usa puestos: cada columna es un EMPLEADO. El codigo queda
-  // comentado hasta la migracion 011, que borra la tabla `puestos`. Si todavia
-  // se necesita leer algo, la tabla sigue existiendo en la base.
+  // La agenda usa una columna por EMPLEADO. La tabla `puestos` fue BORRADA de la
+  // base el 2026-10-03, asi que estas consultas fallarian si se reactivaran.
+  // El historial de "en que box se lavo" sigue en `turnos.puesto_id` (sin FK).
   //
   //   async getPuestos() {
   //     const { data, error } = await this.supabase
@@ -354,11 +354,12 @@ export class SupabaseService {
     return data || [];
   }
 
-  // ── PUESTOS: CRUD retirado (migracion 011 borra la tabla) ───
+  // ── PUESTOS: CRUD retirado, tabla BORRADA (migracion 011) ──
   //
-  // Ninguno de estos metodos se llama desde la app. Se comentan junto con la
-  // tabla para que la fase 2 sea solo SQL. Si volvieran a hacer falta, revisar
-  // primero por que se decidio que la columna de la agenda es el empleado.
+  // Ninguno se llama desde la app y la tabla ya no existe. Si volvieran a hacer
+  // falta, revisar PRIMERO por que se decidio que la columna de la agenda es el
+  // empleado: el problema de origen era que un puesto tiene un unico empleado
+  // para toda la semana, y no se puede cubrir "solo el jueves".
   //
   //   async crearPuesto(puesto)         -> INSERT en 'puestos'
   //   async actualizarPuesto(id, c)     -> UPDATE 'puestos'

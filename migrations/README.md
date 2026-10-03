@@ -36,6 +36,16 @@ Desde el MCP de Supabase se corre el contenido del archivo como un solo
 | 008 | `indices_unicos_catalogos.sql` | Evita catálogos duplicados |
 | 009 | `telefono_denormalizado.sql` | `NULL` en vez de `''`, fusiona cliente duplicado |
 | 010 | `turnos_hora_coincide.sql` | CHECK: `hora` y `hora_inicio` no pueden divergir |
+| 011 | `retirar_puestos.sql` | **Borra la tabla `puestos`**: la agenda ya usa columnas por empleado |
+
+### Sobre 002 y 011
+
+Se aplican juntas y se anulan: 002 crea `puestos` y 011 la borra. Se dejaron las
+dos para que el historial se lea en orden.
+
+`turnos.puesto_id` **se conserva con sus 74 valores**: es el histórico de en qué
+box se lavó cada turno. Perdió su FOREIGN KEY, no sus datos. Para borrar también
+la columna hace falta una `012` aparte.
 
 ## Bases
 

@@ -459,19 +459,11 @@
   margin-bottom: 10px;
 }
 
-/* ── Tabla de Puestos ──
-   Mismo min-width y mismo scroll que .tabla-servicios. Los anchos de los
-   campos están en las reglas compartidas de arriba (input-nombre /
-   input-empleado-puesto) para que sean los mismos que en Servicios. */
-.tabla-puestos {
-  width: 100%;
-  min-width: 480px;
-  max-width: 900px;
-
-  th { white-space: nowrap; }
-
-  .input-empleado-puesto { cursor: pointer; }
-}
+/* ── Tabla de Puestos: RETIRADA (migracion 011) ──
+   .tabla-puestos, .input-empleado-puesto y .puesto-dup quedaron sin uso cuando
+   la tabla `puestos` se eliminó. Los selectores `.celda-empleado` e
+   `.input-nombre` que se comparten con Servicios y con la lista de empleados
+   siguen vivos y NO se tocan. */
 
 /* Texto plano del Empleado (fuera de edición).
    Debe verse idéntico al <input> en readonly: mismo tamaño, mismo color
@@ -489,12 +481,6 @@
   white-space: nowrap;
 }
 
-.puesto-dup {
-  margin-top: 4px;
-  font-size: 0.72rem;
-  color: #b45309;
-  background: #fffbeb;
-  border: 1px solid #fcd34d;
-  border-radius: 4px;
-  padding: 2px 6px;
-}
+/* .puesto-dup: RETIRADO con la tabla `puestos` (migracion 011).
+   Era el aviso "ya existe otro puesto con ese nombre". El mismo aviso para
+   servicios y metodos de pago usa otras clases. */
