@@ -1,13 +1,24 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <title>Turnos-Dashboard</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <link rel="apple-touch-icon" href="assets/icon.png">
-  <link rel="icon" type="image/png" href="assets/icon.png">
+
+  <!-- PWA: sin esto Android no colorea la barra de estado ni ofrece instalar.
+       `#1e293b` es el mismo fondo que la navbar, asi que la app y la barra
+       se ven como una sola cosa. -->
+  <meta name="theme-color" content="#1e293b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Turnos">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Turnos, agenda y caja del lavadero">
+
   <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
 </head>
 <body>
   <app-root></app-root>
