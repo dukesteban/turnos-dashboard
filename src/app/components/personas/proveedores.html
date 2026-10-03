@@ -1,0 +1,112 @@
+<!--
+  ABM de proveedores. Se mudó desde la pestaña "Proveedores" de Caja: el alta,
+  la edición, el inactivado y el buscador son fichas de persona, no plata. En
+  Caja quedó lo que sí es plata (las compras y su total).
+
+  El popup de alta/edición es UNO solo, como en el resto de la app: lo decide
+  `editandoProveedor`. Dos popups idénticos que se diferencian por un booleano
+  terminan divergiendo en algún detalle.
+-->
+<div class="proveedores-page">
+
+  <!-- El error va arriba y el éxito también: son de esta pantalla, no de un popup. -->
+  <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
+  <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
+
+  <div class="seccion">
+    <div class="seccion-header">
+      <h3>
+        Proveedores
+        <span class="subtitulo">
+          {{ proveedoresFiltrados.length }} de {{ proveedores.length }}
+        </span>
+      </h3>
+      <button class="btn-primary" (click)="abrirFormProveedor()">
+        ➕ Nuevo proveedor
+      </button>
+    </div>
+
+    <input type="text" class="buscador" [(ngModel)]="busquedaProveedor"
+           placeholder="🔍 Buscar proveedor..." />
+
+    <div *ngIf="cargando" class="vacio">Cargando...</div>
+
+    <div *ngIf="!cargando && proveedores.length === 0" class="vacio">
+      Todavía no hay proveedores
+    </div>
+
+    <div *ngIf="!cargando && proveedores.length > 0 && proveedoresFiltrados.length === 0" class="vacio">
+      Ningún proveedor coincide con "{{ busquedaProveedor }}"
+    </div>
+
+    <div *ngIf="proveedoresFiltrados.length > 0" class="tabla-scroll">
+      <div class="tabla-caja">
+        <div class="tr tr-cabecera tr-contacto">
+          <span>Proveedor</span>
+          <span>Contacto</span>
+          <span>Teléfono</span>
+          <span></span>
+        </div>
+        <div *ngFor="let p of proveedoresFiltrados" class="tr tr-contacto" [class.fila-inactiva]="!p.activo">
+          <span class="celda-principal">
+            {{ p.nombre }}
+            <span *ngIf="!p.activo" class="badge-inactivo">Inactivo</span>
+          </span>
+          <span class="celda-chica">{{ p.contacto || '-' }}</span>
+          <span class="celda-chica">{{ p.telefono || '-' }}</span>
+          <!-- Editar e inactivar juntos en la celda de acciones: sueltos, la
+               grilla los cuenta como columnas y se caen de lado. -->
+          <span class="celda-acciones">
+            <button class="btn-icon" (click)="abrirFormProveedor(p)" title="Editar">✏️</button>
+            <button *ngIf="p.activo" class="btn-icon" (click)="inactivarProveedor(p)"
+                    title="Inactivar">🚫</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- POPUP: ALTA / EDICIÓN -->
+<div *ngIf="mostrarFormProveedor" class="popup-overlay" (click)="cerrarFormProveedor()">
+  <div class="popup" (click)="$event.stopPropagation()">
+    <div class="popup-header">
+      <h3>{{ editandoProveedor ? '✏️ Editar proveedor' : '➕ Nuevo proveedor' }}</h3>
+      <button class="btn-cerrar" (click)="cerrarFormProveedor()">✕</button>
+    </div>
+
+    <div class="popup-body">
+      <div *ngIf="mensajeError" class="error-msg">{{ mensajeError }}</div>
+
+      <div class="form-caja">
+        <div class="campo">
+          <label>Nombre</label>
+          <input type="text" [(ngModel)]="nuevoProveedor.nombre"
+                 placeholder="Ej: Químicas del Sur" (ngModelChange)="mensajeError = ''" />
+        </div>
+        <div class="fila">
+          <div class="campo">
+            <label>Contacto</label>
+            <input type="text" [(ngModel)]="nuevoProveedor.contacto"
+                   placeholder="Quién atiende" (ngModelChange)="mensajeError = ''" />
+          </div>
+          <div class="campo">
+            <label>Teléfono</label>
+            <input type="text" [(ngModel)]="nuevoProveedor.telefono" (ngModelChange)="mensajeError = ''" />
+          </div>
+        </div>
+        <div class="campo">
+          <label>Notas <span class="opcional">(opcional)</span></label>
+          <input type="text" [(ngModel)]="nuevoProveedor.notas" (ngModelChange)="mensajeError = ''" />
+        </div>
+      </div>
+    </div>
+
+    <div class="popup-acciones">
+      <button class="btn-atendido" [disabled]="guardando" (click)="guardarProveedor()">
+        {{ guardando ? 'Guardando...' : (editandoProveedor ? '💾 Guardar cambios' : '💾 Guardar proveedor') }}
+      </button>
+      <button class="btn-cancelado" (click)="cerrarFormProveedor()">↩️ Cancelar</button>
+    </div>
+  </div>
+</div>

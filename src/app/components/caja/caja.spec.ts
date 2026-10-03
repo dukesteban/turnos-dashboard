@@ -609,7 +609,6 @@ describe('Caja — el error se va cuando tocás un campo', () => {
   const POPUPS = [
     { abrir: 'abrirFormPago', cerrar: 'cerrarFormPago', campo: 'mensajeErrorPagos' },
     { abrir: 'abrirFormCompra', cerrar: 'cerrarFormCompra', campo: 'mensajeError' },
-    { abrir: 'abrirFormProveedor', cerrar: 'cerrarFormProveedor', campo: 'mensajeError' },
   ] as const;
 
   for (const p of POPUPS) {
@@ -640,15 +639,10 @@ describe('Caja — el error se va cuando tocás un campo', () => {
     });
   }
 
-  it('cerrar también descarta el modo edición', async () => {
-    // Si cerrar solo tapara el popup y dejara `proveedorEditando` puesto, el
-    // "Nuevo proveedor" de después abriría en modo edición.
+  it('cerrar tambien descarta el modo edicion', async () => {
+    // Si cerrar solo tapara el popup y dejara compraEditando puesto, el
+    // 'Registrar compra' de despues abriria en modo edicion.
     const { cmp } = await listo();
-    cmp.abrirFormProveedor({ id: 1, nombre: 'Químicas' });
-    cmp.cerrarFormProveedor();
-    expect(cmp.proveedorEditando).toBeNull();
-    expect(cmp.editandoProveedor).toBe(false);
-
     cmp.abrirFormCompra({ id: 1, proveedor_id: 1, fecha: '2026-03-01', concepto: 'x', cantidad: 1, monto: 100 });
     cmp.cerrarFormCompra();
     expect(cmp.compraEditando).toBeNull();
@@ -730,33 +724,6 @@ describe('Caja — el error se va cuando tocás un campo', () => {
     expect(cmp.mensajeError).toBe('');
   });
 
-  const CAMPOS_PROVEEDOR = ['nombre', 'contacto', 'telefono', 'notas'];
-
-  it('el popup de proveedor tiene 4 campos', async () => {
-    const { cmp, fixture } = await listo();
-    cmp.mostrarFormProveedor = true;
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelectorAll('.popup-overlay input').length)
-      .toBe(CAMPOS_PROVEEDOR.length);
-  });
-
-  for (const nombre of CAMPOS_PROVEEDOR) {
-    it(`tocar "${nombre}" borra el error del popup de proveedor`, async () => {
-      const { cmp, fixture } = await listo();
-      cmp.mostrarFormProveedor = true;
-      cmp.mensajeError = '❌ El nombre es obligatorio.';
-      fixture.detectChanges();
-
-      const campos = fixture.nativeElement.querySelectorAll('.popup-overlay input');
-      const indice = CAMPOS_PROVEEDOR.indexOf(nombre);
-
-      tocar(campos[indice], 'Químicas del Sur');
-      fixture.detectChanges();
-
-      expect(cmp.mensajeError).toBe('');
-    });
-  }
-
   it('el error NO aparece duplicado en la pestaña', async () => {
     // El error vive dentro del popup. Si también estuviera en la pestaña, con
     // el overlay puesto se vería el mismo texto dos veces.
@@ -800,7 +767,7 @@ describe('Caja — botones del popup iguales a los de Nuevo turno', () => {
 
   // Un test por popup: en un solo test con un loop, TestBed deja los fixtures
   // anteriores en el document y los selectores cuentan los tres a la vez.
-  for (const abrir of ['abrirFormPago', 'abrirFormCompra', 'abrirFormProveedor'] as const) {
+  for (const abrir of ['abrirFormPago', 'abrirFormCompra'] as const) {
     it(`${abrir}: mismo pie de botones`, async () => {
       const { cmp, fixture } = await listo();
       (cmp as any)[abrir]();
@@ -832,88 +799,6 @@ describe('Caja — editar proveedores y compras', () => {
 
   const PROV = { id: 1, nombre: 'Quimicas', contacto: 'Ana', telefono: '123', notas: null, activo: true };
   const COMPRA = { id: 5, proveedor_id: 1, fecha: '2026-03-15', concepto: 'Shampoo', cantidad: 2, monto: 48000, notas: null };
-
-  // ── PROVEEDOR ──
-
-  it('abrir sin argumento es un ALTA, no una edición', async () => {
-    const { cmp } = await listo({ getProveedores: () => Promise.resolve([PROV]) });
-    cmp.abrirFormProveedor();
-    expect(cmp.editandoProveedor).toBe(false);
-    expect(cmp.proveedorEditando).toBeNull();
-    expect(cmp.nuevoProveedor.nombre).toBe('');
-  });
-
-  it('abrir con un proveedor carga sus datos en el formulario', async () => {
-    const { cmp } = await listo({ getProveedores: () => Promise.resolve([PROV]) });
-    cmp.abrirFormProveedor(PROV);
-    expect(cmp.editandoProveedor).toBe(true);
-    expect(cmp.nuevoProveedor.nombre).toBe('Quimicas');
-    expect(cmp.nuevoProveedor.contacto).toBe('Ana');
-  });
-
-  it('los null del proveedor llegan como cadena vacía, no como "null"', async () => {
-    // Si no, el input muestra literalmente la palabra "null".
-    const { cmp } = await listo({
-      getProveedores: () => Promise.resolve([{ ...PROV, contacto: null, telefono: null }]),
-    });
-    cmp.abrirFormProveedor({ ...PROV, contacto: null, telefono: null });
-    expect(cmp.nuevoProveedor.contacto).toBe('');
-    expect(cmp.nuevoProveedor.telefono).toBe('');
-  });
-
-  it('guardar en modo edición llama a actualizar, NO a crear', async () => {
-    const actualizados: any[] = [];
-    const creados: any[] = [];
-    const { cmp } = await listo({
-      getProveedores: () => Promise.resolve([PROV]),
-      actualizarProveedor: (id: number, d: any) => { actualizados.push({ id, ...d }); return Promise.resolve(); },
-      crearProveedor: (d: any) => { creados.push(d); return Promise.resolve(); },
-    });
-    cmp.abrirFormProveedor(PROV);
-    cmp.nuevoProveedor.telefono = '999';
-
-    await cmp.guardarProveedor();
-
-    expect(actualizados.length).toBe(1);
-    expect(actualizados[0].id).toBe(1);
-    expect(actualizados[0].telefono).toBe('999');
-    expect(creados).toEqual([]);
-  });
-
-  // Sin el `?.id !==`, guardar el mismo proveedor sin tocarle el nombre daría
-  // "ya existe" siempre y sería imposible editar cualquier cosa.
-  it('editar sin cambiar el nombre NO da "ya existe"', async () => {
-    const { cmp } = await listo({ getProveedores: () => Promise.resolve([PROV]) });
-    cmp.abrirFormProveedor(PROV);
-    cmp.nuevoProveedor.contacto = 'Otro nombre de contacto';
-
-    await cmp.guardarProveedor();
-
-    expect(cmp.mensajeError).toBe('');
-  });
-
-  it('editar y poner el nombre de OTRO proveedor sí avisa', async () => {
-    const { cmp } = await listo({
-      getProveedores: () => Promise.resolve([PROV, { id: 2, nombre: 'Ledesma', activo: true }]),
-    });
-    cmp.abrirFormProveedor(PROV);
-    cmp.nuevoProveedor.nombre = 'ledesma';
-
-    await cmp.guardarProveedor();
-
-    expect(cmp.mensajeError).toMatch(/ya existe/i);
-  });
-
-  it('tras editar, el popup se cierra y avisa que se actualizó', async () => {
-    const { cmp } = await listo({
-      getProveedores: () => Promise.resolve([PROV]),
-      actualizarProveedor: () => Promise.resolve(),
-    });
-    cmp.abrirFormProveedor(PROV);
-    await cmp.guardarProveedor();
-    expect(cmp.mostrarFormProveedor).toBe(false);
-    expect(cmp.proveedorEditando).toBeNull();
-  });
 
   // ── COMPRA ──
 
@@ -1045,7 +930,6 @@ describe('Caja — el pie de acciones está en la fila', () => {
   // grilla que se declara tiene TANTAS columnas como celdas tiene la fila.
   const TABLAS_CON_ACCIONES = [
     { clase: 'tr-con-acciones', celdas: 6, etiqueta: 'compras', tab: 'proveedores' },
-    { clase: 'tr-contacto', celdas: 4, etiqueta: 'proveedores', tab: 'proveedores' },
     { clase: 'tr-pagos', celdas: 5, etiqueta: 'pagos', tab: 'empleados' },
   ];
 
@@ -1075,22 +959,6 @@ describe('Caja — el pie de acciones está en la fila', () => {
       }
     });
   }
-
-  it('la fila de proveedores también usa su clase de acciones', async () => {
-    const { cmp, fixture } = await listo({
-      getProveedores: () => Promise.resolve([
-        { id: 1, nombre: 'Quimicas', contacto: 'Ana', telefono: '123', activo: true },
-      ]),
-    });
-    cmp.cambiarTab('proveedores');
-    fixture.detectChanges();
-
-    const filas = fixture.nativeElement.querySelectorAll('.tr-contacto');
-    expect(filas.length).toBeGreaterThan(0);
-    const conAcciones = filas[filas.length - 1];
-    expect(conAcciones.querySelector('.celda-acciones')).toBeTruthy();
-    expect(conAcciones.children.length).toBe(4);
-  });
 
   it('eliminar una compra pide confirmación antes de tocar la base', async () => {
     const spy = vi.spyOn(window, 'confirm').mockReturnValue(false);
@@ -1325,64 +1193,6 @@ describe('Caja — proveedores y compras', () => {
     return r;
   };
 
-  it('exige nombre de proveedor', async () => {
-    const { cmp, mock } = await listo();
-    cmp.nuevoProveedor = { nombre: '   ', contacto: '', telefono: '', notas: '' };
-    await cmp.guardarProveedor();
-    expect(cmp.mensajeError).toMatch(/nombre es obligatorio/i);
-    expect(mock.llamadas).not.toContain('crearProveedor');
-  });
-
-  // El índice único de la base es lower(btrim(nombre)). Avisar acá evita el
-  // error de Postgres.
-  it('rechaza un proveedor con el mismo nombre ignorando mayúsculas y espacios', async () => {
-    const { cmp, mock } = await listo({
-      getProveedores: () => Promise.resolve([
-        { id: 1, nombre: 'Ledesma', contacto: null, telefono: null, activo: true },
-      ]),
-    });
-    cmp.nuevoProveedor = { nombre: '  ledesma ', contacto: '', telefono: '', notas: '' };
-    await cmp.guardarProveedor();
-    expect(cmp.mensajeError).toMatch(/ya existe/i);
-    expect(mock.llamadas).not.toContain('crearProveedor');
-  });
-
-  it('un proveedor válido se guarda y recarga', async () => {
-    const { cmp } = await listo();
-    cmp.nuevoProveedor = { nombre: '  Químicas del Sur ', contacto: ' Ana ', telefono: ' 123 ', notas: '' };
-    await cmp.guardarProveedor();
-    // Con trim: a la base no le mandamos espacios alrededor.
-    const Mock = (c: any) => c;
-    expect(Mock).toBeDefined();
-  });
-
-  // Un buscador tiene que ignorar acentos: el usuario escribe "quimicas" sin
-  // tilde y tiene que encontrar a "Químicas del Sur". Es la misma razón por la
-  // que en Clientes se usa `contiene` y no `paraComparar`.
-  it('el filtro de proveedores ignora acentos y mayúsculas', async () => {
-    const { cmp } = await listo({
-      getProveedores: () => Promise.resolve([
-        { id: 1, nombre: 'Ledesma SA', activo: true },
-        { id: 2, nombre: 'Químicas del Sur', activo: true },
-      ]),
-    });
-    for (const q of ['quimicas', 'QUIMICAS', 'del sur', 'sur']) {
-      cmp.busquedaProveedor = q;
-      expect(cmp.proveedoresFiltrados.map((p: any) => p.id)).toEqual([2]);
-    }
-  });
-
-  // El chequeo de DUPLICADOS sí tiene que distinguir acentos, porque en la base
-  // son dos proveedores distintos. Por eso usa `paraComparar` y no `contiene`.
-  it('el chequeo de duplicados NO ignora acentos', async () => {
-    const { cmp } = await listo({
-      getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Cañada', activo: true }]),
-    });
-    cmp.nuevoProveedor = { nombre: 'Canada', contacto: '', telefono: '', notas: '' };
-    await cmp.guardarProveedor();
-    expect(cmp.mensajeError).toBe('');   // "Canada" NO es duplicado de "Cañada"
-  });
-
   it('el combo de compra solo ofrece proveedores activos', async () => {
     const { cmp } = await listo({
       getProveedores: () => Promise.resolve([
@@ -1391,18 +1201,6 @@ describe('Caja — proveedores y compras', () => {
       ]),
     });
     expect(cmp.proveedoresActivos.map((p: any) => p.id)).toEqual([1]);
-  });
-
-  it('inactivar proveedor pide confirmación y lo marca inactivo', async () => {
-    const spy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const inactivos: number[] = [];
-    const { cmp } = await listo({
-      getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Ledesma', activo: true }]),
-      inactivarProveedor: (id: number) => { inactivos.push(id); return Promise.resolve(); },
-    });
-    await cmp.inactivarProveedor({ id: 1, nombre: 'Ledesma', activo: true });
-    expect(inactivos).toEqual([1]);
-    spy.mockRestore();
   });
 
   it('compra: exige proveedor, fecha, concepto y monto > 0', async () => {

@@ -1,0 +1,193 @@
+// ============================================================
+// TABLA Y SECCIONES COMPARTIDAS
+// ------------------------------------------------------------
+// Vive aca porque lo usan DOS pantallas: Caja (compras, pagos y
+// proveedores) y Personas > Proveedores. Estaba todo en `caja.scss` y
+// cuando el ABM de proveedores se movio a Personas, duplicarlo habria
+// sido la manera rapida de que las dos tablas se desincronicen solas.
+//
+// Uso:  @use '../../../styles/tabla';
+// ============================================================
+
+.seccion {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow-x: auto;
+
+  h3 {
+    font-size: 0.95rem;
+    color: #334155;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+}
+
+.vacio {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  padding: 24px 0;
+}
+
+// ── TABLAS ───────────────────────────────────────────────────
+// Rejilla y no <table>: cada tabla tiene columnas distintas y así cada una
+// define las suyas sin pelearse por un colspan.
+// ── SCROLL HORIZONTAL DE TABLAS ─────────────────────────────
+// En celular la tabla NO se apila: se scrollea.
+//
+// La primera versión pasaba las filas a 2 columnas en el celu y el resultado
+// era ilegible (los números arriba del nombre, la diferencia suelta). Con scroll
+// la tabla sigue siendo una tabla y los importes quedan alineados, que es lo
+// que hay que leer en una caja.
+//
+// El borde y el radio quedan en el wrapper, no en `.tabla-caja`: si el radio
+// estuviera en la caja, `overflow` la recortaría y el scroll no podría scrollear.
+.tabla-scroll {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow-x: auto;
+  // Para que el scroll con el dedo no dispare el scroll de la página en iOS.
+  -webkit-overflow-scrolling: touch;
+}
+
+.tabla-caja {
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+
+  .tr {
+    display: grid;
+    grid-template-columns: 2.2fr 0.8fr 1fr 1fr 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.9rem;
+
+    &:last-child { border-bottom: none; }
+  }
+
+  // Las tablas con un botón de acción al final necesitan más columnas.
+  //
+  // Antes se detectaban con `:has(> span:nth-child(6))`, que NUNCA matcheaba:
+  // la sexta celda de las compras es un `<button>`, no un `<span>`. Como la
+  // regla no aplicaba, la fila usaba la grilla de 5 columnas con 6 celdas y el
+  // botón se caía a una segunda línea (se veía como un botón suelto abajo).
+  //
+  // Ahora cada tabla que tiene acciones lleva la clase explícita. Más legible
+  // que `:has()` y no depende de qué tag tenga la última celda.
+  .tr-con-acciones {
+    grid-template-columns: 1.8fr 1fr 2fr 0.5fr 0.9fr 34px;
+  }
+
+  .tr-contacto {
+    grid-template-columns: 2.4fr 1.4fr 1.4fr 34px;
+  }
+
+  .tr-pagos {
+    grid-template-columns: 2.2fr 1fr 1fr 1fr 34px;
+  }
+  .tr-cabecera {
+    background: #f8fafc;
+    font-weight: 600;
+    font-size: 0.76rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .tr-total {
+    background: #f8fafc;
+    font-weight: 700;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .celda-principal { font-weight: 600; }
+  .celda-concepto  { color: #475569; overflow: hidden; text-overflow: ellipsis; }
+  .celda-chica     { color: #64748b; font-size: 0.82rem; }
+
+  // La diferencia es lo que hay que mirar al cerrar el mes, así que va en
+  // negrita siempre: el color dice si se pagó de más o de menos, el grosor
+  // dice "esta es la columna que importa".
+  .celda-diferencia { font-weight: 700; }
+
+  // Los botones de acción van juntos en una celda. Si cada `<button>` fuera una
+  // celda por separado, la grilla los cuenta como columnas y se caen de lado.
+  .celda-acciones {
+    display: flex;
+    gap: 2px;
+    justify-content: flex-end;
+  }
+
+  .verde { color: #15803d; }
+  .rojo  { color: #b91c1c; }
+
+  .fila-inactiva {
+    opacity: 0.55;
+
+    .celda-principal { font-weight: 400; }
+  }
+}
+
+.badge-inactivo {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.subtitulo {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.buscador {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+// `.btn-primary` vive en `src/styles/_popup.scss` (partial compartido).
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 4px;
+  border-radius: 6px;
+
+  &:hover { background: #f1f5f9; }
+}
+
+.seccion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+
+  h3 { margin: 0; }
+}
+
+.alerta {
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 0.88rem;
+
+  &.exito { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+  &.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+}

@@ -54,13 +54,6 @@ export class CajaComponent implements OnInit {
   // ── PROVEEDORES Y COMPRAS ──
   proveedores: any[] = [];
   compras: any[] = [];
-  busquedaProveedor = '';
-  mostrarFormProveedor = false;
-  nuevoProveedor: any = { nombre: '', contacto: '', telefono: '', notas: '' };
-  // Fila que se está editando, o null si el popup es un alta nueva. El popup es
-  // el mismo para las dos cosas: si el usuario edita y después quiere crear, el
-  // botón "Nuevo proveedor" siempre abre limpio.
-  proveedorEditando: any = null;
   mostrarFormCompra = false;
   nuevaCompra: any = { proveedor_id: null, fecha: '', concepto: '', cantidad: 1, monto: null, notas: '' };
   compraEditando: any = null;
@@ -272,19 +265,6 @@ export class CajaComponent implements OnInit {
   }
 
   /**
-   * Filtro del buscador de proveedores.
-   *
-   * Usa `contiene` (sin acentos) y NO `paraComparar` (con acentos). Para el
-   * chequeo de duplicados `paraComparar` es lo correcto: "Cañada" y "Canada"
-   * son proveedores distintos y la base los guarda distintos. Pero en un
-   * BUSCADOR el usuario escribe "quimicas" sin tilde y tiene que encontrar a
-   * "Químicas del Sur" — igual que en la pantalla de Clientes.
-   */
-  get proveedoresFiltrados(): any[] {
-    if (!this.busquedaProveedor) return this.proveedores;
-    return this.proveedores.filter((p: any) => contiene(p.nombre, this.busquedaProveedor));
-  }
-
   /** Solo los activos: no tiene sentido cargar una compra a un proveedor dado de baja. */
   get proveedoresActivos(): any[] {
     return this.proveedores.filter((p: any) => p.activo);
@@ -338,7 +318,7 @@ export class CajaComponent implements OnInit {
   // lista no se mueve y el ✕ queda siempre a mano.
   //
   // El mismo popup sirve para el alta y para la edición: la diferencia es
-  // `proveedorEditando` / `compraEditando`. Si fueran dos popups separados habría
+   // `compraEditando` (null = alta). Si fueran dos popups separados habria
   // que mantener dos veces el mismo form.
   //
   // Al abrir se limpian los mensajes de error, y también al CERRAR: si el usuario
@@ -357,27 +337,6 @@ export class CajaComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
-  /** Sin argumento = alta nueva. Con un proveedor = editar ese. */
-  abrirFormProveedor(p: any = null) {
-    this.mensajeError = '';
-    this.proveedorEditando = p;
-    this.nuevoProveedor = p
-      ? { nombre: p.nombre, contacto: p.contacto || '', telefono: p.telefono || '', notas: p.notas || '' }
-      : { nombre: '', contacto: '', telefono: '', notas: '' };
-    this.mostrarFormProveedor = true;
-    this.cdr.detectChanges();
-  }
-
-  cerrarFormProveedor() {
-    this.mostrarFormProveedor = false;
-    this.proveedorEditando = null;
-    this.mensajeError = '';
-    this.cdr.detectChanges();
-  }
-
-  get editandoProveedor(): boolean {
-    return this.proveedorEditando !== null;
-  }
 
   /** Sin argumento = alta nueva. Con una compra = editar esa. */
   abrirFormCompra(c: any = null) {
@@ -552,64 +511,7 @@ export class CajaComponent implements OnInit {
 
   // ── PROVEEDORES: alta / inactivar ─────────────────────────
 
-  async guardarProveedor() {
-    this.mensajeError = '';
-    this.mensaje = '';
-    if (!this.nuevoProveedor.nombre.trim()) {
-      this.mensajeError = '❌ El nombre es obligatorio.';
-      return;
-    }
-    // El índice único de la base es `lower(btrim(nombre))`. Se avisa acá para
-    // que el mensaje sea "ya existe" y no un error de Postgres.
-    //
-    // Al EDITAR hay que excluirse a uno mismo: sin el `?.id !==`, guardar el
-    // mismo proveedor sin tocarle el nombre daría "ya existe" siempre.
-    const idEnEdicion = this.proveedorEditando?.id;
-    if (this.proveedores.some(
-      (p: any) => paraComparar(p.nombre) === paraComparar(this.nuevoProveedor.nombre)
-        && p.id !== idEnEdicion
-    )) {
-      this.mensajeError = '⚠️ Ya existe un proveedor con ese nombre.';
-      return;
-    }
-    this.guardando = true;
-    const datos = {
-      nombre: this.nuevoProveedor.nombre.trim(),
-      contacto: this.nuevoProveedor.contacto.trim() || null,
-      telefono: this.nuevoProveedor.telefono.trim() || null,
-      notas: this.nuevoProveedor.notas.trim() || null,
-    };
-    try {
-      if (this.editandoProveedor) {
-        await this.supabase.actualizarProveedor(idEnEdicion, datos);
-      } else {
-        await this.supabase.crearProveedor(datos);
-      }
-      const eraEdicion = this.editandoProveedor;
-      this.cerrarFormProveedor();
-      this.nuevoProveedor = { nombre: '', contacto: '', telefono: '', notas: '' };
-      await this.cargarDatos();
-      this.mostrarMensaje(eraEdicion ? '✅ Proveedor actualizado.' : '✅ Proveedor agregado.');
-    } catch (e) {
-      this.mensajeError = '❌ No se pudo guardar el proveedor.';
-    }
-    this.guardando = false;
-    this.cdr.detectChanges();
-  }
-
   /** Inactivar, no borrar: las compras viejas tienen que seguir apuntando a alguien. */
-  async inactivarProveedor(p: any) {
-    if (!confirm(`¿Inactivar "${p.nombre}"? Las compras ya registradas se mantienen.`)) return;
-    try {
-      await this.supabase.inactivarProveedor(p.id);
-      await this.cargarDatos();
-      this.mostrarMensaje('✅ Proveedor inactivado.');
-    } catch (e) {
-      this.mensajeError = '❌ No se pudo inactivar.';
-    }
-    this.cdr.detectChanges();
-  }
-
   // ── COMPRAS: alta / borrado ────────────────────────────────
 
   async guardarCompra() {

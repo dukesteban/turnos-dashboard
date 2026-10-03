@@ -376,47 +376,6 @@
       </div>
     </div>
 
-    <!-- Listado de proveedores -->
-    <div class="seccion">
-      <div class="seccion-header">
-        <h3>Proveedores</h3>
-        <button class="btn-primary" (click)="abrirFormProveedor()">
-          ➕ Nuevo proveedor
-        </button>
-      </div>
-
-      <input type="text" class="buscador" [(ngModel)]="busquedaProveedor"
-             placeholder="🔍 Buscar proveedor..." />
-
-      <div *ngIf="proveedoresFiltrados.length === 0" class="vacio">
-        No hay proveedores cargados
-      </div>
-
-      <div class="tabla-scroll">
-        <div class="tabla-caja">
-          <div class="tr tr-cabecera tr-contacto">
-            <span>Proveedor</span>
-            <span>Contacto</span>
-            <span>Teléfono</span>
-            <span></span>
-          </div>
-          <div *ngFor="let p of proveedoresFiltrados" class="tr tr-contacto" [class.fila-inactiva]="!p.activo">
-            <span class="celda-principal">
-              {{ p.nombre }}
-              <span *ngIf="!p.activo" class="badge-inactivo">Inactivo</span>
-            </span>
-            <span class="celda-chica">{{ p.contacto || '—' }}</span>
-            <span class="celda-chica">{{ p.telefono || '—' }}</span>
-            <!-- Editar y borrar juntos en la celda de acciones. -->
-            <span class="celda-acciones">
-              <button class="btn-icon" (click)="abrirFormProveedor(p)" title="Editar">✏️</button>
-              <button *ngIf="p.activo" class="btn-icon" (click)="inactivarProveedor(p)"
-                      title="Inactivar">🚫</button>
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- ══════════ POPUP: REGISTRAR COMPRA ══════════ -->
@@ -507,50 +466,6 @@
           {{ guardando ? 'Guardando...' : (editandoCompra ? '💾 Guardar cambios' : '💾 Guardar compra') }}
         </button>
         <button class="btn-cancelado" (click)="cerrarFormCompra()">↩️ Cancelar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════ POPUP: NUEVO PROVEEDOR ══════════ -->
-  <div *ngIf="mostrarFormProveedor" class="popup-overlay" (click)="cerrarFormProveedor()">
-    <div class="popup" (click)="$event.stopPropagation()">
-      <div class="popup-header">
-        <h3>{{ editandoProveedor ? '🏭 Editar proveedor' : '🏭 Nuevo proveedor' }}</h3>
-        <button class="btn-cerrar" (click)="cerrarFormProveedor()">✕</button>
-      </div>
-
-      <div class="popup-body">
-        <div *ngIf="mensajeError" class="error-msg">{{ mensajeError }}</div>
-
-        <div class="form-caja">
-          <div class="campo">
-            <label>Nombre</label>
-            <input type="text" [(ngModel)]="nuevoProveedor.nombre"
-                   placeholder="Ej: Químicas del Sur" (ngModelChange)="mensajeError = ''" />
-          </div>
-          <div class="fila">
-            <div class="campo">
-              <label>Contacto</label>
-              <input type="text" [(ngModel)]="nuevoProveedor.contacto"
-                     placeholder="Quién atiende" (ngModelChange)="mensajeError = ''" />
-            </div>
-            <div class="campo">
-              <label>Teléfono</label>
-              <input type="text" [(ngModel)]="nuevoProveedor.telefono" (ngModelChange)="mensajeError = ''" />
-            </div>
-          </div>
-          <div class="campo">
-            <label>Notas <span class="opcional">(opcional)</span></label>
-            <input type="text" [(ngModel)]="nuevoProveedor.notas" (ngModelChange)="mensajeError = ''" />
-          </div>
-        </div>
-      </div>
-
-      <div class="popup-acciones">
-        <button class="btn-atendido" [disabled]="guardando" (click)="guardarProveedor()">
-          {{ guardando ? 'Guardando...' : (editandoProveedor ? '💾 Guardar cambios' : '💾 Guardar proveedor') }}
-        </button>
-        <button class="btn-cancelado" (click)="cerrarFormProveedor()">↩️ Cancelar</button>
       </div>
     </div>
   </div>

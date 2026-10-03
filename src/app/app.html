@@ -16,11 +16,14 @@
     <a routerLink="/ganancias" routerLinkActive="active">
       <span class="icono">💰</span><span class="texto"> Caja</span>
     </a>
-    <a routerLink="/clientes" routerLinkActive="active">
-      <span class="icono">👥</span><span class="texto"> Clientes</span>
-    </a>
-    <a routerLink="/empleados" routerLinkActive="active">
-      <span class="icono">🧑‍🔧</span><span class="texto"> Empleados</span>
+    <!--
+      PERSONAS agrupa las tres fichas de gente: clientes, empleados y
+      proveedores. `routerLinkActive` sin `exact` para que `/personas` quede
+      marcado también en las tres pestañas: si no, solo se resalta en Clientes y
+      uno no ve dónde está parado.
+    -->
+    <a routerLink="/personas" routerLinkActive="active">
+      <span class="icono">👥</span><span class="texto"> Personas</span>
     </a>
     <a routerLink="/configuracion" routerLinkActive="active">
       <span class="icono">⚙️</span><span class="texto"> Config</span>
