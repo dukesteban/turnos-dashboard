@@ -1,0 +1,575 @@
+.caja-page {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.ganancias-page .seccion {
+  overflow-x: hidden;
+}
+
+.controles {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.vistas {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
+
+  button {
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: #64748b;
+    font-weight: 500;
+    transition: all 0.2s;
+    &.activo {
+      background: white;
+      color: #1e293b;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+  }
+}
+
+.navegacion {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-nav {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 6px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &:hover { background: #f1f5f9; }
+}
+
+.btn-hoy {
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  &:hover { background: #f1f5f9; }
+}
+
+.fecha-titulo {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+// STATS
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+
+  @media (max-width: 800px) { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 480px) { grid-template-columns: 1fr; }
+}
+
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  &.verde .stat-icon { background: #dcfce7; }
+  &.azul .stat-icon { background: #dbeafe; }
+  &.naranja .stat-icon { background: #ffedd5; }
+  &.violeta .stat-icon { background: #ede9fe; }
+}
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1e293b;
+  &.stat-value-sm { font-size: 0.95rem; }
+}
+
+// GRID INFERIOR
+.grid-inferior {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+
+  @media (max-width: 700px) { grid-template-columns: 1fr; }
+}
+
+.seccion {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow-x: auto;
+
+  h3 {
+    font-size: 0.95rem;
+    color: #334155;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+}
+
+.vacio {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  padding: 24px 0;
+}
+
+// GRAFICO
+.grafico {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 180px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  padding-top: 32px;
+  width: 100%;
+}
+
+.grafico-inner {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 600px;
+  width: 100%;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.barra-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 24px;
+  height: 100%;
+}
+
+.barra-wrap {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+}
+
+.barra-valor {
+  font-size: 0.6rem;
+  color: #64748b;
+  margin-bottom: 10px;
+  white-space: nowrap;
+  transform: rotate(-45deg);
+  transform-origin: center center;
+}
+
+.barra {
+  width: 100%;
+  background: #e2e8f0;
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+  transition: height 0.3s;
+
+  &.tiene-datos { background: #3b82f6; }
+}
+
+.barra-label {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.barra-col.clickeable {
+  cursor: pointer;
+  &:hover .barra { filter: brightness(0.85); }
+}
+
+// POR SERVICIO
+.servicios-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.servicio-fila {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.servicio-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.servicio-nombre {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.servicio-cantidad {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.servicio-barra-wrap {
+  height: 6px;
+  background: #f1f5f9;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.servicio-barra {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 3px;
+  transition: width 0.4s;
+}
+
+.servicio-total {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1e293b;
+  text-align: right;
+}
+
+// ══════════════════════════════════════════════════════════════
+// CAJA — pestañas de Pagos a Empleados y Proveedores
+//
+// Lo que hay arriba de esta línea es la pestaña de Ingresos, sin tocar.
+// ══════════════════════════════════════════════════════════════
+
+// ── PESTAÑAS ─────────────────────────────────────────────────
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid #e2e8f0;
+
+  button {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    padding: 10px 16px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    transition: color 0.15s, background 0.15s;
+
+    &:hover { background: #f8fafc; color: #334155; }
+
+    &.activo {
+      color: #1d4ed8;
+      border-bottom-color: #1d4ed8;
+    }
+  }
+}
+
+// ── RESUMEN DE CAJA ──────────────────────────────────────────
+// Va arriba de las pestañas, no dentro de ninguna: el balance es el motivo de la
+// pantalla y tiene que estar visible desde las tres.
+.caja-resumen {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.caja-fila {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 7px 0;
+
+  &.total {
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+    font-weight: 700;
+    font-size: 1.05rem;
+  }
+}
+
+.caja-label { color: #475569; }
+
+.caja-valor {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+
+  &.verde { color: #15803d; }
+  &.rojo  { color: #b91c1c; }
+}
+
+.caja-nota {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 8px 10px;
+  line-height: 1.45;
+}
+
+// ── TABLAS ───────────────────────────────────────────────────
+// Rejilla y no <table>: cada tabla tiene columnas distintas y así cada una
+// define las suyas sin pelearse por un colspan.
+.tabla-caja {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+
+  .tr {
+    display: grid;
+    grid-template-columns: 2.2fr 0.8fr 1fr 1fr 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.9rem;
+
+    &:last-child { border-bottom: none; }
+  }
+
+  // Las tablas de pagos y de compras tienen 6 columnas.
+  .tr:has(> span:nth-child(6)) {
+    grid-template-columns: 1.8fr 1fr 2fr 0.5fr 0.9fr 34px;
+  }
+
+  .tr-cabecera {
+    background: #f8fafc;
+    font-weight: 600;
+    font-size: 0.76rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .tr-total {
+    background: #f8fafc;
+    font-weight: 700;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .celda-principal { font-weight: 600; }
+  .celda-concepto  { color: #475569; overflow: hidden; text-overflow: ellipsis; }
+  .celda-chica     { color: #64748b; font-size: 0.82rem; }
+
+  .verde { color: #15803d; }
+  .rojo  { color: #b91c1c; }
+
+  .fila-inactiva {
+    opacity: 0.55;
+
+    .celda-principal { font-weight: 400; }
+  }
+}
+
+.badge-inactivo {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.subtitulo {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+// ── FORMULARIOS ──────────────────────────────────────────────
+.form-caja {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 14px;
+
+  .fila {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .campo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+    flex: 1;
+    min-width: 160px;
+
+    label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .opcional { font-weight: 400; color: #94a3b8; }
+
+    input, select {
+      padding: 9px 11px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-family: inherit;
+
+      &:focus {
+        outline: none;
+        border-color: #1d4ed8;
+        box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
+      }
+    }
+  }
+}
+
+.buscador {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.btn-primary {
+  padding: 9px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #1d4ed8;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover:not(:disabled) { background: #1e40af; }
+  &:disabled { opacity: 0.6; cursor: default; }
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 4px;
+  border-radius: 6px;
+
+  &:hover { background: #f1f5f9; }
+}
+
+.seccion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+
+  h3 { margin: 0; }
+}
+
+.alerta {
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 0.88rem;
+
+  &.exito { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+  &.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+}
+
+.resumen-prov {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+
+  h4 {
+    margin: 0 0 10px;
+    font-size: 0.9rem;
+    color: #475569;
+  }
+}
+
+// ── RESPONSIVE ───────────────────────────────────────────────
+@media (max-width: 700px) {
+  .tabs {
+    overflow-x: auto;
+
+    button { white-space: nowrap; padding: 10px 12px; }
+  }
+
+  // Las tablas dejan de ser rejilla y pasan a filas apiladas: en un celu no
+  // entran 5 columnas y los números importan más que las etiquetas.
+  .tabla-caja .tr {
+    grid-template-columns: 1fr 1fr !important;
+    row-gap: 2px;
+  }
+
+  .tabla-caja .tr-cabecera { display: none; }
+}

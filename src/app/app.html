@@ -10,8 +10,11 @@
     <a routerLink="/agenda" routerLinkActive="active">
       <span class="icono">📅</span><span class="texto"> Agenda</span>
     </a>
+    <!-- El link sigue apuntando a /ganancias para no romper URLs guardadas,
+         pero el texto es "Caja": la pantalla ya muestra ingresos, pagos y
+         compras, no solo lo que se ganó. -->
     <a routerLink="/ganancias" routerLinkActive="active">
-      <span class="icono">💰</span><span class="texto"> Ganancias</span>
+      <span class="icono">💰</span><span class="texto"> Caja</span>
     </a>
     <a routerLink="/clientes" routerLinkActive="active">
       <span class="icono">👥</span><span class="texto"> Clientes</span>

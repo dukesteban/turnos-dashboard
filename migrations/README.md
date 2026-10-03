@@ -6,14 +6,14 @@ base, se perdía todo y nadie sabía qué se había aplicado.
 
 ## Cómo se aplican
 
-En orden, del 001 al 010. Todas son **idempotentes**: correrlas dos veces no
+En orden, del 001 al 012. Todas son **idempotentes**: correrlas dos veces no
 rompe nada, así que podés aplicarlas sobre una base ya actualizada.
 
 ```bash
 # Con psql
 psql "$DATABASE_URL" -f migrations/001_empleados_y_comisiones.sql
 psql "$DATABASE_URL" -f migrations/002_puestos.sql
-# ... y así hasta el 010
+# ... y así hasta el 012
 
 # O todas de una, en orden:
 for f in migrations/0*.sql; do psql "$DATABASE_URL" -f "$f"; done
@@ -37,6 +37,7 @@ Desde el MCP de Supabase se corre el contenido del archivo como un solo
 | 009 | `telefono_denormalizado.sql` | `NULL` en vez de `''`, fusiona cliente duplicado |
 | 010 | `turnos_hora_coincide.sql` | CHECK: `hora` y `hora_inicio` no pueden divergir |
 | 011 | `retirar_puestos.sql` | **Borra la tabla `puestos`**: la agenda ya usa columnas por empleado |
+| 012 | `caja.sql` | **Caja**: `pagos_empleado`, `proveedores`, `compras_proveedor` |
 
 ### Sobre 002 y 011
 

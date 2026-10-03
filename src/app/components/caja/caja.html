@@ -1,0 +1,421 @@
+<div class="caja-page">
+
+  <!-- Controles -->
+  <div class="controles">
+    <div class="vistas">
+      <button [class.activo]="vista === 'dia'" (click)="cambiarVista('dia')">📅 Día</button>
+      <button [class.activo]="vista === 'mes'" (click)="cambiarVista('mes')">📆 Mes</button>
+    </div>
+    <div class="navegacion">
+      <button class="btn-nav" (click)="navegar(-1)">‹</button>
+      <button class="btn-hoy" (click)="irHoy()">{{ vista === 'dia' ? 'Hoy' : 'Actual' }}</button>
+      <button class="btn-nav" (click)="navegar(1)">›</button>
+    </div>
+    <div class="fecha-titulo">{{ tituloFecha }}</div>
+  </div>
+
+  <!-- PESTAÑAS -->
+  <div class="tabs">
+    <button [class.activo]="tab === 'ingresos'" (click)="cambiarTab('ingresos')">
+      📈 Ingresos
+    </button>
+    <button [class.activo]="tab === 'empleados'" (click)="cambiarTab('empleados')">
+      👷 Pagos Empleados
+    </button>
+    <button [class.activo]="tab === 'proveedores'" (click)="cambiarTab('proveedores')">
+      📦 Proveedores
+    </button>
+  </div>
+
+  <!--
+    RESUMEN DE CAJA. Está ARRIBA de las pestañas y no dentro de ninguna: el
+    balance es el número que motiva la pantalla y tiene que verse siempre,
+    aunque estés viendo solo ingresos.
+  -->
+  <div class="caja-resumen">
+    <div class="caja-fila">
+      <span class="caja-label">Ingresos</span>
+      <span class="caja-valor verde">${{ totalIngresos | number }}</span>
+    </div>
+    <div class="caja-fila">
+      <span class="caja-label">Pagos a empleados</span>
+      <span class="caja-valor rojo">−${{ totalPagadoEmpleados | number }}</span>
+    </div>
+    <div class="caja-fila">
+      <span class="caja-label">Compras a proveedores</span>
+      <span class="caja-valor rojo">−${{ totalCompras | number }}</span>
+    </div>
+    <div class="caja-fila total" [class.negativo]="balance < 0">
+      <span class="caja-label">Queda en caja</span>
+      <span class="caja-valor" [class.verde]="balance >= 0" [class.rojo]="balance < 0">
+        ${{ balance | number }}
+      </span>
+    </div>
+    <p *ngIf="balance < 0" class="caja-nota">
+      Da negativo: en este período se pagaron más comisiones o compras de las que
+      entraron. Puede ser un pago atrasado, no necesariamente un error.
+    </p>
+  </div>
+
+  <!-- ══════════ PESTAÑA 1: INGRESOS ══════════
+       Esta es la pantalla que antes se llamaba Ganancias, tal cual estaba. -->
+  <div *ngIf="esTab('ingresos')">
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card verde">
+      <div class="stat-icon">💰</div>
+      <div class="stat-info">
+        <span class="stat-label">Total ganancias</span>
+        <span class="stat-value">${{ totalGanancias | number }}</span>
+      </div>
+    </div>
+    <div class="stat-card azul">
+      <div class="stat-icon">✅</div>
+      <div class="stat-info">
+        <span class="stat-label">Turnos atendidos</span>
+        <span class="stat-value">{{ totalAtendidos }}</span>
+      </div>
+    </div>
+    <!--
+    <div class="stat-card naranja">
+      <div class="stat-icon">🎯</div>
+      <div class="stat-info">
+        <span class="stat-label">Ticket promedio</span>
+        <span class="stat-value">${{ ticketPromedio | number }}</span>
+      </div>
+    </div>
+    -->
+    <div class="stat-card naranja">
+      <div class="stat-icon">💳</div>
+      <div class="stat-info">
+        <span class="stat-label">Pago más usado</span>
+        <span class="stat-value stat-value-sm">{{ metodoPagoMasUsado }}</span>
+      </div>
+    </div>
+    <div class="stat-card violeta">
+      <div class="stat-icon">⭐</div>
+      <div class="stat-info">
+        <span class="stat-label">Servicio más vendido</span>
+        <span class="stat-value stat-value-sm">{{ servicioMasVendido }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-inferior">
+
+    <!-- Gráfico -->
+    <div class="seccion">
+      <h3>{{ vista === 'dia' ? 'Ganancias por hora' : 'Ganancias por día' }}</h3>
+      <div *ngIf="cargando" class="vacio">Cargando...</div>
+      <div *ngIf="!cargando && totalAtendidos === 0" class="vacio">Sin datos para este período</div>
+      <div *ngIf="!cargando && totalAtendidos > 0" class="grafico" #graficoRef>
+        <div class="grafico-inner">
+          <div *ngFor="let barra of datosGrafico" class="barra-col" [class.clickeable]="vista === 'mes' && barra.total > 0" (click)="irADia(barra.label)">
+            <div class="barra-wrap">
+              <div class="barra-valor" *ngIf="barra.total > 0">${{ barra.total | number }}</div>
+              <div class="barra"
+                [style.height.%]="(barra.total / maxGrafico) * 100"
+                [class.tiene-datos]="barra.total > 0">
+              </div>
+            </div>
+            <div class="barra-label">{{ barra.label }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Por servicio -->
+    <div class="seccion">
+      <h3>Por servicio</h3>
+      <div *ngIf="totalPorServicio.length === 0" class="vacio">Sin datos</div>
+      <div class="servicios-lista">
+        <div *ngFor="let s of totalPorServicio" class="servicio-fila">
+          <div class="servicio-info">
+            <span class="servicio-nombre">{{ s.nombre }}</span>
+            <span class="servicio-cantidad">{{ s.cantidad }} {{ s.cantidad === 1 ? 'vez' : 'veces' }}</span>
+          </div>
+          <div class="servicio-barra-wrap">
+            <div class="servicio-barra" [style.width.%]="(s.total / totalGanancias) * 100"></div>
+          </div>
+          <span class="servicio-total">${{ s.total | number }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Por método de pago -->
+    <div class="seccion">
+      <h3>Por método de pago</h3>
+      <div *ngIf="totalPorMetodoPago.length === 0" class="vacio">Sin datos</div>
+      <div class="servicios-lista">
+        <div *ngFor="let m of totalPorMetodoPago" class="servicio-fila">
+          <div class="servicio-info">
+            <span class="servicio-nombre">{{ m.metodo }}</span>
+            <span class="servicio-cantidad">{{ m.cantidad }} {{ m.cantidad === 1 ? 'turno' : 'turnos' }}</span>
+          </div>
+          <div class="servicio-barra-wrap">
+            <div class="servicio-barra" [style.width.%]="(m.total / totalGanancias) * 100"></div>
+          </div>
+          <span class="servicio-total">${{ m.total | number }}</span>
+        </div>
+      </div>
+    </div>
+  </div><!-- /.grid-inferior -->
+  </div><!-- /esTab('ingresos') -->
+
+  <!-- ══════════ PESTAÑA 2: PAGOS A EMPLEADOS ══════════ -->
+  <div *ngIf="esTab('empleados')">
+    <div *ngIf="mensajePagos" class="alerta exito">{{ mensajePagos }}</div>
+    <div *ngIf="mensajeErrorPagos" class="alerta error">{{ mensajeErrorPagos }}</div>
+
+    <!--
+      Sugerido vs pagado. El "sugerido" lo calcula el servicio aplicando el
+      porcentaje sobre los turnos atendidos; el "pagado" es lo que se registró.
+      Casi nunca coinciden al centavo, y la diferencia es lo que hay que mirar
+      al cerrar el mes.
+    -->
+    <div class="seccion">
+      <h3>
+        Sugerido vs pagado
+        <span class="subtitulo">por empleado, en {{ vista === 'dia' ? 'el día' : 'el mes' }} seleccionado</span>
+      </h3>
+
+      <div *ngIf="pagosPorEmpleado.length === 0" class="vacio">
+        No hay turnos atendidos ni pagos en este período
+      </div>
+
+      <div class="tabla-caja">
+        <div class="tr tr-cabecera">
+          <span>Empleado</span>
+          <span>Turnos</span>
+          <span>Sugerido</span>
+          <span>Pagado</span>
+          <span>Diferencia</span>
+        </div>
+        <div *ngFor="let f of pagosPorEmpleado" class="tr">
+          <span class="celda-principal">{{ f.nombre }}</span>
+          <span>{{ f.turnos }}</span>
+          <span>${{ f.sugerido | number:'1.0-0' }}</span>
+          <span>${{ f.pagado | number:'1.0-0' }}</span>
+          <span [class.verde]="f.diferencia === 0"
+                [class.rojo]="f.diferencia !== 0">
+            {{ f.diferencia === 0 ? '—' : (f.diferencia > 0 ? '+' : '') + (f.diferencia | number:'1.0-0') }}
+          </span>
+        </div>
+        <div class="tr tr-total">
+          <span>Total</span>
+          <span></span>
+          <span>${{ totalSugerido | number:'1.0-0' }}</span>
+          <span>${{ totalPagadoEmpleados | number:'1.0-0' }}</span>
+          <span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pagos registrados -->
+    <div class="seccion">
+      <div class="seccion-header">
+        <h3>Pagos registrados</h3>
+        <button class="btn-primary" (click)="mostrarFormPago = !mostrarFormPago">
+          {{ mostrarFormPago ? 'Cancelar' : '➕ Registrar pago' }}
+        </button>
+      </div>
+
+      <div *ngIf="mostrarFormPago" class="form-caja">
+        <div class="fila">
+          <div class="campo">
+            <label>Empleado</label>
+            <select [(ngModel)]="nuevoPago.empleado_id">
+              <option [ngValue]="null">Elegí…</option>
+              <option *ngFor="let e of empleadosParaPago" [ngValue]="e.id">{{ e.nombre }}</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Fecha</label>
+            <input type="date" [(ngModel)]="nuevoPago.fecha" />
+          </div>
+        </div>
+        <div class="fila">
+          <div class="campo">
+            <label>Monto</label>
+            <input type="number" [(ngModel)]="nuevoPago.monto" min="0" step="0.01" placeholder="0" />
+          </div>
+          <div class="campo">
+            <label>Método</label>
+            <select [(ngModel)]="nuevoPago.metodo">
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+        </div>
+        <div class="campo">
+          <label>Notas <span class="opcional">(opcional)</span></label>
+          <input type="text" [(ngModel)]="nuevoPago.notas" placeholder="Ej: quincena de octubre" />
+        </div>
+        <button class="btn-primary" [disabled]="guardandoPago" (click)="guardarPago()">
+          {{ guardandoPago ? 'Guardando…' : '💾 Guardar pago' }}
+        </button>
+      </div>
+
+      <div *ngIf="pagos.length === 0" class="vacio">
+        Todavía no registraste ningún pago en este período
+      </div>
+
+      <div class="tabla-caja">
+        <div *ngFor="let p of pagos" class="tr">
+          <span class="celda-principal">{{ p.empleados?.nombre || ('Empleado #' + p.empleado_id) }}</span>
+          <span>{{ p.fecha | date:'dd/MM/yyyy' }}</span>
+          <span>${{ p.monto | number }}</span>
+          <span class="celda-chica">{{ p.metodo }}</span>
+          <button class="btn-icon" (click)="eliminarPago(p)" title="Borrar">🗑️</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ PESTAÑA 3: PROVEEDORES ══════════ -->
+  <div *ngIf="esTab('proveedores')">
+    <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
+    <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
+
+    <!-- Compras del período -->
+    <div class="seccion">
+      <div class="seccion-header">
+        <h3>
+          Compras del período
+          <span class="subtitulo">${{ totalCompras | number }} en total</span>
+        </h3>
+        <button class="btn-primary" (click)="mostrarFormCompra = !mostrarFormCompra">
+          {{ mostrarFormCompra ? 'Cancelar' : '➕ Registrar compra' }}
+        </button>
+      </div>
+
+      <div *ngIf="mostrarFormCompra" class="form-caja">
+        <div class="fila">
+          <div class="campo">
+            <label>Proveedor</label>
+            <select [(ngModel)]="nuevaCompra.proveedor_id">
+              <option [ngValue]="null">Elegí…</option>
+              <option *ngFor="let p of proveedoresActivos" [ngValue]="p.id">{{ p.nombre }}</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Fecha</label>
+            <input type="date" [(ngModel)]="nuevaCompra.fecha" />
+          </div>
+        </div>
+        <div class="campo">
+          <label>Concepto</label>
+          <input type="text" [(ngModel)]="nuevaCompra.concepto"
+                 placeholder="Ej: 12 bidones de shampoo" />
+        </div>
+        <div class="fila">
+          <div class="campo">
+            <label>Cantidad</label>
+            <input type="number" [(ngModel)]="nuevaCompra.cantidad" min="0.01" step="0.01" />
+          </div>
+          <div class="campo">
+            <label>Monto total</label>
+            <input type="number" [(ngModel)]="nuevaCompra.monto" min="0" step="0.01" placeholder="0" />
+          </div>
+        </div>
+        <button class="btn-primary" [disabled]="guardando" (click)="guardarCompra()">
+          {{ guardando ? 'Guardando…' : '💾 Guardar compra' }}
+        </button>
+      </div>
+
+      <div *ngIf="compras.length === 0" class="vacio">
+        No hay compras registradas en este período
+      </div>
+
+      <div class="tabla-caja">
+        <div class="tr tr-cabecera">
+          <span>Proveedor</span>
+          <span>Fecha</span>
+          <span>Concepto</span>
+          <span>Cant.</span>
+          <span>Monto</span>
+          <span></span>
+        </div>
+        <div *ngFor="let c of compras" class="tr">
+          <span class="celda-principal">{{ c.proveedores?.nombre || ('#' + c.proveedor_id) }}</span>
+          <span>{{ c.fecha | date:'dd/MM/yyyy' }}</span>
+          <span class="celda-concepto">{{ c.concepto }}</span>
+          <span>{{ c.cantidad }}</span>
+          <span>${{ c.monto | number }}</span>
+          <button class="btn-icon" (click)="eliminarCompra(c)" title="Borrar">🗑️</button>
+        </div>
+      </div>
+
+      <div *ngIf="comprasPorProveedor.length > 0" class="resumen-prov">
+        <h4>Por proveedor</h4>
+        <div *ngFor="let p of comprasPorProveedor" class="servicio-fila">
+          <div class="servicio-info">
+            <span class="servicio-nombre">{{ p.nombre }}</span>
+            <span class="servicio-cantidad">{{ p.cantidad }} {{ p.cantidad === 1 ? 'compra' : 'compras' }}</span>
+          </div>
+          <div class="servicio-barra-wrap">
+            <div class="servicio-barra" [style.width.%]="(p.total / totalCompras) * 100"></div>
+          </div>
+          <span class="servicio-total">${{ p.total | number }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Listado de proveedores -->
+    <div class="seccion">
+      <div class="seccion-header">
+        <h3>Proveedores</h3>
+        <button class="btn-primary" (click)="mostrarFormProveedor = !mostrarFormProveedor">
+          {{ mostrarFormProveedor ? 'Cancelar' : '➕ Nuevo proveedor' }}
+        </button>
+      </div>
+
+      <input type="text" class="buscador" [(ngModel)]="busquedaProveedor"
+             placeholder="🔍 Buscar proveedor..." />
+
+      <div *ngIf="mostrarFormProveedor" class="form-caja">
+        <div class="campo">
+          <label>Nombre</label>
+          <input type="text" [(ngModel)]="nuevoProveedor.nombre" placeholder="Ej: Químicas del Sur" />
+        </div>
+        <div class="fila">
+          <div class="campo">
+            <label>Contacto</label>
+            <input type="text" [(ngModel)]="nuevoProveedor.contacto" placeholder="Nombre de quien atiende" />
+          </div>
+          <div class="campo">
+            <label>Teléfono</label>
+            <input type="text" [(ngModel)]="nuevoProveedor.telefono" />
+          </div>
+        </div>
+        <div class="campo">
+          <label>Notas <span class="opcional">(opcional)</span></label>
+          <input type="text" [(ngModel)]="nuevoProveedor.notas" />
+        </div>
+        <button class="btn-primary" [disabled]="guardando" (click)="guardarProveedor()">
+          {{ guardando ? 'Guardando…' : '💾 Guardar proveedor' }}
+        </button>
+      </div>
+
+      <div *ngIf="proveedoresFiltrados.length === 0" class="vacio">
+        No hay proveedores cargados
+      </div>
+
+      <div class="tabla-caja">
+        <div *ngFor="let p of proveedoresFiltrados" class="tr" [class.fila-inactiva]="!p.activo">
+          <span class="celda-principal">
+            {{ p.nombre }}
+            <span *ngIf="!p.activo" class="badge-inactivo">Inactivo</span>
+          </span>
+          <span class="celda-chica">{{ p.contacto || '—' }}</span>
+          <span class="celda-chica">{{ p.telefono || '—' }}</span>
+          <button *ngIf="p.activo" class="btn-icon" (click)="inactivarProveedor(p)"
+                  title="Inactivar">🚫</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>

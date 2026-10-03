@@ -926,4 +926,210 @@ export class SupabaseService {
       .eq('servicio_id', servicioId);
     if (error) throw error;
   }
+
+  // ── CAJA: PAGOS A EMPLEADOS ────────────────────────────────
+  //
+  // Esto es el PAGO REAL, no el cálculo. El "sugerido" sale de
+  // `calcularComisiones()`, que aplica el porcentaje sobre los turnos atendidos.
+  // La caja muestra los dos y la diferencia, porque casi nunca coinciden: se
+  // pagan quincenas, hay adelantos y hay extras.
+
+  /** Pagos del período, con el nombre del empleado ya resuelto. */
+  async getPagosEmpleado(desde: string, hasta: string) {
+    const { data, error } = await this.supabase
+      .from('pagos_empleado')
+      .select('*, empleados(nombre, activo)')
+      .gte('fecha', desde)
+      .lte('fecha', hasta)
+      .order('fecha', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  async crearPagoEmpleado(datos: any) {
+    const { data, error } = await this.supabase
+      .from('pagos_empleado')
+      .insert(datos)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async actualizarPagoEmpleado(id: number, datos: any) {
+    const { data, error } = await this.supabase
+      .from('pagos_empleado')
+      .update(datos)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async eliminarPagoEmpleado(id: number) {
+    const { error } = await this.supabase
+      .from('pagos_empleado')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  /**
+   * Comisión sugerida de TODOS los empleados en un período, en una sola pasada.
+   *
+   * Existe para la caja: si la pantalla pidiera `calcularComisiones()` por
+   * empleado, con 5 empleados serían 5 idas a la base para pintar una tabla.
+   * Esta versión trae los turnos del período una vez y calcula en memoria, así
+   * que el costo no crece con la cantidad de gente.
+   *
+   * Devuelve `[{ empleado_id, nombre, sugerido, turnos }]`. Los empleados sin
+   * turnos en el período NO aparecen: para la caja no pagan nada.
+   */
+  async getComisionesPeriodo(desde: string, hasta: string) {
+    const { data: turnos, error: eTurnos } = await this.supabase
+      .from('turnos')
+      .select('empleado_id, servicio_id, precio_final, precio')
+      .eq('estado', 'atendido')
+      .gte('fecha', desde)
+      .lte('fecha', hasta);
+    if (eTurnos) throw eTurnos;
+
+    const ids = [...new Set((turnos || []).map((t: any) => t.empleado_id).filter(Boolean))];
+    if (!ids.length) return [];
+
+    const { data: empleados, error: eEmp } = await this.supabase
+      .from('empleados')
+      .select('id, nombre, comision_porcentaje')
+      .in('id', ids);
+    if (eEmp) throw eEmp;
+
+    const { data: comisionServicio, error: eCom } = await this.supabase
+      .from('comisiones_empleado')
+      .select('empleado_id, servicio_id, porcentaje')
+      .in('empleado_id', ids);
+    if (eCom) throw eCom;
+
+    // El porcentaje por servicio pisa al general, igual que en calcularComisiones.
+    const porServicio = new Map<string, number>();
+    (comisionServicio || []).forEach((c: any) => {
+      porServicio.set(`${c.empleado_id}:${c.servicio_id}`, Number(c.porcentaje) || 0);
+    });
+
+    // Map por id: buscar con `.find()` adentro del forEach de turnos es O(n*m).
+    const empPorId = new Map<number, any>((empleados || []).map((e: any) => [e.id, e]));
+
+    const porEmpleado = new Map<number, { sugerido: number; turnos: number }>();
+    (turnos || []).forEach((t: any) => {
+      if (!t.empleado_id) return;
+      const fila = porEmpleado.get(t.empleado_id) || { sugerido: 0, turnos: 0 };
+      const general = Number(empPorId.get(t.empleado_id)?.comision_porcentaje) || 0;
+      // Los paréntesis son obligatorios: mezclar `??` con `||` sin ellos es
+      // error de sintaxis en JS.
+      const pct = porServicio.get(`${t.empleado_id}:${t.servicio_id}`) ?? general;
+      const precioReal = Number(t.precio_final || t.precio) || 0;
+      fila.sugerido += (precioReal * pct) / 100;
+      fila.turnos += 1;
+      porEmpleado.set(t.empleado_id, fila);
+    });
+
+    return (empleados || [])
+      .filter((e: any) => porEmpleado.has(e.id))
+      .map((e: any) => ({
+        empleado_id: e.id,
+        nombre: e.nombre,
+        sugerido: porEmpleado.get(e.id)!.sugerido,
+        turnos: porEmpleado.get(e.id)!.turnos,
+      }))
+      .sort((a: any, b: any) => b.sugerido - a.sugerido);
+  }
+
+  // ── CAJA: PROVEEDORES Y COMPRAS ────────────────────────────
+
+  async getProveedores(soloActivos = false) {
+    let q = this.supabase.from('proveedores').select('*').order('nombre', { ascending: true });
+    if (soloActivos) q = q.eq('activo', true);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data || [];
+  }
+
+  async crearProveedor(datos: any) {
+    const { data, error } = await this.supabase
+      .from('proveedores')
+      .insert(datos)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async actualizarProveedor(id: number, datos: any) {
+    const { data, error } = await this.supabase
+      .from('proveedores')
+      .update(datos)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  /** Inactivar, no borrar: las compras viejas tienen que seguir apuntando a alguien. */
+  async inactivarProveedor(id: number) {
+    const { error } = await this.supabase
+      .from('proveedores')
+      .update({ activo: false })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  async eliminarProveedor(id: number) {
+    const { error } = await this.supabase
+      .from('proveedores')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  /** Compras del período, con el nombre del proveedor ya resuelto. */
+  async getCompras(desde: string, hasta: string) {
+    const { data, error } = await this.supabase
+      .from('compras_proveedor')
+      .select('*, proveedores(nombre, activo)')
+      .gte('fecha', desde)
+      .lte('fecha', hasta)
+      .order('fecha', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  async crearCompra(datos: any) {
+    const { data, error } = await this.supabase
+      .from('compras_proveedor')
+      .insert(datos)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async actualizarCompra(id: number, datos: any) {
+    const { data, error } = await this.supabase
+      .from('compras_proveedor')
+      .update(datos)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async eliminarCompra(id: number) {
+    const { error } = await this.supabase
+      .from('compras_proveedor')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }
 }

@@ -53,25 +53,27 @@
           <span class="chevron" [class.abierto]="acordeonDatos">›</span>
         </div>
         <div class="acordeon-body" [class.visible]="acordeonDatos">
-          <div class="campo-editable">
-            <label class="label-campo">Nombre</label>
-            <input type="text" [(ngModel)]="empleadoSeleccionado.nombre"
-              [readonly]="!empleadoSeleccionado.editando"
-              class="input-nombre" />
-            <button *ngIf="!empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = true">✏️</button>
-            <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarNombre()">💾</button>
-            <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = false">↩️</button>
-            <span *ngIf="empleadoSeleccionado.guardando" class="guardando-celda">⏳ Guardando…</span>
-          </div>
+          <div class="datos-campos">
+            <div class="campo-editable">
+              <label class="label-campo">Nombre</label>
+              <input type="text" [(ngModel)]="empleadoSeleccionado.nombre"
+                [readonly]="!empleadoSeleccionado.editando"
+                class="input-nombre" />
+              <button *ngIf="!empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = true">✏️</button>
+              <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarNombre()">💾</button>
+              <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = false">↩️</button>
+              <span *ngIf="empleadoSeleccionado.guardando" class="guardando-celda">⏳ Guardando…</span>
+            </div>
 
-          <div class="campo-editable">
-            <label class="label-campo">Teléfono</label>
-            <input type="text" [(ngModel)]="empleadoSeleccionado.telefono"
-              [readonly]="!empleadoSeleccionado.editandoTelefono"
-              class="input-nombre" />
-            <button *ngIf="!empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = true">✏️</button>
-            <button *ngIf="empleadoSeleccionado.editandoTelefono && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarTelefono()">💾</button>
-            <button *ngIf="empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = false">↩️</button>
+            <div class="campo-editable">
+              <label class="label-campo">Teléfono</label>
+              <input type="text" [(ngModel)]="empleadoSeleccionado.telefono"
+                [readonly]="!empleadoSeleccionado.editandoTelefono"
+                class="input-nombre" />
+              <button *ngIf="!empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = true">✏️</button>
+              <button *ngIf="empleadoSeleccionado.editandoTelefono && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarTelefono()">💾</button>
+              <button *ngIf="empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = false">↩️</button>
+            </div>
           </div>
         </div>
       </div>

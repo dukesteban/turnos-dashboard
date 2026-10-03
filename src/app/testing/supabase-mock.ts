@@ -168,6 +168,26 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
     verificarUsuario: () => Promise.resolve(true),
     cambiarPassword: () => Promise.resolve(),
 
+    // --- Caja: pagos a empleados ---
+    // `getComisionesPeriodo` es la versión de UNA consulta para todos los
+    // empleados. Si un test necesita otra cosa, que la sobreescriba.
+    getPagosEmpleado: vacio,
+    crearPagoEmpleado: (p: any) => Promise.resolve({ id: 1, ...p }),
+    actualizarPagoEmpleado: (id: number, p: any) => Promise.resolve({ id, ...p }),
+    eliminarPagoEmpleado: () => Promise.resolve(),
+    getComisionesPeriodo: vacio,
+
+    // --- Caja: proveedores y compras ---
+    getProveedores: () => Promise.resolve([]),
+    crearProveedor: (p: any) => Promise.resolve({ id: 1, ...p }),
+    actualizarProveedor: (id: number, p: any) => Promise.resolve({ id, ...p }),
+    inactivarProveedor: () => Promise.resolve(),
+    eliminarProveedor: () => Promise.resolve(),
+    getCompras: vacio,
+    crearCompra: (c: any) => Promise.resolve({ id: 1, ...c }),
+    actualizarCompra: (id: number, c: any) => Promise.resolve({ id, ...c }),
+    eliminarCompra: () => Promise.resolve(),
+
     // --- realtime: en tests no hay suscripciones ---
     suscribirTurnos: () => ({ unsubscribe: noop }),
     suscribirHorarios: () => ({ unsubscribe: noop }),

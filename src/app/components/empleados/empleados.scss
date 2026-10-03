@@ -455,6 +455,24 @@
   }
 }
 
+// Los dos campos del bloque "Datos" (Nombre y Teléfono) son filas flex
+// apiladas, y `.campo-editable` no tiene separación vertical: quedaban pegadas.
+// El ancho fijo de la etiqueta alinea los dos inputs.
+//
+// Scopado a `.datos-campos` a propósito: `.campo-editable` también lo usa
+// `.comision-general`, que ya tiene su propio layout y no debe cambiar.
+.datos-campos {
+  .label-campo {
+    flex: 0 0 72px;
+    font-size: 0.9rem;
+    color: #475569;
+  }
+
+  .campo-editable + .campo-editable {
+    margin-top: 12px;
+  }
+}
+
 .btn-icon {
   background: none;
   border: none;
