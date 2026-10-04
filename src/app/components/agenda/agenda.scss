@@ -202,10 +202,21 @@
    * horas quedaba en `234` en vez de `354` (el borde de la grilla), o sea
    * clavada en el lugar de donde arrancó.
    *
-   * Con el ancho al del contenido, el padre llega hasta donde llega el scroll y
-   * la columna tiene viaje de sobra.
+   * EL PISO DE `100%` ES OBLIGATORIO Y FUE EL BUG. Con `max-content` pelado la
+   * grilla mide lo del contenido y deja el resto en blanco: con 3 empleados
+   * (778px) en una pantalla de 1100 se veian las columnas apretadas a la
+   * izquierda y un bloque vacio al lado, y en un dia sin empleados (286px) una
+   * franja angosta de grilla con un mar de blanco al lado.
+   *
+   * `min-width: 100%` deja que la grilla se estire hasta llenar el contenedor,
+   * y `max-content` sigue mandando cuando el contenido NO entra y hay que
+   * scrollear. O sea: el ancho es el mas grande de los dos.
+   *
+   * `max(320px, 100%)` y no los dos por separado, porque en un celu muy angosto
+   * el 100% puede ser menos de 320 y los dos pisos se pisan.
    */
   width: max-content;
+  min-width: max(320px, 100%);
 }
 
 /* La columna de horas se queda pegada al borde izquierdo al scrollear en

@@ -509,3 +509,89 @@ describe('Agenda - saltar a una fecha', () => {
     expect(cmp.turnosDia.length).toBe(0);
   });
 });
+
+describe('Agenda - el ancho de columna segun la pantalla', () => {
+  // OJO: el arreglo de que la grilla LLENE el ancho disponible (`min-width: 100%`
+  // en `.grilla-dia`) NO tiene test, y no por falta de ganas: es CSS puro y jsdom
+  // no computa los estilos de un componente, asi que un `max-width` sin piso
+  // pasaria verde en los 441 tests. Ese bug se ve solo en un navegador.
+  //
+  // Lo que si se puede fijar por aca es la parte de TypeScript: de estos numeros
+  // sale todo el layout (`posicionTurno` reparte los bloques como `pct%` y
+  // `anchoDeDia` los suma), asi que si se desincronizan, los bloques se salen
+  // de su columna.
+  const nuevo = () => montar().cmp;
+
+  const anchoEn = (cmp: any, ancho: number, vista: 'dia' | 'semana') => {
+    (cmp as any).anchoVentana = ancho;
+    cmp.vista = vista;
+    return cmp.anchoColEmpleado;
+  };
+
+  it('en pantalla chica las columnas son mas angostas', () => {
+    const cmp = nuevo();
+
+    expect(anchoEn(cmp, 360, 'dia')).toBe(150);
+    expect(anchoEn(cmp, 700, 'dia')).toBe(150);      // el corte es INCLUSIVO
+    expect(anchoEn(cmp, 701, 'dia')).toBe(240);
+
+    expect(anchoEn(cmp, 360, 'semana')).toBe(74);
+    expect(anchoEn(cmp, 700, 'semana')).toBe(74);
+    expect(anchoEn(cmp, 701, 'semana')).toBe(92);
+  });
+
+  it('el ancho del dia sigue siendo SU gente por el ancho de columna', () => {
+    // La cuenta tiene que seguir cerrando con el ancho chico, o las bandas de
+    // fondo dejan de calzar con los bloques.
+    const cmp = nuevo();
+    cmp.diaInicio = 1;
+    cmp.diaFin = 6;
+    cmp.vista = 'semana';
+
+    for (const ancho of [360, 1280]) {
+      (cmp as any).anchoVentana = ancho;
+      const anchos: string[] = [];
+      const esperado: string[] = [];
+      for (const dia of cmp.diasDeSemana) {
+        const n = Math.max(cmp.columnasDe(dia).length, 1);
+        // Sin `withContext` (no existe en esta version de Jasmine): se afirma
+        // el array completo de anchos, que muestra igual que dia se desvio.
+        anchos.push(cmp.anchoDeDia(dia));
+        esperado.push(`${n * (cmp.anchoColEmpleado + cmp.gapColumna)}px`);
+      }
+      expect(anchos).toEqual(esperado);
+    }
+  });
+
+  it('la suma de los dias es el ancho de la grilla semanal', () => {
+    const cmp = nuevo();
+    cmp.diaInicio = 1;
+    cmp.diaFin = 6;
+    cmp.vista = 'semana';
+
+    for (const ancho of [360, 1280]) {
+      (cmp as any).anchoVentana = ancho;
+      const suma = cmp.diasDeSemana.reduce(
+        // El `Math.max(..., 1)` es el MISMO que usa `anchoGrillaSemana`: un dia
+        // sin columnas igual reserva el ancho de una, asi que tiene que estar
+        // aca tambien o el dia vacio no cuenta y la cuenta no cierra.
+        (acc: number, d: Date) => acc + Math.max(cmp.columnasDe(d).length, 1) * (cmp.anchoColEmpleado + cmp.gapColumna),
+        0);
+      expect(cmp.anchoGrillaSemana).toBe(`${40 + suma}px`);
+    }
+  });
+
+  it('el ancho se sincroniza con la ventana al redimensionar', () => {
+    // Si el listener quedara colgado, cada ida y vuelta a la Agenda dejaria uno
+    // apuntando al componente viejo: memoria que no se libera.
+    const { cmp } = montar();
+
+    // El handler lee el ancho REAL de la ventana, asi que no se puede fijar a
+    // mano: se le pone un valor inventado y se afirma que se sincroniza.
+    (cmp as any).anchoVentana = 360;
+    (cmp as any).alRedimensionar();
+    expect((cmp as any).anchoVentana).toBe(window.innerWidth);
+
+    expect(() => cmp.ngOnDestroy()).not.toThrow();
+  });
+});

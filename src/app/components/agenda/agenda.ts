@@ -12,6 +12,36 @@ const H_HEADER_MINI = 20;
 /** Gutter horizontal entre columnas: debe coincidir con el margen del header. */
 const GAP_COLUMNA = 3;
 
+/**
+ * Ancho de una columna de empleado, segun cuanto pantalla hay.
+ *
+ * En MONITOR una columna de 240px entra cómoda y se lee el nombre del empleado
+ * de una. En un CELU de 360px entran una columna y un poco más, así que con 4
+ * empleados había que scrollear tres veces solo para ver quién atiende, y cada
+ * toque de scroll horizontal era chances de perder de vista la columna de horas
+ * que se acababa de agregar.
+ *
+ * Por eso el celu usa columnas más angostas: entran ~2 y media, que es la
+ * cantidad desde la que se lee "este turno es de ESTE" sin scrollear.
+ *
+ * Los numeros van en TS y no en un `@media` de CSS porque el ancho NO es
+ * decorativo: `posicionTurno` reparte los bloques como `pct%` y `anchoDeDia`
+ * suma estos numeros, asi que el layout entero sale de acá. Si se changea el
+ * ancho desde CSS, el TS sigue calculando con el viejo y los bloques se salen
+ * de su columna.
+ */
+const ANCHO_COL_DIA = 240;
+const ANCHO_COL_SEMANA = 92;
+const ANCHO_COL_DIA_CHICA = 150;
+const ANCHO_COL_SEMANA_CHICA = 74;
+
+/**
+ * Corte de "pantalla chica". 700px y no 640 porque es el breakpoint que ya usa
+ * el resto de la app, y queda por debajo de una tablet en vertical, que es
+ * justo el caso donde 240px de columna ya molestan.
+ */
+const ANCHO_MAX_CHICA = 700;
+
 @Component({
   selector: 'app-agenda',
   standalone: true,
@@ -25,6 +55,26 @@ export class AgendaComponent implements OnInit, OnDestroy {
   vista: 'dia' | 'semana' = 'dia';
   fechaActual: Date = new Date();
   turnos: any[] = [];
+
+  /**
+   * Ancho de la ventana, para decidir el ancho de columna.
+   *
+   * Vive acá y no en un `@media` de CSS porque el ancho de columna no es
+   * decorativo: de él salen `posicionTurno` (los `pct%` de cada bloque) y
+   * `anchoDeDia`. Si el corte se hiciera en CSS, el TS calcularía el layout con
+   * el ancho viejo y los bloques se saldrían de su columna.
+   *
+   * Se escucha el `resize` y no se calcula una sola vez al inicio porque en un
+   * monitor se puede ir de la pantalla grande al celu con la ventana del navegador
+   * (o en una tablet girándola), y sin listener la grilla se queda con el ancho
+   * de la pantalla en la que arrancó.
+   */
+  private anchoVentana: number = typeof window !== 'undefined' ? window.innerWidth : 1200;
+
+  /** ¿Entra en la categoría de pantalla chica? Ver `ANCHO_MAX_CHICA`. */
+  get pantallaChica(): boolean {
+    return this.anchoVentana <= ANCHO_MAX_CHICA;
+  }
 
   // Puestos de trabajo (columnas de la agenda)
   // RETIRADO: las columnas de la agenda ahora son una por EMPLEADO.
@@ -100,6 +150,7 @@ export class AgendaComponent implements OnInit, OnDestroy {
   constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
 
   async ngOnInit() {
+    window.addEventListener('resize', this.alRedimensionar);
     await this.cargarHorarios();
     await this.cargarTurnos();
     this.metodosPago = await this.supabase.getMetodosPago();
@@ -168,9 +219,27 @@ export class AgendaComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    window.removeEventListener('resize', this.alRedimensionar);
     this.subscription?.unsubscribe();
     this.subHorarios?.unsubscribe();
   }
+
+  /**
+   * Refleja el ancho de columna al cambiar el tamaño de la ventana.
+   *
+   * Se comparan los VALORES y no se setea siempre: si se asignara en cada
+   * evento, el resize dispararia un ciclo de deteccion de cambios por pixel
+   * durante un drag de ventana, que es lo que hace que las apps con scroll se
+   * sientan trabadas al arrastrar el borde.
+   *
+   * El componente no es OnPush, asi que el evento (que entra por la zona de
+   * Angular) dispara el render solo: no hace falta un `detectChanges` aca.
+   */
+  private alRedimensionar = () => {
+    const nuevo = window.innerWidth;
+    if (nuevo === this.anchoVentana) return;
+    this.anchoVentana = nuevo;
+  };
 
   toMinutos(horaStr: string): number {
     if (!horaStr) return 0;
@@ -488,7 +557,8 @@ claseBloque(turno: any, mini: boolean): string {
 
 /** Ancho de UNA columna de empleado, en px. Base de todo el layout. */
   get anchoColEmpleado(): number {
-    return this.vista === 'dia' ? 240 : 92;
+    if (this.vista !== 'dia') return this.pantallaChica ? ANCHO_COL_SEMANA_CHICA : ANCHO_COL_SEMANA;
+    return this.pantallaChica ? ANCHO_COL_DIA_CHICA : ANCHO_COL_DIA;
   }
 
   /**
