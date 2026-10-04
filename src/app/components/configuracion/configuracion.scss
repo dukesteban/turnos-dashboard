@@ -10,6 +10,7 @@
 // src/app/components, después a src/app, y después a src. Con dos `..` el Sass
 // busca en src/app/styles/ y falla con "Can't find stylesheet to import".
 @use '../../../styles/acordeon';
+@use '../../../styles/popup';
 
 .config-page {
   padding: 24px;
@@ -77,31 +78,6 @@
     }
   }
 }
-
-.btn-primary {
-  padding: 10px 20px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  font-weight: 500;
-  &:hover { background: #2563eb; }
-  &:disabled { opacity: 0.6; cursor: not-allowed; }
-}
-
-.btn-secondary {
-  padding: 8px 16px;
-  background: #f1f5f9;
-  color: #334155;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  &:hover { background: #e2e8f0; }
-}
-
 .form-nuevo-horario {
   background: #f8fafc;
   border-radius: 8px;
@@ -195,32 +171,6 @@
   margin-bottom: 16px;
   h3 { font-size: 1.1rem; color: #334155; margin: 0; }
 }
-
-.btn-primary {
-  padding: 8px 16px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  font-weight: 500;
-  white-space: nowrap;
-  &:hover { background: #2563eb; }
-  &:disabled { opacity: 0.6; cursor: not-allowed; }
-}
-
-.btn-secondary {
-  padding: 8px 16px;
-  background: #f1f5f9;
-  color: #334155;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  &:hover { background: #e2e8f0; }
-}
-
 .form-nuevo {
   background: #f8fafc;
   border-radius: 8px;
@@ -329,14 +279,6 @@
 }
 
 /* Fila de botones de Ediar/Guardar/Cancelar (Datos del negocio y password) */
-.botones-edicion {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-top: 10px;
-}
-
 .btn-icon {
   background: none;
   border: none;

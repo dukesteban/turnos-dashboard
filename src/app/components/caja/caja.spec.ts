@@ -787,6 +787,9 @@ describe('Caja — botones del popup iguales a los de Nuevo turno', () => {
     expect(pie.querySelector('.btn-atendido')).toBeTruthy();
     expect(pie.querySelector('.btn-cancelado')).toBeTruthy();
     expect(pie.querySelector('.btn-primary')).toBeNull();
+    // Las dos grafias: .btn-secondary es la que existe hoy y
+    // .btn-secundario la que se escribio sin querer una vez.
+    expect(pie.querySelector('.btn-secondary')).toBeNull();
     expect(pie.querySelector('.btn-secundario')).toBeNull();
   });
 

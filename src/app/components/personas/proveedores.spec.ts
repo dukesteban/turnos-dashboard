@@ -12,10 +12,10 @@ import { crearSupabaseMock } from '../../testing/supabase-mock';
  * de detalle de la derecha, igual que Clientes y Empleados. El popup quedó solo
  * para el alta. Así que hay dos caminos distintos y cada uno tiene su grupo:
  *
- *   · ALTA      -> `abrirFormProveedor()` / `guardarProveedor()` (popup)
- *   · EDICIÓN   -> `seleccionarProveedor()` / `guardarCampo()` (panel)
+ *   · ALTA      -> `abrirFormProveedor()` / `guardarNuevo()` (popup)
+ *   · EDICIÓN   -> `seleccionarProveedor()` / `guardarProveedor()` (panel)
  *
- * Mezclarlos era el error más probable: si `guardarCampo` cayera en el popup,
+ * Mezclarlos era el error más probable: si `guardarProveedor` cayera en el popup,
  * los tests pasarían igual y la pantalla haría otra cosa.
  */
 
@@ -120,7 +120,7 @@ describe('Personas > Proveedores — alta (popup)', () => {
   it('exige nombre', async () => {
     const { cmp, mock } = await listo();
     cmp.nuevoProveedor = { nombre: '   ', contacto: '', telefono: '', notas: '' };
-    await cmp.guardarProveedor();
+    await cmp.guardarNuevo();
     expect(cmp.mensajeError).toMatch(/nombre es obligatorio/i);
     expect(mock.llamadas).not.toContain('crearProveedor');
   });
@@ -131,7 +131,7 @@ describe('Personas > Proveedores — alta (popup)', () => {
       crearProveedor: (d: any) => { guardados.push(d); return Promise.resolve({ id: 9, ...d }); },
     });
     cmp.nuevoProveedor = { nombre: '  Quimicas del Sur ', contacto: ' Ana ', telefono: ' 123 ', notas: '' };
-    await cmp.guardarProveedor();
+    await cmp.guardarNuevo();
     expect(guardados.length).toBe(1);
     expect(guardados[0].nombre).toBe('Quimicas del Sur');
     expect(guardados[0].contacto).toBe('Ana');
@@ -146,7 +146,7 @@ describe('Personas > Proveedores — alta (popup)', () => {
       crearProveedor: () => Promise.resolve({ id: 9, nombre: 'Ledesma', activo: true }),
     });
     cmp.nuevoProveedor = { nombre: 'Ledesma', contacto: '', telefono: '', notas: '' };
-    await cmp.guardarProveedor();
+    await cmp.guardarNuevo();
     expect(cmp.mostrarFormProveedor).toBe(false);
     expect(cmp.mensaje).toMatch(/agregado/i);
   });
@@ -158,7 +158,7 @@ describe('Personas > Proveedores — alta (popup)', () => {
       crearProveedor: () => Promise.resolve({ id: 9, nombre: 'Ledesma', activo: true }),
     });
     cmp.nuevoProveedor = { nombre: 'Ledesma', contacto: '', telefono: '', notas: '' };
-    await cmp.guardarProveedor();
+    await cmp.guardarNuevo();
     expect(cmp.proveedorSeleccionado).toBeNull();
   });
 
@@ -167,7 +167,7 @@ describe('Personas > Proveedores — alta (popup)', () => {
       getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Ledesma', activo: true }]),
     });
     cmp.nuevoProveedor = { nombre: '  ledesma ', contacto: '', telefono: '', notas: '' };
-    await cmp.guardarProveedor();
+    await cmp.guardarNuevo();
     expect(cmp.mensajeError).toMatch(/ya existe/i);
     expect(mock.llamadas).not.toContain('crearProveedor');
   });
@@ -180,7 +180,7 @@ describe('Personas > Proveedores — alta (popup)', () => {
       getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Cañada', activo: true }]),
     });
     cmp.nuevoProveedor = { nombre: 'Canada', contacto: '', telefono: '', notas: '' };
-    await cmp.guardarProveedor();
+    await cmp.guardarNuevo();
     expect(cmp.mensajeError).toBe('');
     expect(mock.llamadas).toContain('crearProveedor');
   });
@@ -203,6 +203,9 @@ describe('Personas > Proveedores — alta (popup)', () => {
     expect(pie.querySelector('.btn-atendido')).toBeTruthy();
     expect(pie.querySelector('.btn-cancelado')).toBeTruthy();
     expect(pie.querySelector('.btn-primary')).toBeNull();
+    // Las dos grafias: .btn-secondary es la que existe hoy y
+    // .btn-secundario la que se escribio sin querer una vez.
+    expect(pie.querySelector('.btn-secondary')).toBeNull();
     expect(pie.querySelector('.btn-secundario')).toBeNull();
   });
 
@@ -243,7 +246,7 @@ for (const campo of ['nombre', 'contacto', 'telefono', 'notas']) {
 // EDICIÓN — el panel de detalle
 // ═══════════════════════════════════════════════════════════════
 
-describe('Personas > Proveedores — editar (panel de detalle)', () => {
+describe('Personas > Proveedores - editar (panel de detalle)', () => {
   it('click en la fila abre el detalle de ESE proveedor', async () => {
     const { cmp, fixture } = await listo({
       getProveedores: () => Promise.resolve([{ ...PROV }, { ...OTRO }]),
@@ -259,11 +262,12 @@ describe('Personas > Proveedores — editar (panel de detalle)', () => {
     expect(fixture.nativeElement.querySelector('.detalle-seccion')).toBeTruthy();
   });
 
-  // Sin esto, escribir en el panel cambiaría el nombre de la fila de la lista
-  // antes de guardar, y con un guardado fallido quedaría mentido.
+  // Sin esto, escribir en el panel cambiarÃ­a el nombre de la fila de la lista
+  // antes de guardar, y con un guardado fallido quedarÃ­a mentido.
   it('el panel es una COPIA: escribir no toca la fila hasta guardar', async () => {
     const { cmp } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
+    cmp.editarProveedor();
     cmp.proveedorSeleccionado.nombre = 'Cambiado en el aire';
     expect(cmp.proveedores[0].nombre).toBe('Quimicas');
   });
@@ -289,51 +293,95 @@ describe('Personas > Proveedores — editar (panel de detalle)', () => {
     expect(fixture.nativeElement.querySelector('.detalle-seccion')).toBeNull();
   });
 
-  it('cada campo arranca en modo lectura y con su propio lapiz', async () => {
+  // â”€â”€ EL BOTON UNICO â”€â”€
+  //
+  // Antes habia un lapiz POR CAMPO. Cuatro lapices en columna parecen cuatro
+  // acciones y el que de verdad se editaba a menudo quedaba sin destino claro.
+  // Ahora hay UN "Editar" para todo el bloque, como Configuracion > General.
+
+  it('en reposo los cuatro campos son de SOLO LECTURA', async () => {
     const { cmp, fixture } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
     fixture.detectChanges();
     const campos = fixture.nativeElement.querySelectorAll('.detalle-seccion .campo-editable');
     expect(campos.length).toBe(4);
     for (const c of Array.from(campos) as HTMLElement[]) {
-      const input = c.querySelector('input') as HTMLInputElement;
-      // `readonly` es lo que hace que en reposo se vea como un dato y no como
-      // un formulario esperando que lo escriban.
-      expect(input.hasAttribute('readonly')).toBe(true);
-      expect(c.querySelectorAll('.btn-icon').length).toBe(1);
+      expect((c.querySelector('input') as HTMLInputElement).hasAttribute('readonly')).toBe(true);
     }
   });
 
-  it('el lapiz pone SOLO ese campo en edicion', async () => {
+  it('NO hay un lapiz por campo: el detalle no tiene ningun .btn-icon', async () => {
     const { cmp, fixture } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
     fixture.detectChanges();
-    const campos = fixture.nativeElement.querySelectorAll('.detalle-seccion .campo-editable');
-    (campos[0].querySelector('.btn-icon') as HTMLElement).click();
-    fixture.detectChanges();
-    const inputs = fixture.nativeElement.querySelectorAll('.detalle-seccion input');
-    expect((inputs[0] as HTMLInputElement).hasAttribute('readonly')).toBe(false);
-    expect((inputs[1] as HTMLInputElement).hasAttribute('readonly')).toBe(true);
-    // Y el campo en edicion muestra guardar + cancelar.
-    expect(campos[0].querySelectorAll('.btn-icon').length).toBe(2);
+    expect(fixture.nativeElement.querySelectorAll('.detalle-seccion .btn-icon').length).toBe(0);
   });
 
-  it('guardar manda SOLO el campo editado y refresca la fila', async () => {
+  it('en reposo se ve SOLO el boton Editar', async () => {
+    const { cmp, fixture } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
+    cmp.seleccionarProveedor(cmp.proveedores[0]);
+    fixture.detectChanges();
+    const botones = Array.from(
+      fixture.nativeElement.querySelectorAll('.botones-edicion button')
+    ) as HTMLElement[];
+    expect(botones.length).toBe(1);
+    expect(botones[0].textContent).toContain('Editar');
+    expect(botones[0].classList.contains('btn-primary')).toBe(true);
+  });
+
+  it('el boton Editar pone los CUATRO campos en edicion', async () => {
+    const { cmp, fixture } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
+    cmp.seleccionarProveedor(cmp.proveedores[0]);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.botones-edicion button') as HTMLElement).click();
+    fixture.detectChanges();
+    const inputs = fixture.nativeElement.querySelectorAll('.detalle-seccion input');
+    for (const i of Array.from(inputs) as HTMLInputElement[]) {
+      expect(i.hasAttribute('readonly')).toBe(false);
+    }
+  });
+
+  it('editando se ven Guardar y Cancelar, y Editar desaparece', async () => {
+    const { cmp, fixture } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
+    cmp.seleccionarProveedor(cmp.proveedores[0]);
+    cmp.editarProveedor();
+    fixture.detectChanges();
+    const botones = Array.from(
+      fixture.nativeElement.querySelectorAll('.botones-edicion button')
+    ) as HTMLElement[];
+    expect(botones.length).toBe(2);
+    const textos = botones.map((b) => b.textContent!.trim());
+    expect(textos.join(' ')).toContain('Guardar');
+    expect(textos.join(' ')).toContain('Cancelar');
+    expect(textos.join(' ')).not.toContain('Editar');
+    // Guardar es el azul y Cancelar el gris: son dos acciones de distinta
+    // naturaleza y no dos botones iguales.
+    expect(botones[0].classList.contains('btn-primary')).toBe(true);
+    expect(botones[1].classList.contains('btn-secondary')).toBe(true);
+  });
+
+  it('guardar manda los CUATRO campos en UNA llamada y refresca la fila', async () => {
     const enviados: any[] = [];
-    const { cmp, fixture } = await listo({
+    const { cmp } = await listo({
       getProveedores: () => Promise.resolve([{ ...PROV }]),
       actualizarProveedor: (id: number, d: any) => { enviados.push({ id, ...d }); return Promise.resolve(); },
     });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
+    cmp.editarProveedor();
+    cmp.proveedorSeleccionado.nombre = '  Quimicas del Sur ';
     cmp.proveedorSeleccionado.telefono = '  456  ';
-    await cmp.guardarCampo('telefono');
+    cmp.proveedorSeleccionado.notas = 'Trae mensual';
+    await cmp.guardarProveedor();
+    // UNA llamada: o se guarda la ficha entera o no se guarda.
     expect(enviados.length).toBe(1);
     expect(enviados[0].id).toBe(1);
-    // Un update por campo, no los cuatro: si mandara todos, cada guardado
-    // pisaria con null los opcionales que el usuario no toco.
-    expect(Object.keys(enviados[0])).toEqual(['id', 'telefono']);
+    expect(enviados[0].nombre).toBe('Quimicas del Sur');
     expect(enviados[0].telefono).toBe('456');
+    expect(enviados[0].notas).toBe('Trae mensual');
+    // Y sale de edicion.
+    expect(cmp.proveedorSeleccionado.editando).toBe(false);
     // Y la lista se entera.
+    expect(cmp.proveedores[0].nombre).toBe('Quimicas del Sur');
     expect(cmp.proveedores[0].telefono).toBe('456');
   });
 
@@ -344,30 +392,35 @@ describe('Personas > Proveedores — editar (panel de detalle)', () => {
       actualizarProveedor: (id: number, d: any) => { enviados.push(d); return Promise.resolve(); },
     });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
+    cmp.editarProveedor();
     cmp.proveedorSeleccionado.notas = '   ';
-    await cmp.guardarCampo('notas');
+    await cmp.guardarProveedor();
     expect(enviados[0].notas).toBeNull();
   });
 
   it('el nombre no se puede dejar vacio', async () => {
     const { cmp, mock } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
+    cmp.editarProveedor();
     cmp.proveedorSeleccionado.nombre = '  ';
-    await cmp.guardarCampo('nombre');
+    await cmp.guardarProveedor();
     expect(cmp.mensajeError).toMatch(/nombre es obligatorio/i);
     expect(mock.llamadas).not.toContain('actualizarProveedor');
+    // Y sigue en edicion, para corregir y reintentar.
+    expect(cmp.proveedorSeleccionado.editando).toBe(true);
   });
 
-  // El chequeo tiene que excluirse a uno mismo. Sin el `p.id !== id`, guardar
-  // el mismo nombre daria "ya existe" siempre y no se podria editar NUNCA.
+  // El chequeo tiene que excluirse a uno mismo. Sin el `p.id !==`, guardar el
+  // mismo nombre daria "ya existe" siempre y no se podria editar NUNCA.
   it('editar SIN cambiar el nombre NO da "ya existe"', async () => {
     const { cmp, mock } = await listo({
       getProveedores: () => Promise.resolve([{ ...PROV }]),
       actualizarProveedor: () => Promise.resolve(),
     });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
+    cmp.editarProveedor();
     cmp.proveedorSeleccionado.contacto = 'Otro contacto';
-    await cmp.guardarCampo('contacto');
+    await cmp.guardarProveedor();
     expect(cmp.mensajeError).toBe('');
     expect(mock.llamadas).toContain('actualizarProveedor');
   });
@@ -378,56 +431,69 @@ describe('Personas > Proveedores — editar (panel de detalle)', () => {
       actualizarProveedor: () => Promise.resolve(),
     });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
+    cmp.editarProveedor();
     cmp.proveedorSeleccionado.nombre = 'Ledesma';
-    await cmp.guardarCampo('nombre');
+    await cmp.guardarProveedor();
     expect(cmp.mensajeError).toMatch(/ya existe/i);
     expect(mock.llamadas).not.toContain('actualizarProveedor');
   });
 
   // Cancelar tiene que devolver el valor GUARDADO. Si dejara lo tipeado, al
-  // volver a editar el campo el usuario veria lo que escribio la vez anterior
-  // sin saber que nunca se guardo.
-  it('cancelar devuelve el valor guardado, no lo tipeado', async () => {
+  // volver a editar se veria lo de la vez anterior sin saber que nunca se
+  // guardo.
+  it('cancelar devuelve los valores guardados, no lo tipeado', async () => {
     const { cmp } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
+    cmp.editarProveedor();
     cmp.proveedorSeleccionado.nombre = 'Basura';
-    cmp.cancelarCampo('nombre');
+    cmp.proveedorSeleccionado.telefono = '999';
+    cmp.cancelarEdicion();
     expect(cmp.proveedorSeleccionado.nombre).toBe('Quimicas');
-    expect(cmp.proveedorSeleccionado.editando['nombre']).toBe(false);
+    expect(cmp.proveedorSeleccionado.telefono).toBe('123');
+    expect(cmp.proveedorSeleccionado.editando).toBe(false);
   });
 
-  // El `guardandoCampo` compartido es lo que impide el doble clic: dos updates
-  // del mismo campo.
-  it('no se puede guardar dos veces el mismo campo seguido', async () => {
+  // El `guardandoCampo` compartido es lo que impide el doble clic.
+  it('no se puede guardar dos veces seguido', async () => {
     let guardadas = 0;
     const { cmp } = await listo({
       getProveedores: () => Promise.resolve([{ ...PROV }]),
-      actualizarProveedor: () => {guardadas++; return Promise.resolve(); },
+      actualizarProveedor: () => { guardadas++; return Promise.resolve(); },
     });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
-    const p1 = cmp.guardarCampo('telefono');
-    const p2 = cmp.guardarCampo('telefono');
+    cmp.editarProveedor();
+    const p1 = cmp.guardarProveedor();
+    const p2 = cmp.guardarProveedor();
     await Promise.all([p1, p2]);
     expect(guardadas).toBe(1);
   });
 
-  it('si el guardado falla, avisa y deja el campo en edicion', async () => {
+  // Guardar sin haber apretado "Editar" no debe pasar: el panel en reposo es de
+  // solo lectura y no hay nada que guardar.
+  it('guardar sin estar en edicion no hace nada', async () => {
+    const { cmp, mock } = await listo({
+      getProveedores: () => Promise.resolve([{ ...PROV }]),
+      actualizarProveedor: () => Promise.resolve(),
+    });
+    cmp.seleccionarProveedor(cmp.proveedores[0]);
+    await cmp.guardarProveedor();
+    expect(mock.llamadas).not.toContain('actualizarProveedor');
+  });
+
+  it('si el guardado falla, avisa y sigue en edicion con lo tipeado', async () => {
     const { cmp } = await listo({
       getProveedores: () => Promise.resolve([{ ...PROV }]),
       actualizarProveedor: () => Promise.reject(new Error('boom')),
     });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
-    cmp.editarCampo('contacto');
-    await cmp.guardarCampo('contacto');
+    cmp.editarProveedor();
+    cmp.proveedorSeleccionado.contacto = 'No se guarda';
+    await cmp.guardarProveedor();
     expect(cmp.mensajeError).toMatch(/no se pudo guardar/i);
-    // Sigue editable para corregir y reintentar, y lo tipeado no se pierde.
-    expect(cmp.proveedorSeleccionado.editando['contacto']).toBe(true);
+    expect(cmp.proveedorSeleccionado.editando).toBe(true);
+    expect(cmp.proveedorSeleccionado.contacto).toBe('No se guarda');
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// LA LISTA — el estilo compartido con Empleados
-// ═══════════════════════════════════════════════════════════════
 
 describe('Personas > Proveedores — la lista', () => {
   // La lista tiene que verse igual que la de Empleados: es lo unico que hace
@@ -480,27 +546,36 @@ describe('Personas > Proveedores — la lista', () => {
     expect(item.getAttribute('tabindex')).toBe('0');
   });
 
-  it('el lapiz de la fila abre el detalle (y no el popup)', async () => {
-    const { cmp, fixture } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
-    fixture.detectChanges();
-    (fixture.nativeElement.querySelector('.item-acciones .btn-icon') as HTMLElement).click();
-    fixture.detectChanges();
-    expect(cmp.proveedorSeleccionado.id).toBe(1);
-    // La prueba de que NO es el popup: este solo queda para el alta.
-    expect(cmp.mostrarFormProveedor).toBe(false);
-  });
-
-  it('solo los activos muestran el boton de inactivar', async () => {
+  it('la fila NO tiene lapiz ni tache: se edita con un click', async () => {
+    // La lista es la de Empleados: avatar, nombre, contacto, badge y chevron.
+    // Con dos íconos de acción por fila parecía una grilla de acciones y no una
+    // lista de personas. Editar es un click; inactivar va en el panel, que es
+    // donde vive la confirmación.
     const { cmp, fixture } = await listo({
       getProveedores: () => Promise.resolve([{ ...PROV }, { id: 2, nombre: 'Ledesma', activo: false }]),
     });
     fixture.detectChanges();
     const filas = fixture.nativeElement.querySelectorAll('.lista .item') as NodeListOf<HTMLElement>;
     expect(filas.length).toBe(2);
-    // Activo: editar + inactivar. Inactivo: solo editar (el reactivar esta en
-    // el detalle, porque el 🚫 desaparece de la fila).
-    expect(filas[0].querySelectorAll('.item-acciones .btn-icon').length).toBe(2);
-    expect(filas[1].querySelectorAll('.item-acciones .btn-icon').length).toBe(1);
+    for (const f of Array.from(filas)) {
+      expect(f.querySelectorAll('.btn-icon').length).toBe(0);
+      expect(f.querySelectorAll('.item-acciones').length).toBe(0);
+      // Y sí está el chevron, como en la de Empleados.
+      expect(f.querySelector('.arrow')).toBeTruthy();
+    }
+  });
+
+  it('el inactivar sigue estando, pero adentro del detalle', async () => {
+    const { cmp, fixture } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.proveedor-acciones').length).toBe(0);
+    cmp.seleccionarProveedor(cmp.proveedores[0]);
+    fixture.detectChanges();
+    const botones = Array.from(
+      fixture.nativeElement.querySelectorAll('.proveedor-acciones button')
+    ) as HTMLElement[];
+    expect(botones.length).toBe(1);
+    expect(botones[0].textContent).toContain('Inactivar');
   });
 });
 

@@ -176,6 +176,38 @@
   &:disabled { opacity: 0.6; cursor: default; }
 }
 
+// Boton gris con marco: el contrapeso del azul. Es el "Cancelar" de los
+// formularios y el "Agregar" de las pantallas que comparten sitio con un alta.
+.btn-secondary {
+  padding: 9px 14px;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled) { background: #e2e8f0; }
+  &:disabled { opacity: 0.6; cursor: default; }
+}
+
+// La fila de abajo de un formulario: "Editar", o "Guardar" + "Cancelar".
+//
+// Los tres botones son excluyentes por `*ngIf` sobre el MISMO flag de edicion, no
+// se ocultan por CSS: asi el template se lee de un vistazo y son tres estados, no
+// tres botones que a veces se pisan.
+//
+// `margin-top` y no `padding-top`: los campos de arriba ya traen su margen.
+.botones-edicion {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 16px;
+}
+
 // Botón chico y gris, el contrapeso de un botón azul.
 //
 // `.btn-secundario-sm` vive acá aunque su nombre diga "de popup", porque

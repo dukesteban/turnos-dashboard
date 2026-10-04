@@ -90,19 +90,26 @@ export class ProveedoresComponent implements OnInit {
   }
 
   /**
-   * Arma el objeto del panel: la ficha mas un flag `editando` por campo.
+   * Arma el objeto del panel: la ficha, el flag `editando` de TODO el bloque y
+   * una foto de los valores guardados.
    *
-   * Los flags van DENTRO del objeto (y no en un diccionario aparte) porque el
-   * template los muestra con `*ngIf` al lado del campo, y asi cada campo sabe
-   * si se esta editando sin tener que consultar una clave dinamica.
+   * `_original` es lo que hace que "Cancelar" sirva: sin la foto, cancelar
+   * tendría que volver a leer la lista, y si el guardado ya habia Actualizado la
+   * fila, la foto seria lo recien guardado y no lo anterior. Guardandola en el
+   * momento de seleccionar, "cancelar" siempre vuelve a donde estabas.
    */
   private crearSeleccion(p: any): any {
-    return {
-      ...p,
+    const valores = {
+      nombre: p.nombre || '',
       contacto: p.contacto || '',
       telefono: p.telefono || '',
       notas: p.notas || '',
-      editando: {} as Record<string, boolean>,
+    };
+    return {
+      ...p,
+      ...valores,
+      _original: { ...valores },
+      editando: false,
       guardandoCampo: false,
     };
   }
@@ -119,75 +126,86 @@ export class ProveedoresComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
-  editarCampo(clave: string) {
-    this.proveedorSeleccionado.editando[clave] = true;
+  /**
+   * Poner TODO el bloque en edicion.
+   *
+   * Un solo boton para los cuatro campos, como Configuración > General. Antes
+   * habia un lapiz por campo: cuatro lapices en columna parecen cuatro acciones
+   * y el que de verdad se editaba a menudo quedaba sin destino claro.
+   */
+  editarProveedor() {
+    if (!this.proveedorSeleccionado) return;
+    this.proveedorSeleccionado.editando = true;
     this.mensajeError = '';
     this.cdr.detectChanges();
   }
 
   /**
-   * Cancelar un campo.
+   * Cancelar la edicion: vuelve a los valores guardados.
    *
-   * No borra lo tipeado: vuelve a copiar el valor guardado. Si se dejara el
-   * texto, al volver a editar el campo el usuario veria lo que escribio la
-   * vez anterior sin saber que nunca se guardo.
+   * No borra lo tipeado a mano, sino que RESTAURA la foto `_original`. Si solo
+   * se cerrara el modo edicion, al volver a entrar se veria lo que se escribio
+   * la vez anterior sin saber que nunca se guardo.
    */
-  cancelarCampo(clave: string) {
+  cancelarEdicion() {
     const sel = this.proveedorSeleccionado;
-    const original = this.proveedores.find((p: any) => p.id === sel.id);
-    if (original) sel[clave] = original[clave] || '';
-    sel.editando[clave] = false;
+    if (!sel) return;
+    Object.assign(sel, sel._original);
+    sel.editando = false;
     this.cdr.detectChanges();
   }
 
   /**
-   * Guardar UN campo.
+   * Guardar el bloque entero en UNA llamada.
    *
-   * Un `updateProveedor` por campo y no uno con los cuatro: si el usuario
-   * edita el nombre y despues el telefono, son dos guardados y dos mensajes.
-   * Mandar los cuatro juntos cada vez pisaria con `null` los campos que no
-   * toco (los opcionales vienen en `null` desde la base).
+   * Con un solo boton, mandar los cuatro campos juntos es lo correcto y lo que
+   * espera la gente: o se guarda la ficha o no se guarda. Antes (un lapiz por
+   * campo) habia que mandar UN campo por vez, porque mandar todos en cada
+   * guardado pisaba con `null` los opcionales que el usuario no habia tocado.
+   * Ahora los cuatro salen del panel, cada uno con su `|| null`, asi que el
+   * campo vacio se guarda como vacio y no como "no tocar".
    */
-  async guardarCampo(clave: string) {
+  async guardarProveedor() {
     const sel = this.proveedorSeleccionado;
-    if (!sel || sel.guardandoCampo) return;
+    if (!sel || sel.guardandoCampo || !sel.editando) return;
     this.mensajeError = '';
 
-    const valor = (sel[clave] ?? '').trim();
-
-    if (clave === 'nombre' && !valor) {
+    const nombre = (sel.nombre ?? '').trim();
+    if (!nombre) {
       this.mensajeError = '❌ El nombre es obligatorio.';
       this.cdr.detectChanges();
       return;
     }
 
     // El indice unico de la base es `lower(btrim(nombre))`. Se avisa aca para
-    // que el mensaje sea "ya existe" y no un error de Postgres. Al editar hay
-    // que excluirse a uno mismo: sin el `p.id !== idEnEdicion`, guardar el
-    // mismo nombre daria "ya existe" siempre y no se podria editar nunca.
-    if (clave === 'nombre') {
-      const idEnEdicion = sel.id;
-      if (this.proveedores.some(
-        (p: any) => paraComparar(p.nombre) === paraComparar(valor) && p.id !== idEnEdicion
-      )) {
-        this.mensajeError = '⚠️ Ya existe un proveedor con ese nombre.';
-        this.cdr.detectChanges();
-        return;
-      }
+    // que el mensaje sea "ya existe" y no un error de Postgres. Hay que
+    // excluirse a uno mismo: sin el `p.id !== sel.id`, guardar el mismo nombre
+    // daria "ya existe" siempre y no se podria editar nunca.
+    if (this.proveedores.some(
+      (p: any) => paraComparar(p.nombre) === paraComparar(nombre) && p.id !== sel.id
+    )) {
+      this.mensajeError = '⚠️ Ya existe un proveedor con ese nombre.';
+      this.cdr.detectChanges();
+      return;
     }
 
     sel.guardandoCampo = true;
     this.cdr.detectChanges();
     try {
-      const datos: any = { [clave]: valor || null };
-      // El nombre nunca se manda en null: es NOT NULL.
-      if (clave === 'nombre') datos.nombre = valor;
+      const datos = {
+        // El nombre nunca va en null: es NOT NULL.
+        nombre,
+        contacto: (sel.contacto ?? '').trim() || null,
+        telefono: (sel.telefono ?? '').trim() || null,
+        notas: (sel.notas ?? '').trim() || null,
+      };
       await this.supabase.actualizarProveedor(sel.id, datos);
 
       const idx = this.proveedores.findIndex((p: any) => p.id === sel.id);
-      if (idx >= 0) this.proveedores[idx][clave] = datos[clave];
-      sel[clave] = datos[clave] || '';
-      sel.editando[clave] = false;
+      if (idx >= 0) Object.assign(this.proveedores[idx], datos);
+      Object.assign(sel, { ...datos, notas: datos.notas || '', contacto: datos.contacto || '', telefono: datos.telefono || '' });
+      sel._original = { nombre, contacto: sel.contacto, telefono: sel.telefono, notas: sel.notas };
+      sel.editando = false;
       this.mostrarMensaje('✅ Proveedor actualizado.');
     } catch (e) {
       this.mensajeError = '❌ No se pudo guardar.';
@@ -226,7 +244,7 @@ export class ProveedoresComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
-  async guardarProveedor() {
+  async guardarNuevo() {
     this.mensajeError = '';
     this.mensaje = '';
     if (!this.nuevoProveedor.nombre.trim()) {

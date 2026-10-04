@@ -3,21 +3,22 @@
   la edición, el inactivado y el buscador son fichas de persona, no plata. En
   Caja quedó lo que sí es plata (las compras y su total).
 
-  LA EDICIÓN NO ES UN POPUP. Es el panel de detalle de la derecha, el mismo que
-  usan Clientes y Empleados: click en la fila, se abre al costado, y cada campo
-  se edita con lápiz -> guardar/cancelar. El popup quedó solo para el ALTA, que
-  es el único caso donde no hay una fila que editar.
+  LA LISTA ES LA DE EMPLEADOS, Tal cual: avatar con la inicial, nombre en
+  negrita, el dato de contacto abajo, el badge Activo/Inactivo y el chevron.
+  No hay lápiz ni tache en la fila a propósito: se edita haciendo click, y el
+  inactivar es una acción destructiva que va adentro del panel, donde está la
+  confirmación. Con los dos íconos la lista parecía una grilla de acciones y no
+  una lista de personas.
 
-  Los estilos vienen de `_lista.scss` (la lista), `_detalle.scss` (el armazón
-  lista + panel) y `_popup.scss` (el alta), así que las tres pestañas de Personas
-  se ven como la misma pantalla.
+  LA EDICIÓN ES EL PANEL DE DETALLE, no un popup, y con UN botón "Editar" para
+  todo el bloque (como Configuración > General), no un lápiz por campo: cuatro
+  lápices encolumna son cuatro cosas que se pueden editar sin querer, y el que
+  se editaba de verdad quedaba sin destino claro.
+
+  Los estilos vienen de `_lista.scss`, `_detalle.scss` y `_popup.scss`.
 -->
 <div class="proveedores-page">
 
-  <!--
-    `.con-detalle` es lo que parte en dos columnas. Sin selección la lista
-    ocupa el ancho completo, que es lo que se quiere al entrar a la pantalla.
-  -->
   <div class="layout" [class.con-detalle]="proveedorSeleccionado">
 
     <!-- LISTA -->
@@ -75,26 +76,15 @@
             </div>
           </div>
 
-          <span class="estado-badge" [class.inactivo]="!p.activo">
+          <div class="estado-badge" [class.inactivo]="!p.activo">
             {{ p.activo ? 'Activo' : 'Inactivo' }}
-          </span>
+          </div>
 
           <!--
-            El ✏️ abre el detalle (lo mismo que el click en la fila) y el 🚫
-            inactiva. El `stopPropagation` evita que el click en el botón
-            tambien dispare el de la fila: sin él, tocar "Inactivar" además abriría
-            el detalle por detrás del confirm.
-
-            El 🚫 solo en los activos, y dentro del detalle hay un botón de
-            "reactivar": un inactivo se puede volver a usar, no queda de adorno.
+            El chevron es decorativo: el ⌨ de Enter y Espacio ya abren el detalle,
+            asi que el "role=button" no tiene que anunciar nada extra.
           -->
-          <div class="item-acciones">
-            <button class="btn-icon" (click)="$event.stopPropagation(); seleccionarProveedor(p)"
-                    title="Ver y editar" aria-label="Ver y editar proveedor">✏️</button>
-            <button *ngIf="p.activo" class="btn-icon"
-                    (click)="$event.stopPropagation(); inactivarProveedor(p)"
-                    title="Inactivar" aria-label="Inactivar proveedor">🚫</button>
-          </div>
+          <div class="arrow" aria-hidden="true">›</div>
         </div>
       </div>
     </div><!-- /.lista-seccion -->
@@ -117,10 +107,9 @@
       </div>
 
       <!--
-        Un `*ngFor` sobre `CAMPOS` en vez de cuatro bloques escrito a mano. Son
-        los mismos cuatro campos siempre, con el mismo patrón de edición, y
-        cuatro copias de ese patrón son cuatro lugares donde algo se puede
-        olvidar de agregar (el `cancelar`, el "Guardando…", el `trim`).
+        Un `*ngFor` sobre `CAMPOS` en vez de cuatro bloques a mano: son los
+        mismos cuatro campos siempre y cuatro copias del mismo markup son
+        cuatro lugares donde se puede olvidar algo.
       -->
       <div class="datos-campos">
         <div *ngFor="let c of CAMPOS" class="campo-editable">
@@ -128,33 +117,43 @@
           <input type="text" class="input-nombre"
                  [(ngModel)]="proveedorSeleccionado[c.clave]"
                  [attr.placeholder]="c.placeholder || '—'"
-                 [readonly]="!proveedorSeleccionado.editando[c.clave]"
+                 [readonly]="!proveedorSeleccionado.editando"
                  [attr.aria-label]="c.label" />
-
-          <button *ngIf="!proveedorSeleccionado.editando[c.clave] && !proveedorSeleccionado.guardandoCampo"
-                  class="btn-icon" (click)="editarCampo(c.clave)"
-                  [title]="'Editar ' + c.label.toLowerCase()" [attr.aria-label]="'Editar ' + c.label">✏️</button>
-
-          <button *ngIf="proveedorSeleccionado.editando[c.clave] && !proveedorSeleccionado.guardandoCampo"
-                  class="btn-icon" (click)="guardarCampo(c.clave)"
-                  title="Guardar" aria-label="Guardar">💾</button>
-
-          <button *ngIf="proveedorSeleccionado.editando[c.clave] && !proveedorSeleccionado.guardandoCampo"
-                  class="btn-icon" (click)="cancelarCampo(c.clave)"
-                  title="Cancelar" aria-label="Cancelar">↩️</button>
-
-          <!--
-            Mientras guarda, los tres botones desaparecen y queda esto. Es lo que
-            impide el doble clic: dos `update` del mismo campo.
-          -->
-          <span *ngIf="proveedorSeleccionado.guardandoCampo" class="guardando-celda">⏳ Guardando…</span>
         </div>
       </div>
 
       <!--
-        El estado y las compras del proveedor. No se editan acá a propósito: si
-        un proveedor está inactivo hay que reactivarlo, y en la lista el 🚫
-        desaparece y no hay dónde tocarlo.
+        UN botón para todo el bloque, como en Configuración > General. Antes
+        había un lápiz por campo: cuatro lápices encolumna parecen cuatro
+        acciones y el que se editaba de verdad quedaba sin destino claro.
+
+        Los tres botones son excluyentes (`*ngIf` sobre el mismo `editando`), no
+        se ocultan por CSS: en el template se lee de un vistazo que son tres
+        estados y no tres botones que a veces se pisan.
+      -->
+      <div class="botones-edicion">
+        <button *ngIf="!proveedorSeleccionado.editando" class="btn-primary"
+                (click)="editarProveedor()">
+          ✏️ Editar
+        </button>
+
+        <button *ngIf="proveedorSeleccionado.editando" class="btn-primary"
+                [disabled]="proveedorSeleccionado.guardandoCampo"
+                (click)="guardarProveedor()">
+          {{ proveedorSeleccionado.guardandoCampo ? 'Guardando...' : '💾 Guardar' }}
+        </button>
+
+        <button *ngIf="proveedorSeleccionado.editando" class="btn-secondary"
+                [disabled]="proveedorSeleccionado.guardandoCampo"
+                (click)="cancelarEdicion()">
+          ↩️ Cancelar
+        </button>
+      </div>
+
+      <!--
+        El estado y el inactivar van DEBAJO de los botones, con un borde arriba:
+        son otra cosa (el estado del registro), no parte del formulario. Si van
+        arriba, se lee "este proveedor está en edición".
       -->
       <div class="proveedor-acciones">
         <span class="estado-badge" [class.inactivo]="!proveedorSeleccionado.activo">
@@ -162,10 +161,12 @@
         </span>
 
         <button *ngIf="proveedorSeleccionado.activo" class="btn-secundario-sm"
+                [disabled]="proveedorSeleccionado.editando"
                 (click)="inactivarProveedor(proveedorSeleccionado)">
           🚫 Inactivar
         </button>
         <button *ngIf="!proveedorSeleccionado.activo" class="btn-secundario-sm"
+                [disabled]="proveedorSeleccionado.editando"
                 (click)="reactivarProveedor(proveedorSeleccionado)">
           ♻️ Reactivar
         </button>
@@ -218,7 +219,7 @@
     </div>
 
     <div class="popup-acciones">
-      <button class="btn-atendido" [disabled]="guardando" (click)="guardarProveedor()">
+      <button class="btn-atendido" [disabled]="guardando" (click)="guardarNuevo()">
         {{ guardando ? 'Guardando...' : '💾 Guardar proveedor' }}
       </button>
       <button class="btn-cancelado" (click)="cerrarFormProveedor()">↩️ Cancelar</button>
