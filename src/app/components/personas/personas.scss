@@ -1,42 +1,21 @@
 // Shell de "Personas". Es solo la barra de pestañas y el panel: cada pantalla
 // hija trae su propio estilo (`.clientes-page`, `.empleados-page`,
 // `.proveedores-page`). Acá no se redefine nada de ellas.
+//
+// El `@use` tiene que estar ARRIBA de todo: Sass exige que las directivas `@use`
+// precedan a cualquier otra regla.
+@use '../../../styles/tabs';
 
 .personas-page {
   min-height: calc(100vh - 56px);
 }
 
-// Barra de pestañas. Copia el patrón de `.tabs` de Caja para que las dos
-// pantallas se vean del mismo modo.
+// El partial `_tabs.scss` trae el ESTILO de la barra. Acá va solo el espacio que
+// la rodea, que es distinto en cada pantalla (Caja lo tiene en `.caja-page`).
 .tabs-personas {
-  display: flex;
-  gap: 4px;
   padding: 12px 24px 0;
   max-width: 1100px;
   margin: 0 auto;
-
-  a {
-    padding: 10px 16px;
-    border-radius: 8px 8px 0 0;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #475569;
-    text-decoration: none;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    border-bottom: none;
-    transition: background 0.15s, color 0.15s;
-  }
-
-  a:hover { background: #e2e8f0; }
-
-  a.activo {
-    background: white;
-    color: #1d4ed8;
-    // La pestaña activa "se junta" con el panel de abajo: sin este borde, la
-    // línea de abajo del panel la cruza y la pestaña pareceFloatando.
-    box-shadow: inset 0 3px 0 #1d4ed8;
-  }
 }
 
 .tab-panel {
@@ -46,14 +25,5 @@
 }
 
 @media (max-width: 700px) {
-  .tabs-personas {
-    padding: 10px 14px 0;
-    overflow-x: auto;
-
-    a {
-      padding: 9px 12px;
-      font-size: 0.82rem;
-      white-space: nowrap;
-    }
-  }
+  .tabs-personas { padding: 10px 14px 0; }
 }

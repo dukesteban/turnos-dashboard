@@ -1,0 +1,133 @@
+// ============================================================
+// LISTA DE PERSONAS
+// ------------------------------------------------------------
+// El bloque "avatar con la inicial + nombre + dato abajo + badge
+// Activo/Inactivo + chevron" que usan Empleados y Proveedores.
+//
+// Nacio en `empleados.scss`. Cuando el ABM de proveedores se movio a Personas,
+// copiarlo ahi era la forma rapida de que las dos listas se desincronicen: un
+// dia el proveedor tiene el nombre en negrita y el empleado no, y se ve como un
+// error.
+//
+// El selector es `.item`, NO `.empleado-item` ni `.proveedor-item`: los tres
+// detalles (cliente, empleado, proveedor) son el MISMO componente visual y
+// llamarlos distinto solo obliga a duplicar la CSS. Se distinguen por el
+// contenido del `*ngFor`, no por el nombre de la clase.
+//
+// Clientes NO lo usa todavia (tiene su propia `.cliente-item` con foto y
+// direccion). Cuando se unifique, esta es la parte que se borra de alla.
+//
+// Uso:  @use '../../../styles/lista';
+// ============================================================
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover { background: #f8fafc; }
+  &.activo { background: #eff6ff; }
+}
+
+.avatar {
+  width: 38px;
+  height: 38px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.nombre {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.sub {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+// Badge Activo/Inactivo de la lista. Reemplaza al % de comision porque en la
+// lista lo que importa es si la persona labra, no cuanto cobra.
+.estado-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+
+  &.inactivo {
+    color: #991b1b;
+    background: #fee2e2;
+    border-color: #fecaca;
+  }
+}
+
+// Un inactivo se ve atenuado pero se puede seleccionar para poder reactivarlo.
+.item.inactivo {
+  opacity: 0.62;
+  cursor: pointer;
+
+  &:hover { opacity: 0.85; }
+}
+
+// Foco visible para navegacion por teclado (el item es un boton de hecho).
+.item:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+.arrow {
+  color: #cbd5e1;
+  font-size: 1.2rem;
+}
+
+// Los botones de editar/inactivar van al final de la fila. El `margin-left:
+// auto` los empuja contra el borde: sin el, quedan pegados al nombre y en una
+// fila larga quedan flotando en el medio.
+.item-acciones {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+
+  .btn-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    padding: 4px 6px;
+    border-radius: 6px;
+    line-height: 1;
+
+    &:hover { background: #e2e8f0; }
+  }
+}

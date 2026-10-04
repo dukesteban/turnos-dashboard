@@ -21,12 +21,15 @@ export class CajaComponent implements OnInit {
   // en `cargarDatos()`, porque el resumen del header (que está arriba de las
   // pestañas) necesita los tres números para cualquier pestaña.
   // `tab` es `string` y no una unión de literales a propósito. Con la unión
-  // ('ingresos' | 'empleados' | 'proveedores'), el type checker de templates de
+  // ('ingresos' | 'compras' | 'empleados'), el type checker de templates de
   // Angular ESTRECHA el tipo después del primer `*ngIf="tab === 'ingresos'"` y
   // se queja con TS2367 de que comparar con 'empleados' no tiene sentido, aunque
   // el narrowing solo valga para ese bloque. Ampliar a string lo evita.
   //
-  // El conjunto de pestañas válidas está en `TABS`.
+  // El conjunto de pestañas válidas son los `esTab(...)` del template. Acá no
+  // hay un `TABS`: si lo hubiera, un valor nuevo tendría que agregarse en dos
+  // lugares y con el tiempo uno se olvida. La barra y el cuerpo comparten el
+  // mismo valor por eso.
   tab: string = 'ingresos';
 
   vista: 'dia' | 'mes' = 'mes';

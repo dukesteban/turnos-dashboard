@@ -3,31 +3,35 @@
   la edición, el inactivado y el buscador son fichas de persona, no plata. En
   Caja quedó lo que sí es plata (las compras y su total).
 
+  La lista es la MISMA que la de Empleados: avatar con la inicial, nombre en
+  negrita, el dato de contacto abajo y el badge Activo/Inactivo. Antes era una
+  tabla y se veía distinta de sus dos vecinas de la misma pantalla.
+
+  Los estilos vienen de `_lista.scss` (el partial compartido con Empleados) y
+  `_popup.scss`, así que las dos listas y los dos popups se desincronizan juntos
+  o no se desincronizan nunca.
+
   El popup de alta/edición es UNO solo, como en el resto de la app: lo decide
   `editandoProveedor`. Dos popups idénticos que se diferencian por un booleano
   terminan divergiendo en algún detalle.
 -->
 <div class="proveedores-page">
 
-  <!-- El error va arriba y el éxito también: son de esta pantalla, no de un popup. -->
-  <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
-  <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
-
-  <div class="seccion">
+  <!--
+    No hay `.layout` con dos columnas como en Empleados: un proveedor no tiene
+    panel de detalle. El click en la fila abre el popup de edicion, asi que el
+    detalle esta a un toque y no vale la pena una segunda columna.
+  -->
+  <div class="seccion lista-seccion">
     <div class="seccion-header">
-      <h3>
-        Proveedores
-        <span class="subtitulo">
-          {{ proveedoresFiltrados.length }} de {{ proveedores.length }}
-        </span>
-      </h3>
+      <span class="badge-count">Total: {{ proveedoresFiltrados.length }}</span>
       <button class="btn-primary" (click)="abrirFormProveedor()">
-        ➕ Nuevo proveedor
+        ➕ Nuevo
       </button>
     </div>
 
     <input type="text" class="buscador" [(ngModel)]="busquedaProveedor"
-           placeholder="🔍 Buscar proveedor..." />
+           placeholder="🔍 Buscar por nombre..." />
 
     <div *ngIf="cargando" class="vacio">Cargando...</div>
 
@@ -39,33 +43,71 @@
       Ningún proveedor coincide con "{{ busquedaProveedor }}"
     </div>
 
-    <div *ngIf="proveedoresFiltrados.length > 0" class="tabla-scroll">
-      <div class="tabla-caja">
-        <div class="tr tr-cabecera tr-contacto">
-          <span>Proveedor</span>
-          <span>Contacto</span>
-          <span>Teléfono</span>
-          <span></span>
+    <!--
+      `role="button"` + `tabindex` + los dos handlers de teclado: el item es
+      un botón de hecho y sin esto no se puede llegar con el teclado ni con un
+      lector de pantalla. Es el mismo contrato que la lista de Empleados.
+    -->
+    <div class="lista">
+      <div *ngFor="let p of proveedoresFiltrados"
+           class="item"
+           [class.inactivo]="!p.activo"
+           role="button"
+           tabindex="0"
+           (click)="editar(p)"
+           (keydown.enter)="editar(p)"
+           (keydown.space)="editar(p); $event.preventDefault()">
+
+        <div class="avatar">{{ p.nombre?.charAt(0)?.toUpperCase() }}</div>
+
+        <div class="info">
+          <div class="nombre">{{ p.nombre }}</div>
+          <!--
+            El contacto y el telefono van en la misma linea separados por un
+            punto. Siempre los dos: si el contacto falta queda solo el telefono
+            y la linea se ve descuadrada hacia el medio.
+          -->
+          <div class="sub">
+            <span *ngIf="p.contacto">{{ p.contacto }}</span>
+            <span *ngIf="p.contacto && p.telefono"> · </span>
+            <span *ngIf="p.telefono">{{ p.telefono }}</span>
+            <span *ngIf="!p.contacto && !p.telefono">Sin datos de contacto</span>
+          </div>
         </div>
-        <div *ngFor="let p of proveedoresFiltrados" class="tr tr-contacto" [class.fila-inactiva]="!p.activo">
-          <span class="celda-principal">
-            {{ p.nombre }}
-            <span *ngIf="!p.activo" class="badge-inactivo">Inactivo</span>
-          </span>
-          <span class="celda-chica">{{ p.contacto || '-' }}</span>
-          <span class="celda-chica">{{ p.telefono || '-' }}</span>
-          <!-- Editar e inactivar juntos en la celda de acciones: sueltos, la
-               grilla los cuenta como columnas y se caen de lado. -->
-          <span class="celda-acciones">
-            <button class="btn-icon" (click)="abrirFormProveedor(p)" title="Editar">✏️</button>
-            <button *ngIf="p.activo" class="btn-icon" (click)="inactivarProveedor(p)"
-                    title="Inactivar">🚫</button>
-          </span>
+
+        <span class="estado-badge" [class.inactivo]="!p.activo">
+          {{ p.activo ? 'Activo' : 'Inactivo' }}
+        </span>
+
+        <!--
+          Editar e inactivar. Editar abre el popup (es lo que hace el click en
+          la fila); inactivar va aparte porque es una accion destructiva y no
+          puede ser lo mismo que hacer clic en la fila.
+
+          El `stopPropagation` evita que el click en el boton dispare tambien
+          el de la fila: sin el, tocar "Inactivar" ademas abria el popup de
+          edicion encima del confirm.
+        -->
+        <div class="item-acciones">
+          <button class="btn-icon" (click)="$event.stopPropagation(); editar(p)"
+                  title="Editar" aria-label="Editar proveedor">✏️</button>
+          <button *ngIf="p.activo" class="btn-icon"
+                  (click)="$event.stopPropagation(); inactivarProveedor(p)"
+                  title="Inactivar" aria-label="Inactivar proveedor">🚫</button>
         </div>
       </div>
     </div>
-  </div>
-</div>
+  </div><!-- /.seccion -->
+
+  <!--
+    El error y el exito van arriba y no dentro de un popup: son de esta pantalla.
+    Arriba porque el popup tapa la pantalla y el mensaje tiene que verse en el
+    momento en que se cierra.
+  -->
+  <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
+  <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
+
+</div><!-- /.proveedores-page -->
 
 <!-- POPUP: ALTA / EDICIÓN -->
 <div *ngIf="mostrarFormProveedor" class="popup-overlay" (click)="cerrarFormProveedor()">

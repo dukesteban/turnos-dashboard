@@ -67,8 +67,33 @@ describe('Caja — pestañas', () => {
   it('arranca en Ingresos', () => {
     const { cmp } = montar();
     expect(cmp.esTab('ingresos')).toBe(true);
+    expect(cmp.esTab('compras')).toBe(false);
     expect(cmp.esTab('empleados')).toBe(false);
-    expect(cmp.esTab('proveedores')).toBe(false);
+  });
+
+  // El orden de la barra es Ingresos, Compras, Pagos a Empleados. El ABM de
+  // proveedores se mudó a Personas, así que la pestaña que antes se llamaba
+  // "Proveedores" ahora se llama "Compras": es lo que muestra.
+  it('la barra ofrece Ingresos, Compras y Pagos a Empleados, en ese orden', () => {
+    const { cmp, fixture } = montar();
+    fixture.detectChanges();
+    // El cast a HTMLButtonElement es por `click()` y `classList`: sin el,
+    // TypeScript los ve como `Element` y no encuentra ninguno de los dos.
+    const botones = Array.from(
+      fixture.nativeElement.querySelectorAll('.tabs button')
+    ) as HTMLButtonElement[];
+    const textos = botones.map((b) => b.textContent!.trim());
+    expect(textos.length).toBe(3);
+    expect(textos[0]).toContain('Ingresos');
+    expect(textos[1]).toContain('Compras');
+    expect(textos[2]).toContain('Pagos a Empleados');
+    // Y cada botón enciende su propia pestaña.
+    for (let i = 0; i < botones.length; i++) {
+      botones[i].click();
+      fixture.detectChanges();
+      expect(botones[i].classList.contains('activo')).toBe(true);
+      expect(cmp.esTab(['ingresos', 'compras', 'empleados'][i])).toBe(true);
+    }
   });
 
   it('cambiarTab cambia y limpia los mensajes de las dos secciones', () => {
@@ -78,9 +103,9 @@ describe('Caja — pestañas', () => {
     cmp.mensajePagos = '✅ Pago registrado.';
     cmp.mensaje = '✅ Proveedor agregado.';
 
-    cmp.cambiarTab('proveedores');
+    cmp.cambiarTab('compras');
 
-    expect(cmp.esTab('proveedores')).toBe(true);
+    expect(cmp.esTab('compras')).toBe(true);
     expect(cmp.mensajePagos).toBe('');
     expect(cmp.mensaje).toBe('');
   });
@@ -900,7 +925,7 @@ describe('Caja — el pie de acciones está en la fila', () => {
         cantidad: 2, monto: 48000, notas: null, proveedores: { nombre: 'Quimicas', activo: true },
       }]),
     });
-    cmp.cambiarTab('proveedores');
+    cmp.cambiarTab('compras');
     fixture.detectChanges();
 
     const filas = fixture.nativeElement.querySelectorAll('.tabla-caja .tr');
@@ -929,7 +954,7 @@ describe('Caja — el pie de acciones está en la fila', () => {
   // Aquí se comprueba la relación que importa: para cada tabla con acciones, la
   // grilla que se declara tiene TANTAS columnas como celdas tiene la fila.
   const TABLAS_CON_ACCIONES = [
-    { clase: 'tr-con-acciones', celdas: 6, etiqueta: 'compras', tab: 'proveedores' },
+    { clase: 'tr-con-acciones', celdas: 6, etiqueta: 'compras', tab: 'compras' },
     { clase: 'tr-pagos', celdas: 5, etiqueta: 'pagos', tab: 'empleados' },
   ];
 
@@ -946,8 +971,8 @@ describe('Caja — el pie de acciones está en la fila', () => {
           metodo: 'efectivo', empleados: { nombre: 'E', activo: true },
         }]),
       });
-      // La tabla vive en UNA pestaña: compras y proveedores en 'proveedores',
-      // pagos en 'empleados'. Hay que medirla con su pestaña abierta.
+      // La tabla vive en UNA pestaña: compras en 'compras', pagos en 'empleados'.
+      // Hay que medirla con su pestaña abierta.
       cmp.cambiarTab(t.tab);
       fixture.detectChanges();
 

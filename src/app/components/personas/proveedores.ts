@@ -98,6 +98,19 @@ export class ProveedoresComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
+  /**
+   * Editar un proveedor.
+   *
+   * Es un alias de `abrirFormProveedor(p)` y no un metodo con cuerpo: existe
+   * para que el template diga lo que hace. El click en la fila y el ✏️ del item
+   * abren el MISMO popup, y si cada uno llamara a `abrirFormProveedor` con un
+   * argumento distinto (o uno de los dos se olvidara del argumento) aparece un
+   * "Nuevo proveedor" en el lugar donde el usuario pidio editar.
+   */
+  editar(p: any) {
+    this.abrirFormProveedor(p);
+  }
+
   async guardarProveedor() {
     this.mensajeError = '';
     this.mensaje = '';

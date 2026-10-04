@@ -1,7 +1,19 @@
-// El `@use` tiene que estar ARRIBA de todo: Sass exige que las directivas
-// `@use` precedan a cualquier otra regla.
+// Proveedores es una de las tres pantallas de Personas, asi que su lista tiene
+// que verse IGUAL que la de Empleados.
+//
+// Por eso NO hay CSS de lista aqui: `.lista`, `.item`, `.avatar`, `.info`,
+// `.nombre`, `.sub`, `.estado-badge` y `.item-acciones` vienen de
+// `_lista.scss`, el partial que los comparte con Empleados. Y el popup (fondo,
+// tarjeta, campos, pie) viene de `_popup.scss`.
+//
+// Lo que queda aca es solo lo propio de esta pantalla: el ancho de la pagina y
+// el contador de "Total: N" de la header.
+//
+// El `@use` tiene que estar ARRIBA de todo: Sass exige que las directivas `@use`
+// precedan a cualquier otra regla.
 @use '../../../styles/popup';
 @use '../../../styles/tabla';
+@use '../../../styles/lista';
 
 .proveedores-page {
   padding: 24px;
@@ -9,52 +21,16 @@
   margin: 0 auto;
 }
 
-// El popup es el de `_popup.scss` (el mismo de Caja y Dashboard). Acá solo
-// lo que le falta: la cajita de los campos y el "opcional" de las notas.
-.popup .form-caja {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 16px;
-
-  .fila {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .campo {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-bottom: 12px;
-
-    label {
-      font-size: 0.82rem;
-      font-weight: 600;
-      color: #475569;
-    }
-
-    .opcional {
-      font-weight: 400;
-      color: #94a3b8;
-      font-size: 0.75rem;
-    }
-
-    input {
-      padding: 9px 11px;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      background: white;
-
-      &:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
-      }
-    }
-  }
+// El "Total: N" de la cabecera, igual que en Clientes y Empleados. Vive en cada
+// componente y no en un partial porque solo estos tres lo usan y cada uno lo
+// tunea un poco.
+.badge-count {
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.8rem;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-weight: 600;
 }
 
 @media (max-width: 700px) {

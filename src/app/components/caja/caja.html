@@ -14,16 +14,26 @@
     <div class="fecha-titulo">{{ tituloFecha }}</div>
   </div>
 
-  <!-- PESTAÑAS -->
-  <div class="tabs">
+  <!--
+    PESTANAS
+
+    El orden va por cuanto se mira: Ingresos (lo que entra), Compras (lo que
+    sale) y Pagos a Empleados (lo que se reparte). El ABM de proveedores vive en
+    Personas, asi que esta pestana ya no administra proveedores: muestra las
+    compras y su total por proveedor.
+
+    El estilo de las pastitas NO es de este archivo: viene de `_tabs.scss`, el
+    mismo partial que usa Personas. `.tabs-caja` solo aporta el margen de abajo.
+  -->
+  <div class="tabs tabs-caja">
     <button [class.activo]="tab === 'ingresos'" (click)="cambiarTab('ingresos')">
       📈 Ingresos
     </button>
-    <button [class.activo]="tab === 'empleados'" (click)="cambiarTab('empleados')">
-      👷 Pagos Empleados
+    <button [class.activo]="tab === 'compras'" (click)="cambiarTab('compras')">
+      📦 Compras
     </button>
-    <button [class.activo]="tab === 'proveedores'" (click)="cambiarTab('proveedores')">
-      📦 Proveedores
+    <button [class.activo]="tab === 'empleados'" (click)="cambiarTab('empleados')">
+      👷 Pagos a Empleados
     </button>
   </div>
 
@@ -166,7 +176,7 @@
   </div><!-- /.grid-inferior -->
   </div><!-- /esTab('ingresos') -->
 
-  <!-- ══════════ PESTAÑA 2: PAGOS A EMPLEADOS ══════════ -->
+  <!-- ══════════ PESTAÑA 3: PAGOS A EMPLEADOS ══════════ -->
   <div *ngIf="esTab('empleados')" class="tab-body">
     <!-- Solo el mensaje de éxito va acá. El de error vive DENTRO del popup: si
          también estuviera en la pestaña, el mismo texto aparecería dos veces. -->
@@ -314,8 +324,8 @@
     </div>
   </div>
 
-  <!-- ══════════ PESTAÑA 3: PROVEEDORES ══════════ -->
-  <div *ngIf="esTab('proveedores')" class="tab-body">
+  <!-- ══════════ PESTAÑA 2: COMPRAS ══════════ -->
+  <div *ngIf="esTab('compras')" class="tab-body">
     <!-- Ídem: el error va dentro del popup, el éxito queda en la pestaña. -->
     <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
 

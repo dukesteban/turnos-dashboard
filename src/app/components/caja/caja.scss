@@ -1,9 +1,13 @@
-// El pie de botones de los popups (.popup-acciones, .btn-atendido,
-// .btn-cancelado, .error-msg) viene de src/styles/_popup.scss y lo comparte con
-// el Dashboard. El `@use` va ARRIBA de todo porque Sass exige que las directivas
-// `@use` precedan a cualquier otra regla, y son TRES `..` para llegar a src/.
+// El popup entero (fondo, tarjeta, header, ✕ y la cajita de los campos) viene de
+// src/styles/_popup.scss, junto con el pie de botones (.popup-acciones,
+// .btn-atendido, .btn-cancelado, .error-msg). Lo comparte con el Dashboard y con
+// Personas > Proveedores.
+//
+// El `@use` va ARRIBA de todo porque Sass exige que las directivas `@use` precedan
+// a cualquier otra regla, y son TRES `..` para llegar a src/.
 @use '../../../styles/popup';
 @use '../../../styles/tabla';
+@use '../../../styles/tabs';
 
 .caja-page {
   padding: 24px;
@@ -283,37 +287,17 @@
 // ══════════════════════════════════════════════════════════════
 
 // ── PESTAÑAS ─────────────────────────────────────────────────
-.tabs {
-  display: flex;
-  gap: 6px;
+// Solo el ESPACIO de la barra. El estilo de la pastita (pill gris, activa
+// blanca con borde azul) viene del partial `_tabs.scss`, el mismo que usa
+// Personas: dos estilos de pastana en la misma app es lo que se acaba de
+// arreglar, no algo que haya que volver a desarmar.
+.tabs-caja {
   margin-bottom: 16px;
-  border-bottom: 2px solid #e2e8f0;
-
-  button {
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    padding: 10px 16px;
-    font-size: 0.92rem;
-    font-weight: 600;
-    color: #64748b;
-    cursor: pointer;
-    border-radius: 8px 8px 0 0;
-    transition: color 0.15s, background 0.15s;
-
-    &:hover { background: #f8fafc; color: #334155; }
-
-    &.activo {
-      color: #1d4ed8;
-      border-bottom-color: #1d4ed8;
-    }
-  }
 }
 
 // Las secciones de cada pestaña. El gap va acá y NO en `.seccion`, porque
 // `.grid-inferior` (pestaña de Ingresos) ya tiene su propio `gap: 20px` y
-//anuts una margen ahí sumaría espacio de más entre las tarjetas.
+// antes una margen ahí sumaría espacio de más entre las tarjetas.
 //
 // Sin esto las tarjetas quedaban pegadas: `.seccion` nunca tuvo margin-bottom y
 // en Ingresos no hacía falta porque vivían dentro de un grid con gap.
@@ -371,50 +355,9 @@
 }
 
 // ── FORMULARIOS ──────────────────────────────────────────────
-.form-caja {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 14px;
-
-  .fila {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .campo {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-bottom: 12px;
-    flex: 1;
-    min-width: 160px;
-
-    label {
-      font-size: 0.78rem;
-      font-weight: 600;
-      color: #475569;
-    }
-
-    .opcional { font-weight: 400; color: #94a3b8; }
-
-    input, select {
-      padding: 9px 11px;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      font-family: inherit;
-
-      &:focus {
-        outline: none;
-        border-color: #1d4ed8;
-        box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
-      }
-    }
-  }
-}
+// Los campos del popup (`.form-caja`, `.campo`, `.fila`) NO estan aca: despues
+// de que el popup de Proveedores se mudara a Personas se vio que la cajita de
+// los campos la dibujan dos pantallas. Esta en `_popup.scss`.
 
 .resumen-prov {
   margin-top: 18px;
@@ -428,76 +371,12 @@
   }
 }
 
-// ── POPUP DE ALTA ───────────────────────────────────────────
-// Mismo patrón que el popup de "Nuevo turno" del Dashboard: overlay + tarjeta
-// centrada. Se replica en vez de inventar uno nuevo para que todos los formularios
-// de la app se cierren igual (click afuera, ✕, Esc).
-.popup-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 16px;
-}
-
-.popup {
-  background: white;
-  border-radius: 16px;
-  width: 100%;
-  max-width: 420px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-
-  .popup-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 18px 20px;
-    border-bottom: 1px solid #e2e8f0;
-
-    h3 {
-      margin: 0;
-      font-size: 1rem;
-      color: #1e293b;
-    }
-  }
-
-  .popup-body {
-    padding: 20px;
-    // Con muchos campos (3 filas) el popup se pasa de alto en un celu; el body
-    // scrollea y el header queda fijo con el ✕ siempre alcanzable.
-    overflow-y: auto;
-  }
-
-  .btn-cerrar {
-    background: none;
-    border: none;
-    font-size: 1.1rem;
-    cursor: pointer;
-    color: #64748b;
-    padding: 4px 8px;
-    border-radius: 6px;
-
-    &:hover { background: #f1f5f9; }
-  }
-}
-
 // El pie de botones (.popup-acciones, .btn-atendido, .btn-cancelado,
 // .error-msg) viene del partial compartido con el Dashboard: los dos popups
 // tienen que verse igual, y por eso no hay una segunda copia de los valores.
 
 // ── RESPONSIVE ───────────────────────────────────────────────
 @media (max-width: 700px) {
-  .tabs {
-    overflow-x: auto;
-
-    button { white-space: nowrap; padding: 10px 12px; }
-  }
 
   // La fila no baja del ancho mínimo: si se comprime, los importes se parten en
   // dos líneas y la tabla deja de poder leerse. El scroll hace el resto.

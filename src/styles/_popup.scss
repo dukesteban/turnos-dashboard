@@ -1,3 +1,132 @@
+// ── EL POPUP: FONDO, TARJETA, HEADER Y BODY ─────────────────
+//
+// El "cascarón" de todos los formularios. Vive acá porque lo usan Caja (pago,
+// compra), Personas > Proveedores y el Dashboard.
+//
+// Faltaba, y no se notaba: Proveedores se había mudado de Caja copiando el
+// markup pero no los estilos, así que su popup salía sin fondo, sin centrado y
+// con el ✕ descolocado, pegado al final de la página en vez de encima. El
+// `.popup-acciones` sí se veía (venía de acá), lo que hace el fallo bastante
+// confuso: parecía medio roto.
+//
+// Los valores son los de Caja, que es el popup del que salió el de Proveedores.
+// Dashboard y Empleados tienen su propia versión (con la header dividida por una
+// línea) y NO los tocan: unificar esos tres es un cambio de aspecto de toda la
+// app, no un arreglo de un parcial.
+//
+// OJO: esto lo trae `@use '../../../styles/popup'` dentro del SCSS del
+// COMPONENTE, así que Angular le pone el `[_ngcontent-xxx]` de ese componente y
+// las reglas solo alcanzan a SU template. Por eso Dashboard y Empleados pueden
+// seguir con la suya sin que se pisen.
+
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.popup {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+
+  .popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px;
+    border-bottom: 1px solid #e2e8f0;
+
+    h3 {
+      margin: 0;
+      font-size: 1rem;
+      color: #1e293b;
+    }
+  }
+
+  .popup-body {
+    padding: 20px;
+    // Con muchos campos (3 filas) el popup se pasa de alto en un celu; el body
+    // scrollea y el header queda fijo con el ✕ siempre alcanzable.
+    overflow-y: auto;
+  }
+
+  .btn-cerrar {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: #64748b;
+    padding: 4px 8px;
+    border-radius: 6px;
+
+    &:hover { background: #f1f5f9; }
+  }
+}
+
+// ── LA CAJITA DE LOS CAMPOS ──────────────────────────────────
+// La cajita gris con los campos de un formulario (`.form-caja`). La usan los
+// popups de Caja (pago y compra) y el de Proveedores.
+//
+// Estaba en `caja.scss` y se copió a `proveedores.scss` al mudarse el ABM. Dos
+// copias de un formulario garantizan que un día los labels de uno queden más
+// chicos que los del otro y nadie sepa cuál es el bueno.
+
+.form-caja {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 14px;
+
+  .fila {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .campo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+    flex: 1;
+    min-width: 160px;
+
+    label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .opcional { font-weight: 400; color: #94a3b8; }
+
+    input, select {
+      padding: 9px 11px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-family: inherit;
+
+      &:focus {
+        outline: none;
+        border-color: #1d4ed8;
+        box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
+      }
+    }
+  }
+}
+
 // ── PIE DE POPUP: botones de guardar y cancelar ─────────────
 //
 // Shared por Dashboard (modal de Nuevo turno) y Caja (registrar pago, compra y

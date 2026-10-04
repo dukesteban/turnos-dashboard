@@ -303,13 +303,97 @@ describe('Personas > Proveedores — inactivar', () => {
       ]),
     });
     fixture.detectChanges();
-    const filas = fixture.nativeElement.querySelectorAll('.tr-contacto:not(.tr-cabecera)');
+    const filas = fixture.nativeElement.querySelectorAll('.lista .item') as NodeListOf<HTMLElement>;
     expect(filas.length).toBe(2);
     // Editar siempre; inactivar solo en la activa.
-    const botones = [].slice.call(filas[0].querySelectorAll('.btn-icon')).length;
-    const botonesInactivo = [].slice.call(filas[1].querySelectorAll('.btn-icon')).length;
-    expect(botones).toBe(2);
-    expect(botonesInactivo).toBe(1);
+    expect(filas[0].querySelectorAll('.item-acciones .btn-icon').length).toBe(2);
+    expect(filas[1].querySelectorAll('.item-acciones .btn-icon').length).toBe(1);
+  });
+});
+
+describe('Personas > Proveedores — la lista', () => {
+  // La lista tiene que verse igual que la de Empleados: es lo unico que hace
+  // que las tres pestañas de Personas parezcan la misma pantalla.
+  it('es la misma lista que la de Empleados: avatar, nombre, sub y badge', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([PROV]),
+    });
+    fixture.detectChanges();
+
+    const item = fixture.nativeElement.querySelector('.lista .item');
+    expect(item).toBeTruthy();
+    // Avatar con la inicial del nombre.
+    const avatar = item.querySelector('.avatar');
+    expect(avatar.textContent.trim()).toBe('Q');
+    // Nombre en `.nombre` y el dato de contacto en `.sub`: son las clases del
+    // partial `_lista.scss`, no las de la tabla que usaba antes.
+    expect(item.querySelector('.nombre').textContent).toContain('Quimicas');
+    expect(item.querySelector('.sub').textContent).toContain('Ana');
+    expect(item.querySelector('.estado-badge').textContent.trim()).toBe('Activo');
+  });
+
+  it('marca el badge y la fila del proveedor inactivo', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([{ id: 2, nombre: 'Ledesma', activo: false }]),
+    });
+    fixture.detectChanges();
+    const item = fixture.nativeElement.querySelector('.lista .item');
+    expect(item.classList.contains('inactivo')).toBe(true);
+    const badge = item.querySelector('.estado-badge');
+    expect(badge.textContent.trim()).toBe('Inactivo');
+    expect(badge.classList.contains('inactivo')).toBe(true);
+  });
+
+  it('el contacto y el telefono van juntos; si no hay ninguno, lo dice', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([
+        { id: 1, nombre: 'Con datos', contacto: 'Ana', telefono: '123', activo: true },
+        { id: 2, nombre: 'Sin datos', contacto: null, telefono: null, activo: true },
+      ]),
+    });
+    fixture.detectChanges();
+    const subs = fixture.nativeElement.querySelectorAll('.lista .sub');
+    expect(subs[0].textContent).toContain('Ana');
+    expect(subs[0].textContent).toContain('123');
+    // La linea vacia es mas clara que un rengon en blanco.
+    expect(subs[1].textContent).toContain('Sin datos de contacto');
+  });
+
+  // Sin esto el item es un div con click: no se puede llegar con el teclado ni
+  // lo anuncia un lector de pantalla.
+  it('cada fila es alcanzable con el teclado', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([PROV]),
+    });
+    fixture.detectChanges();
+    const item = fixture.nativeElement.querySelector('.lista .item') as HTMLElement;
+    expect(item.getAttribute('role')).toBe('button');
+    expect(item.getAttribute('tabindex')).toBe('0');
+  });
+
+  // El click en la fila es el atajo para editar. Si no existiera `editar(p)`,
+  // el click abriria un "Nuevo proveedor" en el lugar donde se pidio editar.
+  it('click en la fila abre la EDICION de ese proveedor', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([PROV]),
+    });
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.lista .item') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(cmp.editandoProveedor).toBe(true);
+    expect(cmp.proveedorEditando.id).toBe(1);
+    expect(cmp.nuevoProveedor.nombre).toBe('Quimicas');
+  });
+
+  it('el boton de editar de la fila tambien abre la edicion', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([PROV]),
+    });
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.item-acciones .btn-icon') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(cmp.editandoProveedor).toBe(true);
+    expect(cmp.proveedorEditando.id).toBe(1);
   });
 });
 
