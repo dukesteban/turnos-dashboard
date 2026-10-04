@@ -343,4 +343,47 @@ describe('Agenda - la semana: cada dia con SU gente y SU ancho', () => {
     expect(cmp.esDiaCerrado(new Date(2026, 11, 7))).toBe(true);
     expect(cmp.columnasDe(new Date(2026, 11, 7)).length).toBe(2);
   });
+
+  it('el motivo del cierre se busca por rango, no por igualdad', async () => {
+    const { cmp } = await listo({
+      // Un cierre de varios dias: tiene fecha_hasta, asi que el match es por
+      // inclusion y no por igualdad.
+      getDiasCerrados: () => Promise.resolve([
+        { fecha: '2026-12-07', fecha_hasta: '2026-12-20', motivo: 'vacaciones' },
+      ]),
+    });
+
+    expect(cmp.motivoDiaCerrado(new Date(2026, 11, 7))).toBe('vacaciones');  // primero
+    expect(cmp.motivoDiaCerrado(new Date(2026, 11, 13))).toBe('vacaciones'); // en el medio
+    expect(cmp.motivoDiaCerrado(new Date(2026, 11, 20))).toBe('vacaciones'); // el ultimo
+
+    // Un dia antes y uno despues siguen abiertos.
+    expect(cmp.esDiaCerrado(new Date(2026, 11, 6))).toBe(false);
+    expect(cmp.esDiaCerrado(new Date(2026, 11, 21))).toBe(false);
+    expect(cmp.motivoDiaCerrado(new Date(2026, 11, 21))).toBe('');
+  });
+
+  it('un cierre sin motivo no inventa un texto', async () => {
+    // `motivo` es nullable en la base y hay cierres guardados vacios. El rayado
+    // va igual, pero al lado del dia no tiene que aparecer nada.
+    const { cmp } = await listo({
+      getDiasCerrados: () => Promise.resolve([
+        { fecha: '2026-12-07', fecha_hasta: null, motivo: '' },
+      ]),
+    });
+
+    expect(cmp.esDiaCerrado(new Date(2026, 11, 7))).toBe(true);
+    expect(cmp.motivoDiaCerrado(new Date(2026, 11, 7))).toBe('');
+  });
+
+  it('sin fecha_hasta el cierre dura un solo dia', async () => {
+    const { cmp } = await listo({
+      getDiasCerrados: () => Promise.resolve([
+        { fecha: '2026-12-07', fecha_hasta: null, motivo: 'feriado' },
+      ]),
+    });
+
+    expect(cmp.esDiaCerrado(new Date(2026, 11, 7))).toBe(true);
+    expect(cmp.esDiaCerrado(new Date(2026, 11, 8))).toBe(false);
+  });
 });

@@ -150,13 +150,51 @@
 .grilla-dia {
   display: flex;
   min-width: 320px;
+
+  /* `width: max-content`, y no solo el `min-width` de 320.
+   *
+   * Es lo que hace que la columna de horas se pueda PEGAR al scrollear en
+   * horizontal. Un `sticky` no viaja libre: se mueve dentro de la caja de su
+   * padre y, si el padre es más angosto que el contenido, se queda sin lugar
+   * donde ir y se va con el scroll. Con solo `min-width: 320` el padre medía
+   * 320 y la grilla scrolleaba a 1024: los `.col-turnos`, que tienen
+   * `min-width: anchoColumnas`, desbordaban al padre. Medido, la columna de
+   * horas quedaba en `234` en vez de `354` (el borde de la grilla), o sea
+   * clavada en el lugar de donde arrancó.
+   *
+   * Con el ancho al del contenido, el padre llega hasta donde llega el scroll y
+   * la columna tiene viaje de sobra.
+   */
+  width: max-content;
 }
 
+/* La columna de horas se queda pegada al borde izquierdo al scrollear en
+ * horizontal.
+ *
+ * SOLO en horizontal (`left: 0`), nunca en vertical: cada `.etiqueta-hora-abs`
+ * está posicionada en `top` según su hora, así que si la columna se pegara
+ * arriba los "13:00" dejarían de caer al lado de su línea. Pegada a la izquierda
+ * la columna entera se mueve con el scroll vertical y cada etiqueta sigue en su
+ * lugar.
+ *
+ * `sticky` y no `relative`: sticky sigue siendo un elemento POSICIONADO, así que
+ * las etiquetas de adentro la siguen tomando como referencia, igual que antes.
+ *
+ * `z-index: 6`: arriba de los turnos (1) y de los nombres de empleado (5), para
+ * que al scrollear en horizontal la columna tape lo que pasa por debajo en vez
+ * de dejar asomar turnos al costado.
+ *
+ * Fondo opaco: sin esto se ven los turnos POR DEBAJO de las horas, que es peor
+ * que que se pierdan.
+ */
 .col-horas-abs {
   width: 40px;
   min-width: 40px;
   flex-shrink: 0;
-  position: relative;
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  background: white;
   border-right: 1px solid #e2e8f0;
   padding-top: 8px;
   padding-bottom: 8px;
@@ -317,16 +355,22 @@
 
 /* Alto del header de DÍAS de la vista Semana.
  *
- * Se declara acá (y no se usa `57px` suelto en dos lados) porque el `top` del
+ * Se declara acá (y no se usa un número suelto en dos lados) porque el `top` del
  * mini header de NOMBRES tiene que ser exactamente este número: si los nombres
- * se pegan en `top: 0` se meten DEBAJO del header de días —que es opaco— y no
+ * se pegan en `top: 0` se meten DEBAJO del header de días -que es opaco- y no
  * se ven; si se pasan, queda una franja de turnos por arriba de los nombres.
  *
  * Antes el header se medía solo (10 de padding + dos renglones de texto) y el
  * `top` del mini era un número copiado a mano. El alto queda fijado por CSS
  * para que las dos cosas no se puedan desincronizar.
+ *
+ * 72 = 10 de padding + día + fecha + motivo del cierre + 10 de padding + el
+ * borde de abajo. La fila del motivo (`.dia-cierre`) es la que lo obliga a
+ * crecer: si algún día no trae motivo, el alto NO se achica (esta vez el número
+ * es fijo, no `auto`), así que los días con y sin motivo quedan a la misma
+ * altura y el header no "salta" al scrollear.
  */
-$h-header-semana: 57px;
+$h-header-semana: 72px;
 
 .header-semana {
   display: flex;
@@ -339,10 +383,23 @@ $h-header-semana: 57px;
   min-width: fit-content;
 }
 
+/* La celda vacía que corona la columna de horas en el header de la vista Semana.
+ *
+ * Se pega al mismo borde que `.col-horas-abs` (abajo) para que los días no se
+ * metan por abajo de ella al scrollear en horizontal, y para que las dos formen
+ * UNA sola columna visual de arriba a abajo.
+ *
+ * `z-index: 11`: dentro del `.header-semana` los días no llevan z-index (pintan
+ * en orden de llegada), así que sin esto esta celda queda debajo de ellos.
+ */
 .col-horas-header {
   width: 40px;
   min-width: 40px;
   flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 11;
+  background: white;
 }
 
 .col-dia-header {
@@ -357,6 +414,25 @@ $h-header-semana: 57px;
 
   .dia-nombre { font-size: 0.72rem; color: #64748b; text-transform: uppercase; }
   .dia-fecha { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-top: 2px; }
+
+  /* Por qué está cerrado el día. Chiquito y con los paréntesis puestos en el
+   * template: el dato es secundario, la fecha es lo que uno busca.
+   *
+   * `nowrap` + ellipsis porque las columnas angostas (un día con un solo
+   * empleado mide 98px) no da lugar para un motivo largo, y un motivo
+   * cortado es mejor que uno que empuje el alto del header y desborde las
+   * celdas de al lado.
+   */
+  .dia-cierre {
+    font-size: 0.65rem;
+    color: #94a3b8;
+    margin-top: 1px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px;
+  }
   .dia-fecha-hoy {
     background: #3b82f6;
     color: white;

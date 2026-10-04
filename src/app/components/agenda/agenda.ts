@@ -243,13 +243,40 @@ export class AgendaComponent implements OnInit, OnDestroy {
     return this.fechaActual.toLocaleDateString('en-CA');
   }
 
-  esDiaCerrado(dia: Date): boolean {
+  /**
+   * El registro de `dias_cerrados` que cierra esta fecha, o `null` si abre.
+   *
+   * Un cierre puede cubrir un RANGO (`fecha` a `fecha_hasta`, para unas
+   * vacaciones de varios días), así que no se busca por igualdad: se busca el
+   * primer registro que incluya la fecha.
+   *
+   * Todo lo que necesita saber "está cerrado" y "por qué" sale de acá, para que
+   * el rayado y el motivo nunca puedan quedar opinando distinto.
+   */
+  cierreDe(dia: Date): any | null {
     const fechaStr = dia.toLocaleDateString('en-CA');
-    return this.diasCerrados.some(d => {
+    return this.diasCerrados.find(d => {
       const desde = d.fecha;
       const hasta = d.fecha_hasta || d.fecha;
       return fechaStr >= desde && fechaStr <= hasta;
-    });
+    }) || null;
+  }
+
+  esDiaCerrado(dia: Date): boolean {
+    return this.cierreDe(dia) !== null;
+  }
+
+  /**
+   * Por qué está cerrado el día, para ponerlo al lado ("LUN 28/09 (vacaciones)").
+   *
+   * String vacío y no `null` para que el template pueda usar `*ngIf` directo y
+   * no tener que distinguir dos "no hay motivo". Hay cierres sin motivo (el
+   * campo es nullable en la base), y en ese caso sale el rayado pelado, que es
+   * lo que hay que mostrar: no inventar un texto.
+   */
+  motivoDiaCerrado(dia: Date): string {
+    const cierre = this.cierreDe(dia);
+    return (cierre && cierre.motivo) || '';
   }
 
   // Altura total del contenedor en px

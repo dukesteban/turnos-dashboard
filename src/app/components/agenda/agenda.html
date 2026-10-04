@@ -22,7 +22,7 @@
   <!-- VISTA DÍA -->
   <div *ngIf="vista === 'dia'" class="grilla-contenedor">
     <div *ngIf="esDiaCerrado(fechaActual)" class="aviso-cerrado">
-      🚫 Hoy cerrado
+      🚫 Hoy cerrado<span *ngIf="motivoDiaCerrado(fechaActual)"> ({{ motivoDiaCerrado(fechaActual) }})</span>
     </div>
     <div class="grilla-dia">
       <div class="spacer-top"></div>
@@ -104,6 +104,9 @@
           [class.dia-cerrado]="esDiaCerrado(dia)">
           <div class="dia-nombre">{{ diasSemana[dia.getDay()] }}</div>
           <div class="dia-fecha" [class.dia-fecha-hoy]="esHoy(dia)">{{ formatearFechaCorta(dia) }}</div>
+          <!-- Por qué está cerrado. Solo si el cierre trae motivo: hay cierres
+               sin motivo y ahí sale el rayado pelado, sin inventar un texto. -->
+          <div class="dia-cierre" *ngIf="motivoDiaCerrado(dia)">{{ motivoDiaCerrado(dia) }}</div>
         </div>
       </div>
 
