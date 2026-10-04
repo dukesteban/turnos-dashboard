@@ -130,6 +130,27 @@
              en blanco al final; esa era la franja que se veía como un hueco. -->
         <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.width]="anchoDeDia(dia)" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
           <!-- Mini header con los empleados de ESE día -->
+          <!--
+            FONDO de columnas, alternado. Una banda por empleado de ESE dia.
+
+            Es lo mismo que hace la vista Dia, con las MISMAS clases: asi el
+            color es el mismo en las dos vistas y no hay que aprender dos paletas.
+
+            Sin esto, al scrollear en la vista Semana los nombres se perdian y
+            los turnos quedaban ahi sin dueno: el mini header de arriba nombra a
+            cada columna, pero de una franja de 20px no se deduce de quien es
+            cada bloque de la mitad de la tarde.
+
+            `offsetHeader` vale 20 en Semana (el alto del mini header) contra 44
+            en Dia, y el `+ 8` es el mismo margen que usa `topParaHora`: por eso
+            las bandas arrancan justo donde arrancan los bloques.
+          -->
+          <div class="columnas-fondo" [style.top.px]="offsetHeader + 8" [style.bottom.px]="0">
+            <div *ngFor="let col of columnasDe(dia)"
+                 class="columna-fondo-celda"
+                 [class.ausente]="col.ausente || !col.trabaja"></div>
+          </div>
+
           <div class="columnas-header mini">
             <div *ngFor="let col of columnasDe(dia)"
                  class="columna-header"

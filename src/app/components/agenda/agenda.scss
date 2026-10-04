@@ -516,6 +516,17 @@ $h-header-semana: 72px;
     rgba(148, 163, 184, 0.10) 0 7px,
     rgba(148, 163, 184, 0.02) 7px 14px
   );
+
+  /* Las bandas de columna se vuelven transparentes para que se vea la raya de
+   * arriba. Mismo criterio que en la vista Día (`.col-turnos.dia-cerrado`): si
+   * las celdas pares siguen pintando su azul, el día cerrado sale rayado en unas
+   * columnas y liso en otras, que se lee como un error de maquetado en vez de
+   * como "acá no se trabaja".
+   *
+   * También se va la raya de "empleado ausente": si el día entero está cerrado,
+   * qué empleado falta adentro es ruido.
+   */
+  .columna-fondo-celda { background: transparent; }
 }
 
 /* El mismo rayado en la vista Día, para que "acá no se trabaja" se lea igual en

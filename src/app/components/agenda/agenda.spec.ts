@@ -22,8 +22,11 @@ function montar(over: Record<string, any> = {}) {
   TestBed.configureTestingModule({
     providers: [{ provide: SupabaseService, useValue: mock }],
   });
-  const cmp = TestBed.createComponent(AgendaComponent).componentInstance;
-  return { cmp, mock };
+  // Se devuelve el fixture y no solo la instancia: hay tests que necesitan
+  // mirar el DOM renderizado (las bandas de columna de la vista Semana).
+  const fixture = TestBed.createComponent(AgendaComponent);
+  const cmp = fixture.componentInstance;
+  return { cmp, mock, fixture };
 }
 
 /** Deja que los `await` de ngOnInit terminen. */
@@ -374,6 +377,48 @@ describe('Agenda - la semana: cada dia con SU gente y SU ancho', () => {
 
     expect(cmp.esDiaCerrado(new Date(2026, 11, 7))).toBe(true);
     expect(cmp.motivoDiaCerrado(new Date(2026, 11, 7))).toBe('');
+  });
+
+  it('la vista Semana pinta una banda de fondo por cada columna de empleado', async () => {
+    // Es lo que deja saber de quién es cada turno con el scroll corrida: el mini
+    // header de arriba queda pegado y las bandas llegan hasta abajo.
+    //
+    // El número de bandas tiene que ser el de ESE día, no el de la semana: el
+    // miércoles solo tiene a Juan (Esteban no labra), así que una sola banda. Si
+    // acá se contara mal, la última banda se correría y los bloques dejarían de
+    // caer dentro de la columna que les corresponde.
+    // A proposito NO se usa `listo()`: ese helper dispara `ngOnInit()` a mano y
+    // despues `detectChanges()` lo vuelve a ejecutar por el ciclo de vida de
+    // Angular, y ahi salta NG0100. Acá se deja que Angular lo corra una sola vez
+    // y el segundo `detectChanges` es el que pinta los datos que trajo.
+    const { cmp, fixture } = montar();
+    cmp.vista = 'semana';
+    cmp.diaInicio = 1;   // lunes
+    cmp.diaFin = 6;       // sabado
+    irA(cmp, 2026, 12, 7);
+
+    fixture.detectChanges();
+    // `settle()` y NO `whenStable()`: las promesas del mock ya estan resueltas
+    // y la zona no las tiene registradas, asi que `whenStable()` devuelve de
+    // una y el `await` no sirve de nada. `settle()` es un macrotask de verdad.
+    await settle();
+    fixture.detectChanges();
+
+    const cuerpos = fixture.nativeElement.querySelectorAll('.col-dia-cuerpo');
+    expect(cuerpos.length).toBe(cmp.diasDeSemana.length);
+
+    // Se comparan los arrays enteros y no uno por uno con `withContext`: esa
+    // funcion no existe en la version de Jasmine de este proyecto, y el fallo
+    // muestra igual que indice se desvio.
+    const esperadas = cmp.diasDeSemana.map((d: Date) => cmp.columnasDe(d).length);
+    const pintadas = Array.from(cuerpos as any)
+      .map((c: any) => c.querySelectorAll('.columna-fondo-celda').length);
+
+    expect(pintadas).toEqual(esperadas);
+
+    // Y que haya dias con distinta cantidad, para que el test de arriba no sea
+    // verde de casualidad con dos bandas siempre.
+    expect(Math.max(...esperadas)).toBeGreaterThan(Math.min(...esperadas));
   });
 
   it('sin fecha_hasta el cierre dura un solo dia', async () => {
