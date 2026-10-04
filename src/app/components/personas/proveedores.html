@@ -3,117 +3,190 @@
   la edición, el inactivado y el buscador son fichas de persona, no plata. En
   Caja quedó lo que sí es plata (las compras y su total).
 
-  La lista es la MISMA que la de Empleados: avatar con la inicial, nombre en
-  negrita, el dato de contacto abajo y el badge Activo/Inactivo. Antes era una
-  tabla y se veía distinta de sus dos vecinas de la misma pantalla.
+  LA EDICIÓN NO ES UN POPUP. Es el panel de detalle de la derecha, el mismo que
+  usan Clientes y Empleados: click en la fila, se abre al costado, y cada campo
+  se edita con lápiz -> guardar/cancelar. El popup quedó solo para el ALTA, que
+  es el único caso donde no hay una fila que editar.
 
-  Los estilos vienen de `_lista.scss` (el partial compartido con Empleados) y
-  `_popup.scss`, así que las dos listas y los dos popups se desincronizan juntos
-  o no se desincronizan nunca.
-
-  El popup de alta/edición es UNO solo, como en el resto de la app: lo decide
-  `editandoProveedor`. Dos popups idénticos que se diferencian por un booleano
-  terminan divergiendo en algún detalle.
+  Los estilos vienen de `_lista.scss` (la lista), `_detalle.scss` (el armazón
+  lista + panel) y `_popup.scss` (el alta), así que las tres pestañas de Personas
+  se ven como la misma pantalla.
 -->
 <div class="proveedores-page">
 
   <!--
-    No hay `.layout` con dos columnas como en Empleados: un proveedor no tiene
-    panel de detalle. El click en la fila abre el popup de edicion, asi que el
-    detalle esta a un toque y no vale la pena una segunda columna.
+    `.con-detalle` es lo que parte en dos columnas. Sin selección la lista
+    ocupa el ancho completo, que es lo que se quiere al entrar a la pantalla.
   -->
-  <div class="seccion lista-seccion">
-    <div class="seccion-header">
-      <span class="badge-count">Total: {{ proveedoresFiltrados.length }}</span>
-      <button class="btn-primary" (click)="abrirFormProveedor()">
-        ➕ Nuevo
-      </button>
-    </div>
+  <div class="layout" [class.con-detalle]="proveedorSeleccionado">
 
-    <input type="text" class="buscador" [(ngModel)]="busquedaProveedor"
-           placeholder="🔍 Buscar por nombre..." />
+    <!-- LISTA -->
+    <div class="seccion lista-seccion">
+      <div class="seccion-header">
+        <span class="badge-count">Total: {{ proveedoresFiltrados.length }}</span>
+        <button class="btn-primary" (click)="abrirFormProveedor()">
+          ➕ Nuevo
+        </button>
+      </div>
 
-    <div *ngIf="cargando" class="vacio">Cargando...</div>
+      <input type="text" class="buscador" [(ngModel)]="busquedaProveedor"
+             placeholder="🔍 Buscar por nombre..." />
 
-    <div *ngIf="!cargando && proveedores.length === 0" class="vacio">
-      Todavía no hay proveedores
-    </div>
+      <div *ngIf="cargando" class="vacio">Cargando...</div>
 
-    <div *ngIf="!cargando && proveedores.length > 0 && proveedoresFiltrados.length === 0" class="vacio">
-      Ningún proveedor coincide con "{{ busquedaProveedor }}"
-    </div>
+      <div *ngIf="!cargando && proveedores.length === 0" class="vacio">
+        Todavía no hay proveedores
+      </div>
 
-    <!--
-      `role="button"` + `tabindex` + los dos handlers de teclado: el item es
-      un botón de hecho y sin esto no se puede llegar con el teclado ni con un
-      lector de pantalla. Es el mismo contrato que la lista de Empleados.
-    -->
-    <div class="lista">
-      <div *ngFor="let p of proveedoresFiltrados"
-           class="item"
-           [class.inactivo]="!p.activo"
-           role="button"
-           tabindex="0"
-           (click)="editar(p)"
-           (keydown.enter)="editar(p)"
-           (keydown.space)="editar(p); $event.preventDefault()">
+      <div *ngIf="!cargando && proveedores.length > 0 && proveedoresFiltrados.length === 0" class="vacio">
+        Ningún proveedor coincide con "{{ busquedaProveedor }}"
+      </div>
 
-        <div class="avatar">{{ p.nombre?.charAt(0)?.toUpperCase() }}</div>
+      <!--
+        `role="button"` + `tabindex` + los dos handlers de teclado: el item es
+        un botón de hecho y sin esto no se puede llegar con el teclado ni con un
+        lector de pantalla. Es el mismo contrato que la lista de Empleados.
+      -->
+      <div class="lista">
+        <div *ngFor="let p of proveedoresFiltrados"
+             class="item"
+             [class.activo]="proveedorSeleccionado?.id === p.id"
+             [class.inactivo]="!p.activo"
+             role="button"
+             tabindex="0"
+             (click)="seleccionarProveedor(p)"
+             (keydown.enter)="seleccionarProveedor(p)"
+             (keydown.space)="seleccionarProveedor(p); $event.preventDefault()">
 
-        <div class="info">
-          <div class="nombre">{{ p.nombre }}</div>
+          <div class="avatar">{{ p.nombre?.charAt(0)?.toUpperCase() }}</div>
+
+          <div class="info">
+            <div class="nombre">{{ p.nombre }}</div>
+            <!--
+              El contacto y el teléfono van en la misma línea separados por un
+              punto. Siempre los dos: si el contacto falta queda solo el
+              teléfono y la línea se ve descuadrada hacia el medio.
+            -->
+            <div class="sub">
+              <span *ngIf="p.contacto">{{ p.contacto }}</span>
+              <span *ngIf="p.contacto && p.telefono"> · </span>
+              <span *ngIf="p.telefono">{{ p.telefono }}</span>
+              <span *ngIf="!p.contacto && !p.telefono">Sin datos de contacto</span>
+            </div>
+          </div>
+
+          <span class="estado-badge" [class.inactivo]="!p.activo">
+            {{ p.activo ? 'Activo' : 'Inactivo' }}
+          </span>
+
           <!--
-            El contacto y el telefono van en la misma linea separados por un
-            punto. Siempre los dos: si el contacto falta queda solo el telefono
-            y la linea se ve descuadrada hacia el medio.
+            El ✏️ abre el detalle (lo mismo que el click en la fila) y el 🚫
+            inactiva. El `stopPropagation` evita que el click en el botón
+            tambien dispare el de la fila: sin él, tocar "Inactivar" además abriría
+            el detalle por detrás del confirm.
+
+            El 🚫 solo en los activos, y dentro del detalle hay un botón de
+            "reactivar": un inactivo se puede volver a usar, no queda de adorno.
           -->
-          <div class="sub">
-            <span *ngIf="p.contacto">{{ p.contacto }}</span>
-            <span *ngIf="p.contacto && p.telefono"> · </span>
-            <span *ngIf="p.telefono">{{ p.telefono }}</span>
-            <span *ngIf="!p.contacto && !p.telefono">Sin datos de contacto</span>
+          <div class="item-acciones">
+            <button class="btn-icon" (click)="$event.stopPropagation(); seleccionarProveedor(p)"
+                    title="Ver y editar" aria-label="Ver y editar proveedor">✏️</button>
+            <button *ngIf="p.activo" class="btn-icon"
+                    (click)="$event.stopPropagation(); inactivarProveedor(p)"
+                    title="Inactivar" aria-label="Inactivar proveedor">🚫</button>
           </div>
         </div>
+      </div>
+    </div><!-- /.lista-seccion -->
 
-        <span class="estado-badge" [class.inactivo]="!p.activo">
-          {{ p.activo ? 'Activo' : 'Inactivo' }}
-        </span>
+    <!-- DETALLE -->
+    <div *ngIf="proveedorSeleccionado" class="seccion detalle-seccion">
 
-        <!--
-          Editar e inactivar. Editar abre el popup (es lo que hace el click en
-          la fila); inactivar va aparte porque es una accion destructiva y no
-          puede ser lo mismo que hacer clic en la fila.
+      <!--
+        Los mensajes viven ACÁ y no en la página: el detalle es lo que se está
+        mirando, y un mensaje que aparece arriba de la pantalla, a la izquierda
+        de donde estás mirando, no se ve.
+      -->
+      <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
+      <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
 
-          El `stopPropagation` evita que el click en el boton dispare tambien
-          el de la fila: sin el, tocar "Inactivar" ademas abria el popup de
-          edicion encima del confirm.
-        -->
-        <div class="item-acciones">
-          <button class="btn-icon" (click)="$event.stopPropagation(); editar(p)"
-                  title="Editar" aria-label="Editar proveedor">✏️</button>
-          <button *ngIf="p.activo" class="btn-icon"
-                  (click)="$event.stopPropagation(); inactivarProveedor(p)"
-                  title="Inactivar" aria-label="Inactivar proveedor">🚫</button>
+      <div class="seccion-header">
+        <h3>Detalle del proveedor</h3>
+        <button class="btn-cerrar" (click)="cerrarDetalle()" title="Cerrar"
+                aria-label="Cerrar detalle">✕</button>
+      </div>
+
+      <!--
+        Un `*ngFor` sobre `CAMPOS` en vez de cuatro bloques escrito a mano. Son
+        los mismos cuatro campos siempre, con el mismo patrón de edición, y
+        cuatro copias de ese patrón son cuatro lugares donde algo se puede
+        olvidar de agregar (el `cancelar`, el "Guardando…", el `trim`).
+      -->
+      <div class="datos-campos">
+        <div *ngFor="let c of CAMPOS" class="campo-editable">
+          <label class="label-campo">{{ c.label }}</label>
+          <input type="text" class="input-nombre"
+                 [(ngModel)]="proveedorSeleccionado[c.clave]"
+                 [attr.placeholder]="c.placeholder || '—'"
+                 [readonly]="!proveedorSeleccionado.editando[c.clave]"
+                 [attr.aria-label]="c.label" />
+
+          <button *ngIf="!proveedorSeleccionado.editando[c.clave] && !proveedorSeleccionado.guardandoCampo"
+                  class="btn-icon" (click)="editarCampo(c.clave)"
+                  [title]="'Editar ' + c.label.toLowerCase()" [attr.aria-label]="'Editar ' + c.label">✏️</button>
+
+          <button *ngIf="proveedorSeleccionado.editando[c.clave] && !proveedorSeleccionado.guardandoCampo"
+                  class="btn-icon" (click)="guardarCampo(c.clave)"
+                  title="Guardar" aria-label="Guardar">💾</button>
+
+          <button *ngIf="proveedorSeleccionado.editando[c.clave] && !proveedorSeleccionado.guardandoCampo"
+                  class="btn-icon" (click)="cancelarCampo(c.clave)"
+                  title="Cancelar" aria-label="Cancelar">↩️</button>
+
+          <!--
+            Mientras guarda, los tres botones desaparecen y queda esto. Es lo que
+            impide el doble clic: dos `update` del mismo campo.
+          -->
+          <span *ngIf="proveedorSeleccionado.guardandoCampo" class="guardando-celda">⏳ Guardando…</span>
         </div>
       </div>
-    </div>
-  </div><!-- /.seccion -->
 
-  <!--
-    El error y el exito van arriba y no dentro de un popup: son de esta pantalla.
-    Arriba porque el popup tapa la pantalla y el mensaje tiene que verse en el
-    momento en que se cierra.
-  -->
-  <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
-  <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
+      <!--
+        El estado y las compras del proveedor. No se editan acá a propósito: si
+        un proveedor está inactivo hay que reactivarlo, y en la lista el 🚫
+        desaparece y no hay dónde tocarlo.
+      -->
+      <div class="proveedor-acciones">
+        <span class="estado-badge" [class.inactivo]="!proveedorSeleccionado.activo">
+          {{ proveedorSeleccionado.activo ? 'Activo' : 'Inactivo' }}
+        </span>
+
+        <button *ngIf="proveedorSeleccionado.activo" class="btn-secundario-sm"
+                (click)="inactivarProveedor(proveedorSeleccionado)">
+          🚫 Inactivar
+        </button>
+        <button *ngIf="!proveedorSeleccionado.activo" class="btn-secundario-sm"
+                (click)="reactivarProveedor(proveedorSeleccionado)">
+          ♻️ Reactivar
+        </button>
+      </div>
+
+      <p class="nota-ayuda">
+        Inactivar no borra: las compras ya registradas siguen apuntando a este
+        proveedor. Reactivarlo lo vuelve a ofrecer en el popup de "Registrar
+        compra" de Caja.
+      </p>
+    </div><!-- /.detalle-seccion -->
+
+  </div><!-- /.layout -->
 
 </div><!-- /.proveedores-page -->
 
-<!-- POPUP: ALTA / EDICIÓN -->
+<!-- POPUP: ALTA (la edición va en el panel de detalle, no acá) -->
 <div *ngIf="mostrarFormProveedor" class="popup-overlay" (click)="cerrarFormProveedor()">
   <div class="popup" (click)="$event.stopPropagation()">
     <div class="popup-header">
-      <h3>{{ editandoProveedor ? '✏️ Editar proveedor' : '➕ Nuevo proveedor' }}</h3>
+      <h3>➕ Nuevo proveedor</h3>
       <button class="btn-cerrar" (click)="cerrarFormProveedor()">✕</button>
     </div>
 
@@ -146,7 +219,7 @@
 
     <div class="popup-acciones">
       <button class="btn-atendido" [disabled]="guardando" (click)="guardarProveedor()">
-        {{ guardando ? 'Guardando...' : (editandoProveedor ? '💾 Guardar cambios' : '💾 Guardar proveedor') }}
+        {{ guardando ? 'Guardando...' : '💾 Guardar proveedor' }}
       </button>
       <button class="btn-cancelado" (click)="cerrarFormProveedor()">↩️ Cancelar</button>
     </div>

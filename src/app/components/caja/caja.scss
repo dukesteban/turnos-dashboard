@@ -6,6 +6,7 @@
 // El `@use` va ARRIBA de todo porque Sass exige que las directivas `@use` precedan
 // a cualquier otra regla, y son TRES `..` para llegar a src/.
 @use '../../../styles/popup';
+@use '../../../styles/buscador-crear';
 @use '../../../styles/tabla';
 @use '../../../styles/tabs';
 

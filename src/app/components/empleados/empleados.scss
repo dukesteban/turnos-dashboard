@@ -5,6 +5,8 @@
 // Ojo con la ruta: TRES `..` para llegar a src/ (mismo path que Configuración,
 // porque los dos componentes están en src/app/components/<nombre>/).
 @use '../../../styles/acordeon';
+@use '../../../styles/popup';
+@use '../../../styles/detalle';
 @use '../../../styles/lista';
 
 .empleados-page {
@@ -25,22 +27,6 @@
   &.exito { background: #dcfce7; color: #166534; }
   &.error { background: #fee2e2; color: #991b1b; }
 }
-
-.layout {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-
-  &.con-detalle {
-    grid-template-columns: 1fr 0.6fr;
-    @media (max-width: 700px) {
-      display: block;
-      .lista-seccion { display: none; }
-      .detalle-seccion { width: 100%; box-sizing: border-box; }
-    }
-  }
-}
-
 .seccion {
   background: white;
   border-radius: 12px;
@@ -64,17 +50,6 @@
   border-radius: 12px;
   font-weight: 600;
 }
-
-.btn-cerrar {
-  background: none;
-  border: none;
-  font-size: 1rem;
-  cursor: pointer;
-  color: #94a3b8;
-  padding: 4px;
-  &:hover { color: #1e293b; }
-}
-
 .buscador {
   width: 100%;
   min-width: 0;
@@ -87,56 +62,6 @@
   background: #f8fafc;
   &:focus { outline: none; border-color: #3b82f6; background: white; }
 }
-
-.popup-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.popup {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  width: 90%;
-  max-width: 400px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-}
-
-.popup-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-
-  h3 {
-    margin: 0;
-    font-size: 1.05rem;
-    color: #1e293b;
-    font-weight: 700;
-  }
-}
-
-.popup-body {
-  margin-bottom: 16px;
-}
-
-.popup-acciones {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 16px;
-}
-
 .campo {
   margin-bottom: 12px;
 
@@ -147,58 +72,6 @@
     margin-bottom: 6px;
   }
 }
-
-.error-msg {
-  color: #dc2626;
-  font-size: 0.85rem;
-  margin-top: 8px;
-}
-
-.btn-atendido {
-  background: #dcfce7;
-  color: #166534;
-  border: none;
-  padding: 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.88rem;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  justify-content: center;
-
-  &:hover {
-    background: #bbf7d0;
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-}
-
-.btn-cancelado {
-  background: #fee2e2;
-  color: #991b1b;
-  border: none;
-  padding: 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.88rem;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  justify-content: center;
-
-  &:hover {
-    background: #fecaca;
-  }
-}
-
 .agregar-box {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -282,20 +155,6 @@
     display: none;
   }
 }
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  white-space: nowrap;
-  &:hover { background: #2563eb; }
-}
-
 .btn-agregar {
   width: 100%;
   background: #3b82f6;
@@ -337,49 +196,6 @@
     font-weight: 600;
   }
 }
-
-.input-nombre {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  background: #f8fafc;
-  color: #1e293b;
-  &:not([readonly]) { background: white; border-color: #3b82f6; }
-  &:focus { outline: none; }
-  &[readonly] { cursor: default; }
-}
-
-.campo-editable {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  .input {
-    flex: 1;
-    margin-bottom: 0;
-  }
-}
-
-// Los dos campos del bloque "Datos" (Nombre y Teléfono) son filas flex
-// apiladas, y `.campo-editable` no tiene separación vertical: quedaban pegadas.
-// El ancho fijo de la etiqueta alinea los dos inputs.
-//
-// Scopado a `.datos-campos` a propósito: `.campo-editable` también lo usa
-// `.comision-general`, que ya tiene su propio layout y no debe cambiar.
-.datos-campos {
-  .label-campo {
-    flex: 0 0 72px;
-    font-size: 0.9rem;
-    color: #475569;
-  }
-
-  .campo-editable + .campo-editable {
-    margin-top: 12px;
-  }
-}
-
 .btn-icon {
   background: none;
   border: none;
@@ -930,8 +746,3 @@
 }
 
 /* Estado "guardando" en los_INLINE edits del detalle */
-.guardando-celda {
-  font-size: 0.75rem;
-  color: #64748b;
-  white-space: nowrap;
-}

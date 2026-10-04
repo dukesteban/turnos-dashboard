@@ -181,6 +181,7 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
     crearProveedor: (p: any) => Promise.resolve({ id: 1, ...p }),
     actualizarProveedor: (id: number, p: any) => Promise.resolve({ id, ...p }),
     inactivarProveedor: () => Promise.resolve(),
+    activarProveedor: () => Promise.resolve(),
     eliminarProveedor: () => Promise.resolve(),
     getCompras: vacio,
     crearCompra: (c: any) => Promise.resolve({ id: 1, ...c }),

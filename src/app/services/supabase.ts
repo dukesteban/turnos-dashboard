@@ -1074,6 +1074,23 @@ export class SupabaseService {
     if (error) throw error;
   }
 
+  /**
+   * Reactivar un proveedor dado de baja. La contrapartida de `inactivarProveedor`.
+   *
+   * Va en el servicio y no como `actualizarProveedor(id, { activo: true })`
+   * desde el componente para que quede el par de operaciones juntas y se lea
+   * sola: si el menu de "inactivar" desaparece cuando el proveedor esta inactivo
+   * (que es lo que pasa), el unico lugar desde donde volverlo es el panel de
+   * detalle, y tiene que existir el metodo.
+   */
+  async activarProveedor(id: number) {
+    const { error } = await this.supabase
+      .from('proveedores')
+      .update({ activo: true })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
   async eliminarProveedor(id: number) {
     const { error } = await this.supabase
       .from('proveedores')

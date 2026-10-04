@@ -18,7 +18,6 @@
 // COMPONENTE, así que Angular le pone el `[_ngcontent-xxx]` de ese componente y
 // las reglas solo alcanzan a SU template. Por eso Dashboard y Empleados pueden
 // seguir con la suya sin que se pisen.
-
 .popup-overlay {
   position: fixed;
   inset: 0;
@@ -29,7 +28,6 @@
   z-index: 1000;
   padding: 16px;
 }
-
 .popup {
   background: white;
   border-radius: 16px;
@@ -39,28 +37,24 @@
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-
   .popup-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 18px 20px;
     border-bottom: 1px solid #e2e8f0;
-
     h3 {
       margin: 0;
       font-size: 1rem;
       color: #1e293b;
     }
   }
-
   .popup-body {
     padding: 20px;
     // Con muchos campos (3 filas) el popup se pasa de alto en un celu; el body
     // scrollea y el header queda fijo con el ✕ siempre alcanzable.
     overflow-y: auto;
   }
-
   .btn-cerrar {
     background: none;
     border: none;
@@ -69,11 +63,9 @@
     color: #64748b;
     padding: 4px 8px;
     border-radius: 6px;
-
     &:hover { background: #f1f5f9; }
   }
 }
-
 // ── LA CAJITA DE LOS CAMPOS ──────────────────────────────────
 // La cajita gris con los campos de un formulario (`.form-caja`). La usan los
 // popups de Caja (pago y compra) y el de Proveedores.
@@ -81,20 +73,17 @@
 // Estaba en `caja.scss` y se copió a `proveedores.scss` al mudarse el ABM. Dos
 // copias de un formulario garantizan que un día los labels de uno queden más
 // chicos que los del otro y nadie sepa cuál es el bueno.
-
 .form-caja {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 14px;
-
   .fila {
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
   }
-
   .campo {
     display: flex;
     flex-direction: column;
@@ -102,22 +91,18 @@
     margin-bottom: 12px;
     flex: 1;
     min-width: 160px;
-
     label {
       font-size: 0.78rem;
       font-weight: 600;
       color: #475569;
     }
-
     .opcional { font-weight: 400; color: #94a3b8; }
-
     input, select {
       padding: 9px 11px;
       border: 1px solid #cbd5e1;
       border-radius: 8px;
       font-size: 0.9rem;
       font-family: inherit;
-
       &:focus {
         outline: none;
         border-color: #1d4ed8;
@@ -126,7 +111,6 @@
     }
   }
 }
-
 // ── PIE DE POPUP: botones de guardar y cancelar ─────────────
 //
 // Shared por Dashboard (modal de Nuevo turno) y Caja (registrar pago, compra y
@@ -140,12 +124,10 @@
 // alta las dos acciones son "salió bien" / "salí sin hacer nada", no una
 //jerarquía de primaria/secundaria. Cancelar en rojo evita que alguien lo lea
 // como "la otra opción".
-
 .popup-acciones {
   display: flex;
   gap: 8px;
   padding: 12px 20px 20px;
-
   button {
     flex: 1;
     padding: 10px;
@@ -155,25 +137,19 @@
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s;
-
     &:disabled { opacity: 0.6; cursor: default; }
   }
 }
-
 .btn-atendido {
   background: #dcfce7;
   color: #166534;
-
   &:hover:not(:disabled) { background: #bbf7d0; }
 }
-
 .btn-cancelado {
   background: #fee2e2;
   color: #991b1b;
-
   &:hover:not(:disabled) { background: #fecaca; }
 }
-
 // El mensaje de error de un popup. Sin el ❌/⚠️: el texto ya dice qué pasó y el
 // prefijo doble queda como ruido.
 .error-msg {
@@ -184,7 +160,6 @@
   border-radius: 8px;
   margin-top: 8px;
 }
-
 // Botón azul principal. Vive acá porque los popups lo usan y cada pantalla
 // mantenía su propia copia.
 .btn-primary {
@@ -197,103 +172,20 @@
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
-
   &:hover:not(:disabled) { background: #1e40af; }
   &:disabled { opacity: 0.6; cursor: default; }
 }
 
-// ── BUSCAR Y CREAR DENTRO DE UN POPUP ───────────────────────
+// Botón chico y gris, el contrapeso de un botón azul.
 //
-// El combo de clientes de "Nuevo turno": se escribe, sale una lista, y si no
-// hay resultados aparece la opción de crearlo ahí mismo. Lo comparten Dashboard
-// (clientes) y Caja (proveedores).
+// `.btn-secundario-sm` vive acá aunque su nombre diga "de popup", porque
+// Personas > Proveedores lo usa en el PANEL DE DETALLE (el "Inactivar" y el
+// "Reactivar"), no en un popup. Es un botón chico y gris, y este es el partial
+// donde viven los botones.
 //
-// Una diferencia a propósito: el de Dashboard consulta la base en cada tecla
-// (`buscarClientes` con `.ilike`, que además es sensible a acentos). El de
-// proveedores filtra la lista que YA está en memoria con `contiene`: sin red por
-// tecla e ignorando acentos. Si algún día se unifican, conviene quedarse con el
-// local.
-
-.dropdown-busqueda {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  margin-top: 4px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  // En un celu la lista puede ser más alta que la pantalla; scrollea sola en vez
-  // de empujar el popup entero.
-  max-height: 190px;
-  overflow-y: auto;
-}
-
-.dropdown-item {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 14px;
-  cursor: pointer;
-  font-size: 0.88rem;
-
-  &:hover { background: #f8fafc; }
-}
-
-.dropdown-nombre { font-weight: 600; color: #1e293b; }
-.dropdown-extra  { color: #94a3b8; font-size: 0.82rem; }
-
-// Aviso de "elegido": fondo verde, como el botón de guardar.
-.seleccionado-ok {
-  margin-top: 8px;
-  font-size: 0.85rem;
-  color: #166534;
-  background: #dcfce7;
-  padding: 6px 12px;
-  border-radius: 6px;
-}
-
-// "No encontré nada": acá aparece el botón de crear.
-.crear-inline {
-  margin-top: 8px;
-  font-size: 0.85rem;
-  color: #64748b;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.btn-crear-inline {
-  background: none;
-  border: 1px dashed #3b82f6;
-  color: #3b82f6;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-family: inherit;
-  text-align: left;
-
-  &:hover { background: #eff6ff; }
-}
-
-.form-crear-inline {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-
-  input {
-    flex: 1;
-    min-width: 140px;
-    padding: 8px 12px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    font-size: 0.88rem;
-    font-family: inherit;
-
-    &:focus { outline: none; border-color: #3b82f6; }
-  }
-}
-
+// Lo que sí se movió a `_buscador-crear.scss` es el combo de buscar-y-crear:
+// ese lo usan solo Dashboard y Caja, y dejarlo acá le costaba el budget de
+// estilo a los componentes que solo quieren el cascarón.
 .btn-secundario-sm {
   padding: 6px 12px;
   background: #f1f5f9;

@@ -3,6 +3,7 @@
 // Caja. El `@use` va ARRIBA de todo porque Sass exige que las directivas `@use`
 // precedan a cualquier otra regla.
 @use '../../../styles/popup';
+@use '../../../styles/buscador-crear';
 
 .dashboard-page {
   padding: 24px;
@@ -231,51 +232,6 @@ tr.vencido td { background: #fff7ed; }
   transition: background 0.15s;
   &:hover { background: #f1f5f9; }
 }
-
-.popup-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 16px;
-}
-
-.popup {
-  background: white;
-  border-radius: 16px;
-  width: 100%;
-  max-width: 380px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
-}
-
-.popup-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #f1f5f9;
-  h3 { font-size: 1rem; color: #1e293b; margin: 0; }
-}
-
-.btn-cerrar {
-  background: none;
-  border: none;
-  font-size: 1rem;
-  cursor: pointer;
-  color: #94a3b8;
-  &:hover { color: #1e293b; }
-}
-
-.popup-body {
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
 .detalle-bloque {
   display: flex;
   flex-direction: column;

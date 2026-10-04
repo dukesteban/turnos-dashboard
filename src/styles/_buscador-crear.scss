@@ -1,0 +1,110 @@
+// ============================================================
+// BUSCAR Y CREAR DENTRO DE UN POPUP
+// ------------------------------------------------------------
+// El combo de clientes de "Nuevo turno" y el de proveedores de
+// "Registrar compra".
+//
+// Va SEPARADO de `_popup.scss` a propósito: lo usan solo Dashboard y Caja, y
+// `@use` dentro de un componente NO es global, así que dejarlo dentro del
+// cascarión le costaba ~2,5 kB del budget de estilo a cada componente que
+// solo quiere el fondo y el pie del popup. Con `empleados.scss` eso lo hizo
+// pasar de los 16 kB y romper el build.
+//
+// OJO con el costo de este diseño: cada componente que hace `@use` de un
+// partial se lleva una COPIA COMPLETA de ese partial, con su `[_ngcontent]`.
+// Un partial compartido NO se deduplica entre componentes. Sirve para que las
+// copias no se desincronicen, no para ahorrar bytes.
+//
+// Uso:  @use '../../../styles/buscador-crear';
+// ============================================================
+// ── EL COMBO ────────────────────────────────────────────────
+//
+// El combo de clientes de "Nuevo turno": se escribe, sale una lista, y si no
+// hay resultados aparece la opción de crearlo ahí mismo. Lo comparten Dashboard
+// (clientes) y Caja (proveedores).
+//
+// Una diferencia a propósito: el de Dashboard consulta la base en cada tecla
+// (`buscarClientes` con `.ilike`, que además es sensible a acentos). El de
+// proveedores filtra la lista que YA está en memoria con `contiene`: sin red por
+// tecla e ignorando acentos. Si algún día se unifican, conviene quedarse con el
+// local.
+
+.dropdown-busqueda {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 4px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  // En un celu la lista puede ser más alta que la pantalla; scrollea sola en vez
+  // de empujar el popup entero.
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.dropdown-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 0.88rem;
+
+  &:hover { background: #f8fafc; }
+}
+
+.dropdown-nombre { font-weight: 600; color: #1e293b; }
+.dropdown-extra  { color: #94a3b8; font-size: 0.82rem; }
+
+// Aviso de "elegido": fondo verde, como el botón de guardar.
+.seleccionado-ok {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: #166534;
+  background: #dcfce7;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+// "No encontré nada": acá aparece el botón de crear.
+.crear-inline {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-crear-inline {
+  background: none;
+  border: 1px dashed #3b82f6;
+  color: #3b82f6;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: inherit;
+  text-align: left;
+
+  &:hover { background: #eff6ff; }
+}
+
+.form-crear-inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+
+  input {
+    flex: 1;
+    min-width: 140px;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-family: inherit;
+
+    &:focus { outline: none; border-color: #3b82f6; }
+  }
+}
