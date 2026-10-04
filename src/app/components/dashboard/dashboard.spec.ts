@@ -757,3 +757,88 @@ describe('Dashboard — buscador de cliente del modal de Nuevo turno', () => {
     expect(cmp.clienteSeleccionadoNuevo).toBeNull();
   });
 });
+
+describe('Dashboard - saltar a una fecha', () => {
+  // Un `montar()` por test: TestBed no se puede reconfigurar una vez instanciado.
+  const nuevo = () => montar().cmp;
+
+  it('cae en el dia exacto, sin corrimiento por zona horaria', () => {
+    // Mismo bug que en la Agenda: `new Date(iso)` se parsea como medianoche
+    // UTC y en Argentina muestra el dia anterior.
+    const cmp = nuevo();
+    cmp.irAFechaTurnos('2026-08-15');
+
+    expect(cmp.fechaTurnos.getFullYear()).toBe(2026);
+    expect(cmp.fechaTurnos.getMonth()).toBe(7);   // agosto
+    expect(cmp.fechaTurnos.getDate()).toBe(15);
+  });
+
+  it('un input vaciado o con basura no mueve la fecha', () => {
+    const cmp = nuevo();
+    cmp.irAFechaTurnos('2026-08-15');
+
+    cmp.irAFechaTurnos('');
+    expect(cmp.fechaTurnos.getDate()).toBe(15);
+
+    cmp.irAFechaTurnos('ayer');
+    expect(cmp.fechaTurnos.getDate()).toBe(15);
+
+    cmp.irAFechaTurnos('2026-02-31');
+    expect(cmp.fechaTurnos.getDate()).toBe(15);
+  });
+
+  it('el ISO del input es el de en-CA, no el de toISOString', () => {
+    // `toISOString()` convierte a UTC: a la tarde (o en cualquier timezone
+    // negativo) devuelve el dia ANTERIOR, asi que el input se llenaria con la
+    // fecha equivocada y al elegir una fecha se saltarian dos dias.
+    const cmp = nuevo();
+    cmp.fechaTurnos = new Date(2026, 7, 15);   // 15/08/2026 a medianoche local
+    expect(cmp.fechaTurnosISO).toBe('2026-08-15');
+  });
+
+  it('en la vista Semana el titulo muestra la semana de la fecha elegida', () => {
+    // El 19/08/2026 es miercoles: la semana va del lunes 17 al domingo 23.
+    // El separador es un EM-DASH (U+2014), no un guion: se escribe como escape
+    // a proposito, porque el archivo fuente lo tiene asi y un "-" normal deja
+    // el test en rojo por un caracter invisible al ojo.
+    const cmp = nuevo();
+    cmp.vistasTurnos = 'semana';
+    cmp.irAFechaTurnos('2026-08-19');
+    expect(cmp.rangoSemanaTurnos).toBe('17/08 \u2014 23/08');
+  });
+
+  it('en la vista Mes el titulo muestra el mes de la fecha elegida', () => {
+    const cmp = nuevo();
+    cmp.vistasTurnos = 'mes';
+    cmp.irAFechaTurnos('2026-08-19');
+    expect(cmp.tituloMesTurnos).toBe('Agosto 2026');
+  });
+
+  it('la tabla se re-filtra sola: no hace falta recargar los turnos', () => {
+    // `turnosFiltrados` sale de `fechaTurnos` y de `todosTurnos`, que ya estan
+    // en memoria: mover la fecha alcanza, no hay llamada al servidor. Con un
+    // turno antes y otro despues de la fecha elegida, se ve el cambio.
+    const cmp = nuevo();
+    cmp.todosTurnos = [
+      turno({ fecha: '2026-08-10', hora_inicio: '10:00:00' }),
+      turno({ fecha: '2026-08-17', hora_inicio: '11:00:00' }),
+      turno({ fecha: '2026-08-20', hora_inicio: '12:00:00' }),
+    ];
+
+    cmp.vistasTurnos = 'semana';
+    cmp.irAFechaTurnos('2026-08-12');    // semana del 10 al 16
+    expect(cmp.turnosFiltrados.length).toBe(1);
+    expect(cmp.turnosFiltrados[0].fecha).toBe('2026-08-10');
+
+    cmp.irAFechaTurnos('2026-08-19');    // semana del 17 al 23
+    expect(cmp.turnosFiltrados.length).toBe(2);
+    expect(cmp.turnosFiltrados[0].fecha).toBe('2026-08-17');
+
+    cmp.vistasTurnos = 'mes';
+    cmp.irAFechaTurnos('2026-08-05');    // agosto entero
+    expect(cmp.turnosFiltrados.length).toBe(3);
+
+    cmp.irAFechaTurnos('2026-09-05');    // septiembre: ninguno
+    expect(cmp.turnosFiltrados.length).toBe(0);
+  });
+});

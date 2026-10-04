@@ -4,6 +4,7 @@ import {
   normalizarJornada,
   textoAusencia,
   debeMostrarColumna,
+  fechaDesdeISO,
 } from './fechas';
 
 /** Esteban: L,M,J,V (no miércoles, no sábado) — dato real de la base. */
@@ -263,5 +264,55 @@ describe('discriminación jornada vs ausencia (lista "Turnos en riesgo")', () =>
   it('el motivo de ausencia es el de la ausencia', () => {
     expect(textoAusencia(turnoTocadoPorAusencia([VAC], '2026-12-01', '10:00', 60)))
       .toBe('Vacaciones al 15/12');
+  });
+});
+
+describe('fechaDesdeISO', () => {
+  // El bug que evita: `new Date('2026-08-15')` se parsea como MEDIANOCHE UTC.
+  // En Argentina (UTC-3) eso es el 14/08 a las 21:00 local, o sea el dia
+  // ANTERIOR. Sin ningun error: la app muestra el dia anterior y el usuario
+  // busca un 15/09 que no aparece.
+  //
+  // Por eso se comparan los COMPONENTES y no el ISO devuelto: en un runner en
+  // UTC las dos formas dan el mismo resultado y el test pasaria teniendo el
+  // bug. Los componentes delatan el corrimiento en cualquier timezone.
+  it('devuelve el dia exacto, no el anterior', () => {
+    const d = fechaDesdeISO('2026-08-15');
+    expect(d).not.toBeNull();
+    expect(d!.getFullYear()).toBe(2026);
+    expect(d!.getMonth()).toBe(7);      // agosto
+    expect(d!.getDate()).toBe(15);
+  });
+
+  it('la devuelve a medianoche LOCAL', () => {
+    // Si fuera UTC, getHours() daria 3 (o 0 en un runner en UTC) en vez de 0.
+    expect(fechaDesdeISO('2026-08-15')!.getHours()).toBe(0);
+  });
+
+  it('rechaza lo que no es una fecha, y devuelve null en vez de una Date rota', () => {
+    // El input type="date" se vacia si el usuario borra el valor a mano.
+    expect(fechaDesdeISO('')).toBeNull();
+    expect(fechaDesdeISO(null)).toBeNull();
+    expect(fechaDesdeISO(undefined)).toBeNull();
+    expect(fechaDesdeISO('ayer')).toBeNull();
+    expect(fechaDesdeISO('15/08/2026')).toBeNull();
+    expect(fechaDesdeISO('2026-8-15')).toBeNull();      // sin padding
+    expect(fechaDesdeISO('2026-08-15T10:00')).toBeNull();   // con hora
+  });
+
+  it('rechaza fechas que no existen, en vez de que Date las corra solas', () => {
+    // `new Date(2026, 12, 45)` NO tira error: se corre a Feb 14 y termina
+    // mostrando una fecha que el usuario nunca eligio.
+    expect(fechaDesdeISO('2026-13-45')).toBeNull();
+    expect(fechaDesdeISO('2026-00-10')).toBeNull();
+    expect(fechaDesdeISO('2026-08-00')).toBeNull();
+    expect(fechaDesdeISO('2026-02-31')).toBeNull();     // febrero no tiene 31
+  });
+
+  it('acepta los bordes validos', () => {
+    expect(fechaDesdeISO('2026-01-31')!.getDate()).toBe(31);   // enero tiene 31
+    expect(fechaDesdeISO('2024-02-29')!.getDate()).toBe(29);   // bisiesto
+    expect(fechaDesdeISO('2026-02-28')!.getDate()).toBe(28);   // no bisiesto
+    expect(fechaDesdeISO('2026-12-31')).not.toBeNull();        // ultimo dia del año
   });
 });

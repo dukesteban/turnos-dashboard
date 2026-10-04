@@ -139,3 +139,42 @@ export function debeMostrarColumna(e: EstadoColumna): boolean {
   if (!e.activo) return false;
   return e.trabaja || e.tieneAusencia || e.tieneTurnosEnRiesgo;
 }
+
+/**
+ * Convierte un "AAAA-MM-DD" en un `Date` a MEDIANOCHE LOCAL, o `null` si el
+ * string no es una fecha.
+ *
+ * Existe porque `new Date('2026-08-15')` NO hace lo que parece: el spec de
+ * `Date` obliga a parsear el formato de solo fecha como MEDIANOCHE UTC, que en
+ * cualquier timezone negativo (Argentina, UTC-3) cae el dia ANTERIOR a las 21:00
+ * local. Se corre un dia entero y sin ningun error que lo delate.
+ *
+ * Por eso se descompone a mano. Devuelve `null` y no una fecha invalida porque
+ * un `Date` con NaN adentro se propaga a todos lados sin que ninguno avise: `setDate`
+ * sobre NaN queda NaN, los `.getMonth()` dan NaN y el filtro de turnos deja de
+ * filtrar sin avisar.
+ *
+ * Acepta "AAAA-MM-DD" del `<input type="date">` y tolera que venga vacio (el
+ * input se vacia si el usuario borra el valor a mano).
+ */
+export function fechaDesdeISO(iso: string | null | undefined): Date | null {
+  if (typeof iso !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!m) return null;
+
+  const anio = parseInt(m[1], 10);
+  const mes = parseInt(m[2], 10);
+  const dia = parseInt(m[3], 10);
+
+  // Rango, y no solo "son digitos": `new Date(2026, 12, 45)` NO tira error, se
+  // corre solo a Feb 14 y termina mostrando una fecha que el usuario nunca
+  // eligio.
+  if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+
+  // Si el dia no existe en ese mes (31 de febrero), `new Date` lo corre al mes
+  // siguiente. Se rechaza en vez de aceptar, porque es un dato que no se eligio.
+  const d = new Date(anio, mes - 1, dia);
+  if (d.getMonth() !== mes - 1 || d.getDate() !== dia) return null;
+
+  return d;
+}

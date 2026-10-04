@@ -146,6 +146,43 @@
   color: #1e293b;
 }
 
+/* -- IR A UNA FECHA ---------------------------------------------------
+ *
+ * Es el MISMO truco que en la Agenda: un `<input type="date">` transparente
+ * puesto encima de un `<span>` con el ícono, que se ve como un `.btn-nav` más.
+ *
+ * Va duplicado acá y no en un parcial compartido porque los estilos de un
+ * componente Angular llevan su `[_ngcontent-xxx]` y un parcial compartido NO
+ * matchea el template de otro componente: si el selector no calza, el estilo no
+ * se aplica y no hay error que lo delate.
+ *
+ * `opacity: 0` y NO `display: none`: con cualquiera de los otros dos el input no
+ * existe para el navegador y el calendario no abre.
+ */
+.ir-a-fecha {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.btn-calendario {
+  pointer-events: none;
+  font-size: 1rem;
+}
+
+.input-calendario {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
 .seccion-header {
   display: flex;
   justify-content: space-between;

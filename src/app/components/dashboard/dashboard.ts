@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
-import { nombreMes } from '../../utils/fechas';
+import { nombreMes, fechaDesdeISO } from '../../utils/fechas';
 import { contiene } from '../../utils/texto';
 
 @Component({
@@ -185,6 +185,34 @@ export class DashboardComponent implements OnInit, OnDestroy {
   
   irHoyTurnos() {
     this.fechaTurnos = new Date();
+  }
+
+  /**
+   * Fecha de referencia de la sección, en "AAAA-MM-DD": el formato que quiere el
+   * `<input type="date">`.
+   *
+   * Es `toLocaleDateString('en-CA')` y no `toISOString()` a proposito:
+   * `toISOString()` convierte a UTC, asi que a la tarde (o en cualquier
+   * timezone negative) devuelve el dia ANTERIOR. El input se bindearia al dia
+   * equivocado y, al elegir una fecha, saltaria dos dias.
+   */
+  get fechaTurnosISO(): string {
+    return this.fechaTurnos.toLocaleDateString('en-CA');
+  }
+
+  /**
+   * Salta a la semana o al mes que contienen la fecha elegida.
+   *
+   * No hay que hacer nada mas: `rangoSemanaTurnos`, `tituloMesTurnos` y
+   * `turnosFiltrados` salen todos de `fechaTurnos`, asi que con mover esa
+   * variable se reacomodan el titulo y la tabla juntos.
+   *
+   * En la vista Mes la fecha da igual dentro del mismo mes (solo se mira el ano
+   * y el mes), asi que elegir el 28/09 muestra Setiembre.
+   */
+  irAFechaTurnos(iso: string) {
+    const d = fechaDesdeISO(iso);
+    if (d) this.fechaTurnos = d;
   }
 
   toggleIngresos() {

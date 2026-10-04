@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
-import { jornadaCubre, turnoTocadoPorAusencia, textoAusencia, normalizarJornada, debeMostrarColumna } from '../../utils/fechas';
+import { jornadaCubre, turnoTocadoPorAusencia, textoAusencia, normalizarJornada, debeMostrarColumna, fechaDesdeISO } from '../../utils/fechas';
 
 const PX_POR_MINUTO = 1.2;
 /** Alto del header de columnas (vista dia). Los turnos se corren esta cantidad. */
@@ -695,7 +695,7 @@ claseBloque(turno: any, mini: boolean): string {
    *
    * OJO con armar la fecha: `new Date('2026-10-04')` se interpreta como
    * MEDIANOCHE UTC, que en Argentina (UTC-3) es el 03/10 a las 21:00 local. Un
-   * día antes, siempre. Por eso se descompone el string a mano.
+   * día antes, siempre. Por eso el parseo no es un `new Date` pelado.
    *
    * En la vista Semana no hay que hacer nada más: `diasDeSemana` ya normaliza
    * al lunes de esa semana.
@@ -704,18 +704,12 @@ claseBloque(turno: any, mini: boolean): string {
    * filtra en memoria, que es justo por lo que `navegarDia` no recarga nada.
    */
   irAFecha(iso: string) {
-    // El input se vacía si el usuario borra la fecha a mano: `''` no es una fecha.
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return;
-    const [y, m, d] = iso.split('-').map(p => parseInt(p, 10));
-
-    // Defensa pura: el input del navegador solo entrega fechas validas. Pero
-    // `new Date(2026, 12, 45)` NO tira error, se corre solo a Feb 14 y uno
-    // termina en un dia que no existe en el calendario, asi que mejor cortar
-    // aca. (No se valida el largo contra el mes: Feb 31 todavia pasaria, y para
-    // eso alcanza con que el navegador no lo deje escribir.)
-    if (m < 1 || m > 12 || d < 1 || d > 31) return;
-
-    this.fechaActual = new Date(y, m - 1, d);
+    // El parseo vive en `fechaDesdeISO` (utils/fechas) y lo comparte con el
+    // Dashboard, que tiene el mismo boton de calendario. Con dos copias de
+    // esta logica un dia se desincroniza del otro, y no se nota hasta que
+    // alguien busca el 28/09 en un lado y no lo encuentra.
+    const d = fechaDesdeISO(iso);
+    if (d) this.fechaActual = d;
   }
 
   formatearFecha(fecha: Date): string {

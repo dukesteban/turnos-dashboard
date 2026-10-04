@@ -86,6 +86,22 @@
           <button class="btn-nav" (click)="navegarTurnos(-1)">‹</button>
           <button class="btn-hoy" (click)="irHoyTurnos()">Actual</button>
           <button class="btn-nav" (click)="navegarTurnos(1)">›</button>
+          <!--
+            Ir a una fecha. Mismo truco que en la Agenda: un `<input type="date">`
+            TRANSPARENTE encima de un botón con el ícono, y que sea el navegador
+            el que abra su calendario (sin `showPicker()` ni JavaScript).
+
+            El valor va bindeado a `fechaTurnosISO`, que es `en-CA` y NO
+            `toISOString()`: el input se llenaría con el día anterior a la tarde.
+          -->
+          <span class="ir-a-fecha">
+            <span class="btn-nav btn-calendario" aria-hidden="true">📅</span>
+            <input type="date"
+                   class="input-calendario"
+                   [value]="fechaTurnosISO"
+                   (change)="irAFechaTurnos($any($event.target).value)"
+                   aria-label="Ir a una fecha" />
+          </span>
        </div>
     </div>
     <div class="tabla-wrapper">
