@@ -1,10 +1,7 @@
-// Proveedores es una de las tres pantallas de Personas, asi que su lista tiene
-// que verse IGUAL que la de Empleados.
-//
-// Por eso NO hay CSS de lista aqui: `.lista`, `.item`, `.avatar`, `.info`,
-// `.nombre`, `.sub`, `.estado-badge` y `.item-acciones` vienen de
-// `_lista.scss`, el partial que los comparte con Empleados. Y el popup (fondo,
-// tarjeta, campos, pie) viene de `_popup.scss`.
+// El pie del panel (`.detalle-acciones`: badge + botón de inactivar) y el texto
+// aclaratorio (`.nota-ayuda`) NO están acá: viven en `_detalle.scss`, que los
+// comparte con el detalle de Empleados. Es la misma acción y tiene que verse
+// igual en las dos.
 //
 // Lo que queda aca es solo lo propio de esta pantalla: el ancho de la pagina y
 // el contador de "Total: N" de la header.
@@ -32,34 +29,6 @@
   padding: 2px 10px;
   border-radius: 12px;
   font-weight: 600;
-}
-
-// El pie del panel de detalle: el estado y el botón de inactivar/reactivar.
-//
-// `margin-top` y no `padding-top`: los campos de arriba ya tienen su propio
-// margen y este bloque tiene que quedar separado del último, no pegado.
-.proveedor-acciones {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid #f1f5f9;
-
-  .btn-secundario-sm {
-    // Va a la derecha del badge. Sin `margin-left: auto` queda pegado al
-    // estado y, en un panel angosto, el texto "Inactivo" y el botón se pisan.
-    margin-left: auto;
-  }
-}
-
-// El texto que explica que inactivar no es borrar. Chiquito y al final, porque
-// es una aclaración, no algo que haya que leer antes de operar.
-.nota-ayuda {
-  margin: 10px 0 0;
-  font-size: 0.78rem;
-  line-height: 1.45;
-  color: #94a3b8;
 }
 
 @media (max-width: 700px) {

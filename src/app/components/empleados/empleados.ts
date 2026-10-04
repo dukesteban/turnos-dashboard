@@ -162,11 +162,24 @@ export class EmpleadosComponent implements OnInit {
 
   async seleccionarEmpleado(empleado: any) {
     const jornada = normalizarJornada(empleado.jornada);
+    // La foto de nombre y teléfono, para que "Cancelar" vuelva a donde estabas
+    // en vez de dejar lo que se escribió a medias. Se toma acá, al seleccionar,
+    // y no de la lista: si el guardado ya actualizó la fila, leer la lista
+    // después devolvería lo recien guardado y "Cancelar" no cancelaría nada.
+    const datos = {
+      nombre: empleado.nombre || '',
+      telefono: empleado.telefono || '',
+    };
     this.empleadoSeleccionado = {
       ...empleado,
+      ...datos,
       jornada,
       _jornadaOrig: JSON.parse(JSON.stringify(jornada)),
+      _datosOrig: datos,
       editando: false,
+      // Los flags de la edicion por campo que ya no existen. Se limpian para que
+      // un empleado que venia de la version vieja no quede medio editado.
+      editandoTelefono: false,
     };
     // Cada empleado arranca con solo "Datos" abierto. Sin esto, el empleado
     // anterior deja los cinco acordeones como los dejó y el que viene queda con
@@ -237,36 +250,74 @@ export class EmpleadosComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
-  async guardarNombre() {
-    if (!this.empleadoSeleccionado || this.empleadoSeleccionado.guardando) return;
-    const emp = this.empleadoSeleccionado;
-    emp.guardando = true;
+  /**
+   * Poner nombre y teléfono en edición.
+   *
+   * Un solo flag para los dos campos. Antes había dos (`editando` y
+   * `editandoTelefono`) con un lápiz por campo: en una columna de dos campos
+   * parecían cuatro acciones y el que de verdad se editaba a menudo quedaba
+   * sin destino claro.
+   */
+  editarDatos() {
+    if (!this.empleadoSeleccionado) return;
+    this.empleadoSeleccionado.editando = true;
     this.cdr.detectChanges();
-    try {
-      await this.supabase.updateEmpleado(emp.id, { nombre: emp.nombre.trim() });
-      const idx = this.empleados.findIndex(e => e.id === emp.id);
-      if (idx >= 0) this.empleados[idx].nombre = emp.nombre.trim();
-      emp.editando = false;
-      this.mostrarMensaje('✅ Nombre actualizado.');
-    } catch (e) {
-      this.mostrarError('❌ Error al actualizar.');
-    } finally {
-      emp.guardando = false;
-      this.cdr.detectChanges();
-    }
   }
 
-  async guardarTelefono() {
-    if (!this.empleadoSeleccionado || this.empleadoSeleccionado.guardando) return;
+  /**
+   * Cancelar: vuelve a los valores con los que se abrió el panel.
+   *
+   * Restaura `_datosOrig` en vez de solo cerrar el modo edición. Si solo se
+   * cerrara, al volver a apretar "Editar" se vería lo que se escribió la vez
+   * anterior sin saber que nunca se guardó.
+   */
+  cancelarEdicionDatos() {
     const emp = this.empleadoSeleccionado;
+    if (!emp) return;
+    Object.assign(emp, emp._datosOrig);
+    emp.editando = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Guardar nombre y teléfono en UNA llamada.
+   *
+   * Con un botón único, mandar los dos campos juntos es lo que espera la gente:
+   * o se guarda la ficha o no se guarda. Antes eran dos updates (uno por campo)
+   * y con nombre vacío se mandaba `""` a una columna NOT NULL.
+   */
+  async guardarDatos() {
+    const emp = this.empleadoSeleccionado;
+    if (!emp || emp.guardando || !emp.editando) return;
+
+    const nombre = (emp.nombre ?? '').trim();
+    if (!nombre) {
+      this.mostrarError('❌ El nombre es obligatorio.');
+      this.cdr.detectChanges();
+      return;
+    }
+
     emp.guardando = true;
     this.cdr.detectChanges();
     try {
-      await this.supabase.updateEmpleado(emp.id, { telefono: emp.telefono?.trim() || null });
+      const datos = {
+        nombre,
+        // Vacío -> null, no cadena vacía: en la base la columna es nullable y
+        // "" es un valor distinto de "no cargado".
+        telefono: (emp.telefono ?? '').trim() || null,
+      };
+      await this.supabase.updateEmpleado(emp.id, datos);
+
       const idx = this.empleados.findIndex(e => e.id === emp.id);
-      if (idx >= 0) this.empleados[idx].telefono = emp.telefono;
-      emp.editandoTelefono = false;
-      this.mostrarMensaje('✅ Teléfono actualizado.');
+      if (idx >= 0) {
+        this.empleados[idx].nombre = datos.nombre;
+        this.empleados[idx].telefono = datos.telefono;
+      }
+      emp.nombre = datos.nombre;
+      emp.telefono = datos.telefono || '';
+      emp._datosOrig = { nombre: emp.nombre, telefono: emp.telefono };
+      emp.editando = false;
+      this.mostrarMensaje('✅ Datos actualizados.');
     } catch (e) {
       this.mostrarError('❌ Error al actualizar.');
     } finally {

@@ -115,3 +115,42 @@
   color: #64748b;
   white-space: nowrap;
 }
+
+// ── EL PIE DEL PANEL: ESTADO + LA ACCION QUE LO CAMBIA ───────
+//
+// El badge Activo/Inactivo a la izquierda y el boton a la derecha.
+//
+// El boton es GRIS CON MARCO, no rojo. Inactivar es reversible: la fila queda
+// tachada y el mismo panel tiene el boton para volver a activarlo. El rojo de
+// "borrar" prometeria mas de lo que hace, y si un dia el inactivar se comiera
+// la fila, el rojo seria la senal de que la accion no tiene vuelta atras.
+//
+// Lo usan Empleados y Personas > Proveedores. Antes cada uno tenia el suyo: el
+// de Proveedores era un boton gris al lado del badge, y el de Empleados un
+// boton rojo de pantalla completa sin badge. Dos acciones parecidas, dos
+// guinea visual.
+
+.detalle-acciones {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+
+  .btn-secundario-sm,
+  .btn-secundario {
+    // A la derecha del badge. Sin el `margin-left: auto` quedan pegados y, en
+    // un panel angosto, el texto del badge y el del boton se pisan.
+    margin-left: auto;
+  }
+}
+
+// El texto que aclara que la accion es reversible. Chiquito y al final, porque
+// es una aclaracion, no algo que haya que leer antes de operar.
+.nota-ayuda {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #94a3b8;
+}

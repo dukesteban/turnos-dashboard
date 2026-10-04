@@ -264,98 +264,107 @@
   <div *ngIf="mostrarModalNuevoTurno" class="popup-overlay" (click)="cerrarModalNuevoTurno()">
     <div class="popup popup-grande" (click)="$event.stopPropagation()">
       <div class="popup-header">
-        <h3>Nuevo turno</h3>
+        <h3>📋 Nuevo turno</h3>
         <button class="btn-cerrar" (click)="cerrarModalNuevoTurno()">✕</button>
       </div>
       <div class="popup-body">
-
-        <!-- Cliente. Igual que el proveedor del popup de compra: al elegir uno
-             el campo desaparece y queda el ✅ con su "Cambiar". Si el input
-             quedara editable con el nombre ya cargado se desincronizaba de
-             `clienteSeleccionadoNuevo`: se veía un cliente y se guardaba otro. -->
-        <div class="campo">
-          <label>Cliente</label>
-
-          <div *ngIf="clienteSeleccionadoNuevo" class="seleccionado-ok">
-            ✅ {{ clienteSeleccionadoNuevo.nombre }}
-            <button class="btn-secundario-sm" (click)="quitarClienteNuevo()">Cambiar</button>
-          </div>
-
-          <ng-container *ngIf="!clienteSeleccionadoNuevo">
-            <input type="text" [(ngModel)]="busquedaCliente"
-              (ngModelChange)="errorNuevoTurno = ''"
-              placeholder="Buscar cliente..." />
-            <div *ngIf="cargandoClientesBusqueda" class="dropdown-extra">Buscando…</div>
-            <div *ngIf="clientesBuscados.length > 0" class="dropdown-busqueda">
-              <div *ngFor="let c of clientesBuscados"
-                class="dropdown-item"
-                (click)="seleccionarClienteNuevo(c); errorNuevoTurno = ''">
-                <span class="dropdown-nombre">{{ c.nombre }}</span>
-                <span class="dropdown-extra">{{ c.telefonos?.[0]?.telefono }}</span>
-              </div>
+        <!--
+          Los campos van dentro de `.form-caja`, la cajita gris: es lo
+          mismo que hacen "Nuevo proveedor", "Nuevo empleado" y los
+          popups de Caja. Sin ella los campos quedan pegados al borde del
+          popup y el formulario se pierde en el blanco de la tarjeta.
+        -->
+        <div class="form-caja">
+  
+          <!-- Cliente. Igual que el proveedor del popup de compra: al elegir uno
+               el campo desaparece y queda el ✅ con su "Cambiar". Si el input
+               quedara editable con el nombre ya cargado se desincronizaba de
+               `clienteSeleccionadoNuevo`: se veía un cliente y se guardaba otro. -->
+          <div class="campo">
+            <label>Cliente</label>
+  
+            <div *ngIf="clienteSeleccionadoNuevo" class="seleccionado-ok">
+              ✅ {{ clienteSeleccionadoNuevo.nombre }}
+              <button class="btn-secundario-sm" (click)="quitarClienteNuevo()">Cambiar</button>
             </div>
-            <!-- Crear cliente nuevo -->
-            <div *ngIf="busquedaCliente.length > 0 && clientesBuscados.length === 0" class="crear-inline">
-              <span>No se encontró el cliente.</span>
-              <button class="btn-crear-inline" (click)="mostrarFormNuevoCliente = true; errorNuevoTurno = ''" *ngIf="!mostrarFormNuevoCliente">
-                + Crear "{{ busquedaCliente }}"
-              </button>
-              <div *ngIf="mostrarFormNuevoCliente" class="form-crear-inline">
-                <input type="text" [(ngModel)]="nombreNuevoCliente"
-                  (ngModelChange)="errorNuevoTurno = ''"
-                  placeholder="Nombre completo" />
-                <button class="btn-primary" (click)="crearYSeleccionarCliente()">Crear</button>
-                <button class="btn-secundario-sm" (click)="mostrarFormNuevoCliente = false; errorNuevoTurno = ''">Cancelar</button>
+  
+            <ng-container *ngIf="!clienteSeleccionadoNuevo">
+              <input type="text" [(ngModel)]="busquedaCliente"
+                (ngModelChange)="errorNuevoTurno = ''"
+                placeholder="Buscar cliente..." />
+              <div *ngIf="cargandoClientesBusqueda" class="dropdown-extra">Buscando…</div>
+              <div *ngIf="clientesBuscados.length > 0" class="dropdown-busqueda">
+                <div *ngFor="let c of clientesBuscados"
+                  class="dropdown-item"
+                  (click)="seleccionarClienteNuevo(c); errorNuevoTurno = ''">
+                  <span class="dropdown-nombre">{{ c.nombre }}</span>
+                  <span class="dropdown-extra">{{ c.telefonos?.[0]?.telefono }}</span>
+                </div>
               </div>
+              <!-- Crear cliente nuevo -->
+              <div *ngIf="busquedaCliente.length > 0 && clientesBuscados.length === 0" class="crear-inline">
+                <span>No se encontró el cliente.</span>
+                <button class="btn-crear-inline" (click)="mostrarFormNuevoCliente = true; errorNuevoTurno = ''" *ngIf="!mostrarFormNuevoCliente">
+                  + Crear "{{ busquedaCliente }}"
+                </button>
+                <div *ngIf="mostrarFormNuevoCliente" class="form-crear-inline">
+                  <input type="text" [(ngModel)]="nombreNuevoCliente"
+                    (ngModelChange)="errorNuevoTurno = ''"
+                    placeholder="Nombre completo" />
+                  <button class="btn-primary" (click)="crearYSeleccionarCliente()">Crear</button>
+                  <button class="btn-secundario-sm" (click)="mostrarFormNuevoCliente = false; errorNuevoTurno = ''">Cancelar</button>
+                </div>
+              </div>
+            </ng-container>
+          </div>
+  
+          <!-- Servicio -->
+          <div class="campo">
+            <label>Servicio</label>
+            <select [(ngModel)]="nuevoTurnoServicioId"
+              (ngModelChange)="onServicioChange()">
+              <option [value]="null" disabled>Seleccioná un servicio</option>
+              <option *ngFor="let s of servicios" [value]="s.id">
+                {{ s.nombre }} — ${{ s.precio | number }} ({{ s.duracion_minutos }} min)
+              </option>
+            </select>
+          </div>
+  
+          <!-- Fecha y hora -->
+          <div class="campo">
+            <label>Fecha</label>
+            <input type="date" [(ngModel)]="nuevoTurnoFecha"
+              (ngModelChange)="errorNuevoTurno = ''; actualizarEmpleadosLibres()" />
+          </div>
+          <div class="campo">
+            <label>Hora</label>
+            <input type="time" [(ngModel)]="nuevoTurnoHora"
+              (ngModelChange)="errorNuevoTurno = ''; actualizarEmpleadosLibres()" />
+          </div>
+  
+          <!-- Empleado -->
+          <div class="campo">
+            <label>Empleado que atende</label>
+            <select [(ngModel)]="nuevoTurnoEmpleadoId"
+              (ngModelChange)="errorNuevoTurno = ''">
+              <option [value]="null" disabled>-- Elegí un empleado --</option>
+              <option *ngFor="let e of empleadosLibres" [value]="e.id">
+                {{ e.nombre }} ({{ getComisionEmpleadoServicio(e.id) }}%)
+              </option>
+            </select>
+            <p class="ayuda-campo" *ngIf="nuevoTurnoFecha && nuevoTurnoHora">
+              Solo aparecen los que pueden trabajar en esa fecha y hora.
+            </p>
+            <div *ngIf="nuevoTurnoFecha && nuevoTurnoHora && empleadosLibres.length === 0"
+                 class="empleados-ocupados">
+              ⚠️ No hay empleados libres en este horario
             </div>
-          </ng-container>
-        </div>
-
-        <!-- Servicio -->
-        <div class="campo">
-          <label>Servicio</label>
-          <select [(ngModel)]="nuevoTurnoServicioId"
-            (ngModelChange)="onServicioChange()">
-            <option [value]="null" disabled>Seleccioná un servicio</option>
-            <option *ngFor="let s of servicios" [value]="s.id">
-              {{ s.nombre }} — ${{ s.precio | number }} ({{ s.duracion_minutos }} min)
-            </option>
-          </select>
-        </div>
-
-        <!-- Fecha y hora -->
-        <div class="campo">
-          <label>Fecha</label>
-          <input type="date" [(ngModel)]="nuevoTurnoFecha"
-            (ngModelChange)="errorNuevoTurno = ''; actualizarEmpleadosLibres()" />
-        </div>
-        <div class="campo">
-          <label>Hora</label>
-          <input type="time" [(ngModel)]="nuevoTurnoHora"
-            (ngModelChange)="errorNuevoTurno = ''; actualizarEmpleadosLibres()" />
-        </div>
-
-        <!-- Empleado -->
-        <div class="campo">
-          <label>Empleado que atende</label>
-          <select [(ngModel)]="nuevoTurnoEmpleadoId"
-            (ngModelChange)="errorNuevoTurno = ''">
-            <option [value]="null" disabled>-- Elegí un empleado --</option>
-            <option *ngFor="let e of empleadosLibres" [value]="e.id">
-              {{ e.nombre }} ({{ getComisionEmpleadoServicio(e.id) }}%)
-            </option>
-          </select>
-          <p class="ayuda-campo" *ngIf="nuevoTurnoFecha && nuevoTurnoHora">
-            Solo aparecen los que pueden trabajar en esa fecha y hora.
-          </p>
-          <div *ngIf="nuevoTurnoFecha && nuevoTurnoHora && empleadosLibres.length === 0"
-               class="empleados-ocupados">
-            ⚠️ No hay empleados libres en este horario
+            <div *ngIf="nuevoTurnoFecha && nuevoTurnoHora && empleadosLibres.length > 0"
+                 class="empleados-ayuda">
+              {{ empleadosLibres.length }} disponible{{ empleadosLibres.length === 1 ? '' : 's' }}
+            </div>
           </div>
-          <div *ngIf="nuevoTurnoFecha && nuevoTurnoHora && empleadosLibres.length > 0"
-               class="empleados-ayuda">
-            {{ empleadosLibres.length }} disponible{{ empleadosLibres.length === 1 ? '' : 's' }}
-          </div>
+  
         </div>
 
         <div *ngIf="errorNuevoTurno" class="error-msg">{{ errorNuevoTurno }}</div>

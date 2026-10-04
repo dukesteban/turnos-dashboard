@@ -53,28 +53,51 @@
           <span class="chevron" [class.abierto]="acordeonDatos">›</span>
         </div>
         <div class="acordeon-body" [class.visible]="acordeonDatos">
+          <!--
+            UN solo boton "Editar" para los dos campos, como en Personas >
+            Proveedores. Antes habia un lapiz por campo (y dos flags distintos:
+            `editando` para el nombre y `editandoTelefono` para el telefono), y
+            dos lapices en una columna de dos campos parecen cuatro acciones.
+
+            Los dos flags se unnieron en uno solo y el guardado es UNA llamada
+            con los dos campos: o se guarda la ficha o no se guarda.
+          -->
           <div class="datos-campos">
             <div class="campo-editable">
               <label class="label-campo">Nombre</label>
               <input type="text" [(ngModel)]="empleadoSeleccionado.nombre"
                 [readonly]="!empleadoSeleccionado.editando"
                 class="input-nombre" />
-              <button *ngIf="!empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = true">✏️</button>
-              <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarNombre()">💾</button>
-              <button *ngIf="empleadoSeleccionado.editando && !empleadoSeleccionado.guardando" class="btn-icon" (click)="empleadoSeleccionado.editando = false">↩️</button>
-              <span *ngIf="empleadoSeleccionado.guardando" class="guardando-celda">⏳ Guardando…</span>
             </div>
 
             <div class="campo-editable">
               <label class="label-campo">Teléfono</label>
               <input type="text" [(ngModel)]="empleadoSeleccionado.telefono"
-                [readonly]="!empleadoSeleccionado.editandoTelefono"
+                [readonly]="!empleadoSeleccionado.editando"
                 class="input-nombre" />
-              <button *ngIf="!empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = true">✏️</button>
-              <button *ngIf="empleadoSeleccionado.editandoTelefono && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarTelefono()">💾</button>
-              <button *ngIf="empleadoSeleccionado.editandoTelefono" class="btn-icon" (click)="empleadoSeleccionado.editandoTelefono = false">↩️</button>
             </div>
           </div>
+
+          <div class="botones-edicion">
+            <button *ngIf="!empleadoSeleccionado.editando" class="btn-primary"
+                    (click)="editarDatos()">
+              ✏️ Editar
+            </button>
+
+            <button *ngIf="empleadoSeleccionado.editando" class="btn-primary"
+                    [disabled]="empleadoSeleccionado.guardando"
+                    (click)="guardarDatos()">
+              {{ empleadoSeleccionado.guardando ? 'Guardando...' : '💾 Guardar' }}
+            </button>
+
+            <button *ngIf="empleadoSeleccionado.editando" class="btn-secondary"
+                    [disabled]="empleadoSeleccionado.guardando"
+                    (click)="cancelarEdicionDatos()">
+              ↩️ Cancelar
+            </button>
+          </div>
+
+          <span *ngIf="empleadoSeleccionado.guardando" class="guardando-celda">⏳ Guardando…</span>
         </div>
       </div>
 
@@ -332,11 +355,26 @@
         </div>
       </div>
 
-      <!-- Inactivar: FUERA de los acordeones a propósito. Es una acción
-           destructiva y no puede quedar escondida detrás de un click. -->
-      <div class="detalle-bloque eliminar-bloque" *ngIf="empleadoSeleccionado?.activo !== false">
-        <button class="btn-eliminar" (click)="inactivarEmpleado()">🚫 Inactivar empleado</button>
+      <!--
+        Inactivar: FUERA de los acordeones a propósito. Es una acción que no
+        puede quedar escondida detrás de un click.
+
+        El botón es gris con marco y va al lado del badge, igual que en
+        Personas > Proveedores. Antes era un botón ROJO de pantalla completa y
+        sin badge: dos acciones que hacen lo mismo pero no se parecían, y el
+        rojo de "borrar" en una acción que tiene vuelta atrás exagera.
+      -->
+      <div class="detalle-acciones" *ngIf="empleadoSeleccionado?.activo !== false">
+        <span class="estado-badge">Activo</span>
+        <button class="btn-secundario-sm" (click)="inactivarEmpleado()">
+          🚫 Inactivar
+        </button>
       </div>
+
+      <p class="nota-ayuda" *ngIf="empleadoSeleccionado?.activo !== false">
+        Inactivar no borra: el empleado queda tachado en la lista y los turnos y
+        pagos viejos siguen apuntando a él. Podés volver a activarlo desde acá.
+      </p>
 
     </div>
 
@@ -346,38 +384,46 @@
   <div *ngIf="mostrarModalNuevoEmpleado" class="popup-overlay" (click)="cerrarModalNuevoEmpleado()">
     <div class="popup" (click)="$event.stopPropagation()">
       <div class="popup-header">
-        <h3>Nuevo empleado</h3>
+        <h3>🧑‍🔧 Nuevo empleado</h3>
         <button class="btn-cerrar" (click)="cerrarModalNuevoEmpleado()">✕</button>
       </div>
       <div class="popup-body">
-        <div class="campo">
-          <label>Nombre</label>
-          <input type="text" [(ngModel)]="nuevoNombre" placeholder="Nombre" class="input" />
-        </div>
-        <div class="campo">
-          <label>Teléfono (opcional)</label>
-          <input type="text" [(ngModel)]="nuevoTelefono" placeholder="Teléfono" class="input" />
-        </div>
-        <div class="campo">
-          <label>Comisión: <strong>{{ nuevaComision }}%</strong></label>
-          <input type="range" [(ngModel)]="nuevaComision" min="0" max="100" step="1" class="slider" />
-        </div>
-        <div class="campo">
-          <label>Jornada</label>
-          <div class="jornada-edicion nueva">
-            <div *ngFor="let dia of diasSemana; let i = index" class="jornada-fila"
-                 [class.inactivo]="!jornadaNueva[i].activo">
-              <label class="dia-chip">
-                <input type="checkbox"
-                       [ngModel]="jornadaNueva[i].activo"
-                       (ngModelChange)="$event ? activarDiaNueva(i) : desactivarDiaNueva(i)" />
-                <span>{{ dia }}</span>
-              </label>
-              <div class="jornada-horario" *ngIf="jornadaNueva[i].activo">
-                <input type="time" [(ngModel)]="jornadaNueva[i].hora_inicio" />
-                <span class="guion">→</span>
-                <input type="time" [(ngModel)]="jornadaNueva[i].hora_fin" />
-                <button class="btn-mini" (click)="limpiarHorarioNueva(i)" title="Jornada completa">∞</button>
+        <!--
+          Los campos van dentro de `.form-caja`, la cajita gris: es lo mismo
+          que hacen "Nuevo proveedor", "Registrar compra" y "Registrar pago".
+          Sin ella los campos quedan pegados al borde del popup y el formulario
+          se pierde en el blanco de la tarjeta.
+        -->
+        <div class="form-caja">
+          <div class="campo">
+            <label>Nombre</label>
+            <input type="text" [(ngModel)]="nuevoNombre" placeholder="Nombre" class="input" />
+          </div>
+          <div class="campo">
+            <label>Teléfono (opcional)</label>
+            <input type="text" [(ngModel)]="nuevoTelefono" placeholder="Teléfono" class="input" />
+          </div>
+          <div class="campo">
+            <label>Comisión: <strong>{{ nuevaComision }}%</strong></label>
+            <input type="range" [(ngModel)]="nuevaComision" min="0" max="100" step="1" class="slider" />
+          </div>
+          <div class="campo">
+            <label>Jornada</label>
+            <div class="jornada-edicion nueva">
+              <div *ngFor="let dia of diasSemana; let i = index" class="jornada-fila"
+                   [class.inactivo]="!jornadaNueva[i].activo">
+                <label class="dia-chip">
+                  <input type="checkbox"
+                         [ngModel]="jornadaNueva[i].activo"
+                         (ngModelChange)="$event ? activarDiaNueva(i) : desactivarDiaNueva(i)" />
+                  <span>{{ dia }}</span>
+                </label>
+                <div class="jornada-horario" *ngIf="jornadaNueva[i].activo">
+                  <input type="time" [(ngModel)]="jornadaNueva[i].hora_inicio" />
+                  <span class="guion">→</span>
+                  <input type="time" [(ngModel)]="jornadaNueva[i].hora_fin" />
+                  <button class="btn-mini" (click)="limpiarHorarioNueva(i)" title="Jornada completa">∞</button>
+                </div>
               </div>
             </div>
           </div>

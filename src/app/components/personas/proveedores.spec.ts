@@ -568,11 +568,11 @@ describe('Personas > Proveedores — la lista', () => {
   it('el inactivar sigue estando, pero adentro del detalle', async () => {
     const { cmp, fixture } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelectorAll('.proveedor-acciones').length).toBe(0);
+    expect(fixture.nativeElement.querySelectorAll('.detalle-acciones').length).toBe(0);
     cmp.seleccionarProveedor(cmp.proveedores[0]);
     fixture.detectChanges();
     const botones = Array.from(
-      fixture.nativeElement.querySelectorAll('.proveedor-acciones button')
+      fixture.nativeElement.querySelectorAll('.detalle-acciones button')
     ) as HTMLElement[];
     expect(botones.length).toBe(1);
     expect(botones[0].textContent).toContain('Inactivar');
@@ -640,7 +640,7 @@ it('con el proveedor activo, el detalle ofrece "Inactivar"', async () => {
     cmp.seleccionarProveedor(cmp.proveedores[0]);
     fixture.detectChanges();
     const botones = Array.from(
-      fixture.nativeElement.querySelectorAll('.proveedor-acciones button')
+      fixture.nativeElement.querySelectorAll('.detalle-acciones button')
     ) as HTMLElement[];
     expect(botones.length).toBe(1);
     expect(botones[0].textContent).toContain('Inactivar');
@@ -655,7 +655,7 @@ it('con el proveedor activo, el detalle ofrece "Inactivar"', async () => {
     cmp.seleccionarProveedor(cmp.proveedores[0]);
     fixture.detectChanges();
     const botones = Array.from(
-      fixture.nativeElement.querySelectorAll('.proveedor-acciones button')
+      fixture.nativeElement.querySelectorAll('.detalle-acciones button')
     ) as HTMLElement[];
     expect(botones.length).toBe(1);
     expect(botones[0].textContent).toContain('Reactivar');

@@ -728,21 +728,12 @@
   gap: 4px;
 }
 
-.eliminar-bloque {
-  margin-top: 8px;
-  padding-top: 16px;
-  border-top: 1px solid #f1f5f9;
-}
-
-.btn-eliminar {
-  background: #fee2e2;
-  color: #991b1b;
-  border: none;
-  padding: 10px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  &:hover { background: #fecaca; }
-}
+// ── EL PIE DEL PANEL ────────────────────────────────────────
+//
+// `.eliminar-bloque` y `.btn-eliminar` se fueron de acá: el pie del detalle es
+// `.detalle-acciones` de `_detalle.scss` (badge + botón gris), el mismo que usa
+// Personas > Proveedores. Un botón ROJO de pantalla completa para una acción
+// reversible exagera el riesgo, y de paso el de inactivar empleado y el de
+// inactivar proveedor parecían dos cosas distintas cuando hacen lo mismo.
 
 /* Estado "guardando" en los_INLINE edits del detalle */
