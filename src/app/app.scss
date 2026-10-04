@@ -1,0 +1,66 @@
+// ============================================================
+// AVISO DE "HAY UNA VERSIÓN NUEVA"
+// ------------------------------------------------------------
+// Va en `app.scss` y no en el `<style>` inline de `app.html` a propósito: los
+// estilos de un componente van en su SCSS. Los inline funcionan para los
+// elementos de ESE template, pero mezcla el código en tres lugares y no los
+// encuentra nadie.
+//
+// `position: fixed` y no un bloque en el flujo: el aviso tiene que flotar sobre
+// la pantalla sin empujar el contenido, porque el usuario va a seguir trabajando
+// mientras lo decide.
+//
+// Va arriba de todo (`z-index` alto) porque al pie de la pantalla lo tapa el
+// teclado del celular justo cuando se quiere tocar "Actualizar".
+//
+// Uso: se muestra con `*ngIf="hayVersionNueva"` desde `app.ts`.
+
+.aviso-actualizacion {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: #1e293b;
+  color: white;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.aviso-texto {
+  flex: 1;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.btn-actualizar {
+  padding: 8px 14px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover { background: #2563eb; }
+}
+
+// El ✕ de "ahora no". Chico y gris: es la opción secundaria y no tiene que
+// competir con "Actualizar".
+.btn-cerrar-aviso {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+
+  &:hover { color: white; background: #334155; }
+}

@@ -36,7 +36,25 @@
   <router-outlet />
 </main>
 
-<footer class="version-footer">v1.0.0</footer>
+<!--
+  AVISO DE VERSIÓN NUEVA
+
+  Aparece SOLO cuando el service worker ya descargó una versión nueva y la está
+  esperando. Sirve para que no haya que adivinar que hay que cerrar la app del
+  todo para que se actualice.
+
+  Va antes del `<footer>` y NO dentro de `<main>`: tiene que estar sobre el
+  contenido, no ocupar lugar en el flujo, porque el usuario va a seguir usando
+  la pantalla de abajo mientras lo decide.
+-->
+<div class="aviso-actualizacion" *ngIf="hayVersionNueva" role="status" aria-live="polite">
+  <span class="aviso-texto">Hay una versión nueva disponible</span>
+  <button class="btn-actualizar" (click)="actualizarAhora()">Actualizar</button>
+  <button class="btn-cerrar-aviso" (click)="despuesActualizar()" title="Ahora no"
+          aria-label="Ahora no">✕</button>
+</div>
+
+<footer class="version-footer">v1.0.3</footer>
 
 <style>
   /* OJO: los estilos globales (body, font-family, reset) van en src/styles.scss.
