@@ -54,7 +54,7 @@
           aria-label="Ahora no">✕</button>
 </div>
 
-<footer class="version-footer">v1.0.3</footer>
+<footer class="version-footer">v1.0.4</footer>
 
 <style>
   /* OJO: los estilos globales (body, font-family, reset) van en src/styles.scss.
@@ -132,7 +132,15 @@
   }
   .btn-logout:hover { color: white; background: #334155; }
 
-  .main-content { min-height: calc(100vh - 56px); }
+  /* `var(--chrome-app)` y no `56px`: hay que descontar del alto de la ventana todo
+     lo que NO es contenido, no solo el navbar. Con `100vh - 56` el main crecia
+     hasta el pie de la ventana y el `<footer>` de mas abajo quedaba SIEMPRE
+     fuera: la pagina scrolleaba 40px en todas las pantallas. En Agenda eso
+     terminaba en dos scrollbars (el de la grilla y el de la pagina) y no se
+     sabia con cual se estaba scrolleando.
+
+     El detalle de que es 112 y no 96 esta en styles.scss, junto a la variable. */
+  .main-content { min-height: calc(100vh - var(--chrome-app)); }
 
   @media (max-width: 640px) {
     .navbar { padding: 0 12px; }

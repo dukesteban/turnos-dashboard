@@ -9,6 +9,26 @@
    defecto del navegador (Times).
    ============================================================ */
 
+/* Chrome fijo de la app: lo que NO es contenido y por lo tanto no se scrollea.
+ *
+ * Vive acá y no repetido en cada pantalla porque hay dos lugares que lo
+ * necesitan para lo mismo (`.main-content` en app.html y `.agenda-page` en
+ * agenda.scss) y si se desincronizan aparece el síntoma clásico: scrollbar de
+ * página en una pantalla que no debería scrollear.
+ *
+ *   56  navbar
+ *   40  .version-footer (12 de padding + el renglón de texto)
+ *   16  el margin default del body (8 arriba + 8 abajo)
+ *
+ * OJO con el 16: no hay `margin: 0` en el body, sigue el del navegador. Ponerlo
+ * en cero haría la app más alta y más prolija (la navbar dejaría de tener el
+ * margen blanco a los costados), pero cambia TODAS las pantallas, así que es un
+ * cambio aparte. Acá se descuenta y listo.
+ */
+:root {
+  --chrome-app: 112px;
+}
+
 /* `box-sizing: border-box` en TODO.
    Sin esto, un `width: 100%` con padding y borde mide 100% MÁS el
    padding y el borde, y el elemento se sale de su contenedor. Pasaba en el
