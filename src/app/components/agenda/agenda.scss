@@ -111,6 +111,46 @@
   color: #1e293b;
 }
 
+/* -- IR A UNA FECHA ---------------------------------------------------
+ *
+ * El botón de calendario es un `<input type="date">` transparente PUESTO
+ * ENCIMA de un `<span>` que parece un `.btn-nav` más.
+ *
+ * Por qué un input y no un `<button>` con `showPicker()`: `showPicker()` no
+ * existe en varios navegadores (y en los que existe tira error si no hay un
+ * gesto real del usuario). Con el input transparente lo abre el navegador solo
+ * y no hay nada que pueda fallar.
+ *
+ * `opacity: 0` y NO `display: none` ni `visibility: hidden`: con cualquiera de
+ * esos dos el input no existe para el navegador y el calendario no abre.
+ */
+.ir-a-fecha {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* El input va arriba del `<span>`, así que el click nunca llega al botón falso.
+   `pointer-events: none` lo deja explícito y evita surprises si algún día se
+   reordena el DOM. */
+.btn-calendario {
+  pointer-events: none;
+  font-size: 1rem;
+}
+
+.input-calendario {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
 // CONTENEDOR
 /* El contenedor scrollea en LOS DOS ejes, y eso es lo que permite el header fijo.
  *

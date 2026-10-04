@@ -432,3 +432,80 @@ describe('Agenda - la semana: cada dia con SU gente y SU ancho', () => {
     expect(cmp.esDiaCerrado(new Date(2026, 11, 8))).toBe(false);
   });
 });
+
+describe('Agenda - saltar a una fecha', () => {
+  // Un `montar()` POR TEST, no uno compartido en el `describe`: TestBed no se
+  // puede reconfigurar una vez que se instancia, y con un `montar()` en el
+  // describe el segundo test revienta con "Cannot configure the test module".
+  // Esto no necesita `ngOnInit`: `irAFecha` solo toca `fechaActual`, y lo que se
+  // usa aca (jornadas de la semana, turnos) se setea a mano.
+  const nuevo = () => montar().cmp;
+
+  // REGRESION DE ZONA HORARIA: `new Date('2026-08-15')` se parsea como MEDIANOCHE
+  // UTC, que en cualquier timezone negativo (Argentina, UTC-3) es el 14/08 a las
+  // 21:00 local. Un dia antes, siempre, y sin que nada falle.
+  //
+  // Por eso `irAFecha` descompone el string a mano. Este test mira los
+  // componentes de la fecha, no el ISO: comparar el ISO pasaria en un runner en
+  // UTC y solo fallaria donde esta de verdad el problema.
+  it('cae en el dia exacto, sin corrimiento por zona horaria', () => {
+    const cmp = nuevo();
+    cmp.irAFecha('2026-08-15');
+
+    expect(cmp.fechaActual.getFullYear()).toBe(2026);
+    expect(cmp.fechaActual.getMonth()).toBe(7);   // agosto
+    expect(cmp.fechaActual.getDate()).toBe(15);
+  });
+
+  it('un input vaciado o con basura no mueve la fecha', () => {
+    const cmp = nuevo();
+    cmp.irAFecha('2026-08-15');
+
+    // El `input type="date"` entrega '' si el usuario borra el valor a mano.
+    cmp.irAFecha('');
+    expect(cmp.fechaActual.getDate()).toBe(15);
+
+    cmp.irAFecha('no-es-una-fecha');
+    expect(cmp.fechaActual.getDate()).toBe(15);
+
+    cmp.irAFecha('2026-13-45');   // mes 13 no existe
+    expect(cmp.fechaActual.getDate()).toBe(15);
+  });
+
+  it('en la vista Semana aterriza en la semana que contiene esa fecha', () => {
+    const cmp = nuevo();
+    cmp.vista = 'semana';
+    cmp.diaInicio = 1;   // lunes
+    cmp.diaFin = 6;       // sabado
+    // El 19/08/2026 es miercoles: la semana va del lunes 17 al sabado 22.
+    cmp.irAFecha('2026-08-19');
+
+    const fechas = cmp.diasDeSemana.map((d: Date) => d.toLocaleDateString('en-CA'));
+    expect(fechas[0]).toBe('2026-08-17');
+    expect(fechas[fechas.length - 1]).toBe('2026-08-22');
+    expect(fechas).toContain('2026-08-19');
+  });
+
+  it('los turnos que se ven se recalculan solos al cambiar la fecha', () => {
+    const cmp = nuevo();
+    // `turnosDia` filtra `this.turnos` en memoria por `fechaISO`, asi que cambiar
+    // la fecha ya cambia que turnos se ven, sin volver a pedir nada al servidor.
+    // Esto fija ese contrato: es lo que hace que `navegarDia` y `irAFecha`
+    //_funciones_ de un solo assignment, sin recargas.
+    cmp.turnos = [
+      turno({ fecha: '2026-08-15', hora_inicio: '10:00:00' }),
+      turno({ fecha: '2026-08-15', hora_inicio: '14:00:00' }),
+      turno({ fecha: '2026-08-20', hora_inicio: '11:00:00' }),
+      turno({ fecha: '2026-08-15', hora_inicio: '09:00:00', estado: 'cancelado' }),
+    ];
+
+    cmp.irAFecha('2026-08-15');
+    expect(cmp.turnosDia.length).toBe(2);   // el cancelado no cuenta
+
+    cmp.irAFecha('2026-08-20');
+    expect(cmp.turnosDia.length).toBe(1);
+
+    cmp.irAFecha('2026-08-17');
+    expect(cmp.turnosDia.length).toBe(0);
+  });
+});

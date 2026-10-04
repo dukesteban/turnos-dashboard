@@ -620,6 +620,34 @@ claseBloque(turno: any, mini: boolean): string {
 
   irHoy() { this.fechaActual = new Date(); }
 
+  /**
+   * Salta a la fecha elegida en el calendario.
+   *
+   * OJO con armar la fecha: `new Date('2026-10-04')` se interpreta como
+   * MEDIANOCHE UTC, que en Argentina (UTC-3) es el 03/10 a las 21:00 local. Un
+   * día antes, siempre. Por eso se descompone el string a mano.
+   *
+   * En la vista Semana no hay que hacer nada más: `diasDeSemana` ya normaliza
+   * al lunes de esa semana.
+   *
+   * Tampoco recarga los turnos: `cargarTurnos()` los trae TODOS y `turnosDia`
+   * filtra en memoria, que es justo por lo que `navegarDia` no recarga nada.
+   */
+  irAFecha(iso: string) {
+    // El input se vacía si el usuario borra la fecha a mano: `''` no es una fecha.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return;
+    const [y, m, d] = iso.split('-').map(p => parseInt(p, 10));
+
+    // Defensa pura: el input del navegador solo entrega fechas validas. Pero
+    // `new Date(2026, 12, 45)` NO tira error, se corre solo a Feb 14 y uno
+    // termina en un dia que no existe en el calendario, asi que mejor cortar
+    // aca. (No se valida el largo contra el mes: Feb 31 todavia pasaria, y para
+    // eso alcanza con que el navegador no lo deje escribir.)
+    if (m < 1 || m > 12 || d < 1 || d > 31) return;
+
+    this.fechaActual = new Date(y, m - 1, d);
+  }
+
   formatearFecha(fecha: Date): string {
     const dia = this.diasCompletos[fecha.getDay()];
     const d = String(fecha.getDate()).padStart(2, '0');
