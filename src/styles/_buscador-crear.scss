@@ -94,11 +94,28 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+
+  // `nowrap`, NO `wrap`. Con wrap, en un celular angosto el "Cancelar" se iba
+  // a la línea de abajo y quedaba solo, Descolgado del "Crear" al que
+  // pertenece: dos botones de la MISMA acción partidos en dos filas, y la
+  // línea de abajo parecía un error de maquetado.
+  //
+  // Con nowrap, el que cede lugar es el input: ver el `min-width: 0` de abajo.
+  flex-wrap: nowrap;
 
   input {
     flex: 1;
-    min-width: 140px;
+
+    // OBLIGATORIO con `nowrap`: un flex item no baja de su ancho intrínseco, y
+    // el de un input son ~200px (el `size` por defecto del HTML). Con
+    // `min-width: 140px` los tres no entran en 360px y el navegador igual
+    // rompe la línea.
+    //
+    // El piso es para que el input siga siendo escribible en un celular MUY
+    // angosto. Los dos botones miden ~136px y el padding del popup se lleva 72,
+    // asi que con 60 el conjunto entra hasta en un popup de ~285px.
+    min-width: 60px;
+
     padding: 8px 12px;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
@@ -106,5 +123,12 @@
     font-family: inherit;
 
     &:focus { outline: none; border-color: #3b82f6; }
+  }
+
+  // Los dos botones no se encogen ni se parten: son de la misma acción y tiene
+  // que leerse "Crear | Cancelar" junto.
+  button {
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 }

@@ -691,4 +691,69 @@ describe('Dashboard — buscador de cliente del modal de Nuevo turno', () => {
     expect(popup.querySelectorAll('.seleccionado-ok').length).toBe(1);
     expect(cmp.mostrarFormNuevoCliente).toBe(false);
   });
+
+  // BUG: el estado del form de crear se Filtraba entre aperturas del modal.
+  //
+  // `abrirModalNuevoTurno()` limpiaba `busquedaCliente` pero NO
+  // `mostrarFormNuevoCliente` ni `nombreNuevoCliente`. O sea: se abria, se
+  // buscaba un nombre inexistente, se tocaba "Crear", se escribia el nombre, se
+  // cerraba el modal sin guardar, y al volver a abrir la cajita de crear ya
+  // estaba ABIERTA con el texto del intento anterior.
+  //
+  // Pasaba desapercibido porque `busquedaCliente = ''` ocultaba el bloque (su
+  // `*ngIf` exige texto). Se veía recien al volver a escribir algo que no
+  // matcheaba: ahi la cajita aparecia sola, sin pasar por el boton "Crear".
+  it('al reabrir, el form de crear NO queda abierto con el intento anterior', async () => {
+    const { cmp, fixture } = await listo();
+
+    // Se llega al estado problematico por el DOM REAL, no asignando las
+    // propiedades: `[(ngModel)]` escribe el input en un microtask, y cambiar el
+    // valor del componente con el form ya renderizado tira NG0100.
+    tocar(fixture, 'Cliente Inexistente');
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.btn-crear-inline') as HTMLElement).click();
+    fixture.detectChanges();
+
+    const inputNombre = fixture.nativeElement.querySelector('.form-crear-inline input');
+    inputNombre.value = 'Cliente Inexistente';
+    inputNombre.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(cmp.mostrarFormNuevoCliente).toBe(true);
+    expect(cmp.nombreNuevoCliente).toBe('Cliente Inexistente');
+
+    // Salir del modal sin guardar...
+    cmp.cerrarModalNuevoTurno();
+    fixture.detectChanges();
+    expect(cmp.mostrarModalNuevoTurno).toBe(false);
+
+    // ...y volver a abrirlo tiene que arrancar limpio.
+    cmp.abrirModalNuevoTurno();
+    fixture.detectChanges();
+
+    expect(cmp.mostrarFormNuevoCliente).toBe(false);
+    expect(cmp.nombreNuevoCliente).toBe('');
+    expect(cmp.busquedaCliente).toBe('');
+
+    // Y al escribir una busqueda que no matchea, aparece el BOTON "Crear", no
+    // la cajita ya abierta.
+    tocar(fixture, 'Otro Inexistente');
+    const popup = fixture.nativeElement.querySelector('.popup-overlay');
+    expect(popup.querySelectorAll('.btn-crear-inline').length).toBe(1);
+    expect(popup.querySelectorAll('.form-crear-inline').length).toBe(0);
+  });
+
+  // El mismo criterio que Caja, que SI lo limpia en `abrirFormCompra`.
+  it('cerrar el modal y reabrirlo no deja el cliente elegido puesto', async () => {
+    const { cmp, fixture } = await listo();
+    cmp.seleccionarClienteNuevo({ id: 1, nombre: 'Daniel Prueba', telefonos: [] });
+    fixture.detectChanges();
+    expect(cmp.clienteSeleccionadoNuevo).toBeTruthy();
+
+    cmp.cerrarModalNuevoTurno();
+    fixture.detectChanges();
+    cmp.abrirModalNuevoTurno();
+    fixture.detectChanges();
+
+    expect(cmp.clienteSeleccionadoNuevo).toBeNull();
+  });
 });

@@ -557,6 +557,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.mostrarModalNuevoTurno = true;
     this.clienteSeleccionadoNuevo = null;
     this.busquedaCliente = '';
+    // El formulario de "crear cliente" también se limpia al ABRIR, no solo al
+    // guardar o al cancelar.
+    //
+    // Sin esto: se abre el modal, se busca un nombre que no existe, se toca
+    // "Crear", se escribe el nombre y se cierra el modal sin guardar. Al
+    // volver a abrir, `mostrarFormNuevoCliente` seguía en true, así que la
+    // cajita de crear aparecía YA ABIERTA al primer error de búsqueda, con el
+    // texto del intento anterior adentro. Para usarla había que apretar
+    // "Cancelar" primero.
+    //
+    // Ojo: `busquedaCliente = ''` la tapaba, y por eso el bug pasaba
+    // desapercibido: se veía solo al volver a escribir algo que no matchea.
+    this.mostrarFormNuevoCliente = false;
+    this.nombreNuevoCliente = '';
     this.nuevoTurnoFecha = '';
     this.nuevoTurnoHora = '';
     this.nuevoTurnoServicioId = null;
