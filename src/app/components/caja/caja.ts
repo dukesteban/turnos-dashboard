@@ -328,18 +328,31 @@ export class CajaComponent implements OnInit {
   }
 
   /**
-   * "DD/MM/YYYY" a partir de un "AAAA-MM-DD" de la base.
+   * "DD/MM" a partir de un "AAAA-MM-DD" de la base. SIN el año.
    *
-   * Las tablas de Caja mostraban la fecha cruda ("2026-10-01") mientras el
-   * resto de la app muestra "01/10/2026". Se hace a mano y no con el pipe
-   * `date` porque el pipe usa la zona horaria del navegador: con una fecha
-   * "2026-10-01" devuelve 30/09 en un timezone negativo.
+   * Igual que `formatearFechaSinAnio` del Dashboard, y a pedido del usuario. Dos
+   * razones:
+   *
+   *   · Son las mismas tablas de la misma app: que en Turnos se vea "07/10" y en
+   *     Caja "07/10/2026" hace que cada pantalla parezca de otra aplicación.
+   *   · El año ya está a la vista. Arriba dice "Octubre 2026", y toda la tabla
+   *     está dentro de ese período, así que el año no informa nada: solo ensancha
+   *     la columna y empuja los números de la derecha.
+   *
+   * Se hace a mano y no con el pipe `date` porque el pipe usa la zona horaria del
+   * navegador: con una fecha "2026-10-01" devuelve 30/09 en un timezone negativo.
+   * El día corrido es el peor tipo de bug: no tira error, solo muestra mal.
    */
   formatearFechaCorta(iso: string): string {
     if (!iso) return '';
-    const [y, m, d] = String(iso).split('-');
-    if (!y || !m || !d) return iso;
-    return `${d}/${m}/${y}`;
+    // Regex y no `split('-')`: un texto que tenga guiones pero no sea una fecha
+    // ("no-es-fecha") con `split` se desarma en tres partes y sale "fecha/es" en
+    // la celda, que es peor que no mostrar nada. Acá, si no matchea el formato
+    // exacto de `AAAA-MM-DD`, se devuelve lo que vino y la celda lo muestra tal
+    // cual.
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso).trim());
+    if (!m) return iso;
+    return `${m[3]}/${m[2]}`;
   }
 
   // ── ACORDEONES ───────────────────────────────────────────────
@@ -354,19 +367,32 @@ export class CajaComponent implements OnInit {
   // `*ngIf`: meterlos en un mapa por nombre agregaría una capa de indirección
   // para no ganar nada.
   //
-  // "Todos los empleados" y "Todos los proveedores" arrancan CERRADOS y están al
-  // FINAL de la pestaña: es la vista larga, para comparar, no la que se mira
-  // primero. Arriba están los tres cuadros del que elegiste.
+  // LAS DOS PESTAÑAS ARRANCAN IGUAL, y es a propósito. Las dos tienen la misma
+  // forma:
   //
-  // `acordeonDetalle` y `acordeonPagos` arrancan ABIERTOS porque son el detalle
-  // de a quién estás mirando, que es lo que se vino a ver.
+  //   1. el detalle de lo que se elige arriba   → ABIERTO
+  //   2. los pagos/abonos que le hiciste         → ABIERTO
+  //   3. todos, para comparar                    → CERRADO, y AL FINAL
+  //
+  // Los dos primeros abren porque son el detalle de a quién estás mirando, que es
+  // lo que se vino a ver. El tercero cierra y va al final porque es la vista
+  // larga, de apoyo, no la que hay que leer primero.
+  //
+  // Antes los de Gastos abrían TODOS cerrados y los de Empleados los dos primeros
+  // abiertos. No es que uno estuviera mal: es que dos pantallas que se leen igual
+  // no pueden abrir distinto. Saltar de una a otra y tener que abrir a mano lo
+  // mismo es la clase de fricción que hace que una pantalla parezca más
+  // complicada de lo que es.
+  //
+  // OJO: cambiar estos flags NO reinicia la pantalla. Un acordeón que se abrió se
+  // queda abierto al cambiar de período, así que el "arranca abierto" es solo del
+  // primer arranque.
   acordeonDetalle = true;
   acordeonPagos = true;
   acordeonTotales = false;
   acordeonSaldo = false;
-  acordeonPagosProv = false;
-  acordeonCompras = false;
-
+  acordeonPagosProv = true;
+  acordeonCompras = true;
   // ── "TODOS" EN EL COMBO ──────────────────────────────────────
   //
   // La PRIMERA opción del selector, y el estado en el que arranca la pantalla.
@@ -397,12 +423,17 @@ export class CajaComponent implements OnInit {
    * hoy. Si se abriera con la fecha de un mes viejo, el pago caería en el mes
    * viejo y la tarjeta "Gastos" del período que estás mirando no se movería, que
    * es justo lo que se viene a hacer.
+   *
+   * El proveedor preseleccionado sale del selector de ARRIBA, no del primero de la
+   * lista. Mismo criterio que `abrirFormPago`: el botón está dentro del detalle
+   * de ESE proveedor, así que el formulario es de ESE. Con el combo en "Todos"
+   * no hay nadie elegido y entra el primero activo.
    */
   abrirFormPagoProveedor() {
-    const hoy = new Date().toLocaleDateString('en-CA');
+    const elegido = this.proveedorParaPagoPorDefecto();
     this.nuevoPagoProveedor = {
-      proveedor_id: this.proveedoresActivos[0]?.id ?? null,
-      fecha: hoy,
+      proveedor_id: elegido ? elegido.id : null,
+      fecha: this.hoyISO(),
       monto: null,
       metodo: 'transferencia',
       notas: '',
@@ -1068,10 +1099,109 @@ export class CajaComponent implements OnInit {
   // abre, corrige a medias, cierra sin guardar y vuelve a abrir, tiene que ver
   // el formulario limpio y no el reclamo del intento anterior.
 
+
+  /**
+   * El día de hoy en formato `YYYY-MM-DD`, que es el que espera `<input type="date">`.
+   *
+   * Un método y no la expresión suelta en los dos popups: se va a necesitar en
+   * todos los formularios de alta (pago, abono, compra) y copy-pastear
+   * `toLocaleDateString('en-CA')` tres veces es la forma segura de que una de las
+   * tres quede con un formato distinto.
+   *
+   * `en-CA` y no `es-AR` a propósito: el pipe de fecha de `es-AR` devuelve
+   * `DD/MM/YYYY` y `<input type="date">` no lo acepta. Por eso el `fechaDesdeISO`
+   * del Dashboard hace la operación inversa.
+   */
+  hoyISO(): string {
+    return new Date().toLocaleDateString('en-CA');
+  }
+
+  /**
+   * Abrir el popup de pago a EMPLEADO.
+   *
+   * Viene preseleccionado el empleado del selector de arriba, y no un "Elegí..."
+   * vacío. La razón es que el botón "Registrar pago" está DENTRO del detalle de
+   * ese empleado: si leés "Pagos que le hiciste — Juan Pérez" y tocás el botón,
+   * el formulario que se abre es de Juan Pérez. Pedir de nuevo quién es es
+   * trabajo para confirmar lo que ya se sabe, y lo peor: si elegís otro por error,
+   * el pago queda cargado al que no era sin que nada avise.
+   *
+   * En "Todos" no hay nadie elegido, así que el combo arranca con el primero de
+   * la lista. Es un default, no una decisión: el popup igual muestra el nombre.
+   */
   abrirFormPago() {
     this.mensajeErrorPagos = '';
+    this.nuevoPago = {
+      empleado_id: this.empleadoParaPagoPorDefecto(),
+      fecha: this.hoyISO(),
+      monto: null,
+      metodo: 'efectivo',
+      notas: '',
+    };
     this.mostrarFormPago = true;
     this.cdr.detectChanges();
+  }
+
+  /**
+   * A quién va preseleccionado el combo del popup de pago a empleado.
+   *
+   * El empleado del selector de la pantalla si hay uno elegido; si el selector
+   * está en "Todos" no hay nadie elegido, y entonces el primero que pueda recibir
+   * un pago. Nunca `null` si hay empleados, para que el popup no abra con un
+   * "Elegí..." que ya se sabe cuál es.
+   */
+  private empleadoParaPagoPorDefecto(): number | null {
+    if (!this.mostrarTodos) {
+      const fila = this.filaEmpleadoActual;
+      if (fila) return fila.empleado_id;
+      if (this.empleadoActual !== null) return this.empleadoActual;
+    }
+    return this.empleadosParaPago[0]?.id ?? null;
+  }
+
+  /**
+   * A quién va preseleccionado el buscador del popup de COMPRA.
+   *
+   * El mismo criterio que en el pago: si arriba hay un proveedor elegido, el
+   * formulario de "Registrar compra" lo trae puesto.
+   *
+   * Devuelve el objeto completo y no el id porque el buscador muestra
+   * `.seleccionado-ok` con `proveedorSeleccionado.nombre` y no con el id: si solo
+   * pasara el id, la pantalla "no hay proveedor elegido" con uno ya asignado,
+   * que es exactamente el bug que el comentario de `abrirFormCompra` describe.
+   */
+  private proveedorParaCompraPorDefecto(): any {
+    if (!this.mostrarTodos) {
+      const fila = this.filaProveedorActual;
+      if (fila) {
+        return this.proveedores.find((p: any) => p.id === fila.proveedor_id)
+          || { id: fila.proveedor_id, nombre: fila.nombre, activo: true };
+      }
+      if (this.proveedorActual !== null) {
+        const p = this.proveedores.find((x: any) => x.id === this.proveedorActual);
+        if (p) return p;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * El proveedor del popup de ABONO, con el mismo criterio que el de compra.
+   *
+   * Se reusa `proveedorParaCompraPorDefecto` y no se escribe un segundo criterio:
+   * los dos popups abren dentro del detalle del proveedor elegido arriba, así que
+   * si un día uno se cambia y el otro no, los dos formularios de la misma pantalla
+   * empiezan a discrepar sin que nadie lo note.
+   *
+   * Solo se diferencia en el fallback cuando NO hay nadie elegido (combo en
+   * "Todos"): el de compra deja el buscador vacío para no imponer un proveedor,
+   * y el de abono pone el primero activo, porque sin proveedor no se puede
+   * guardar y el popup debe quedar listo para usar.
+   */
+  private proveedorParaPagoPorDefecto(): any {
+    return this.proveedorParaCompraPorDefecto()
+      || this.proveedoresActivos[0]
+      || null;
   }
 
   cerrarFormPago() {
@@ -1104,7 +1234,10 @@ export class CajaComponent implements OnInit {
     this.proveedorSeleccionado = c
       ? this.proveedores.find((p: any) => p.id === c.proveedor_id)
         || { id: c.proveedor_id, nombre: c.proveedores?.nombre || `#${c.proveedor_id}`, activo: true }
-      : null;
+      // Sin compra en edición entra el proveedor del selector de arriba, si hay uno
+      // elegido. Es el mismo criterio que el popup de pago: el botón está dentro
+      // del detalle de ESE proveedor, así que el formulario es de ESE.
+      : this.proveedorParaCompraPorDefecto();
     this.mostrarFormCompra = true;
     this.cdr.detectChanges();
   }

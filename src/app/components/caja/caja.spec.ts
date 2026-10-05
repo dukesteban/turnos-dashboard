@@ -2277,3 +2277,183 @@ describe('Caja — los cuadros no muestran el signo negativo', () => {
     }
   });
 });
+
+describe('Caja - los popups y la coherencia entre las dos pestanas', () => {
+  const listo = async (over: Record<string, any> = {}) => {
+    const r = montar(over);
+    await r.cmp.cargarDatos();
+    return r;
+  };
+
+
+  it('los dos primeros acordeones arrancan ABIEERTOS en las DOS pestañas', () => {
+    // Coherencia entre Empleados y Gastos. Antes Gastos abría los tres cerrados
+    // y Empleados los dos primeros abiertos: dos pantallas que se leen igual
+    // arrancaban distinto, y hadia que abrir a mano lo mismo en una de las dos.
+    const { cmp } = montar();
+    cmp.cambiarTab('empleados');
+    expect(cmp.acordeonDetalle).toBe(true);
+    expect(cmp.acordeonPagos).toBe(true);
+    expect(cmp.acordeonTotales).toBe(false);
+
+    cmp.cambiarTab('gastos');
+    expect(cmp.acordeonPagosProv).toBe(true);
+    expect(cmp.acordeonCompras).toBe(true);
+    expect(cmp.acordeonSaldo).toBe(false);
+  });
+
+  it('el popup de pago a empleado abre con el del selector, no vacío', async () => {
+    // El botón está DENTRO del detalle de ese empleado: si abrís el popup tiene
+    // que ser de él. Antes venía "Elegí..." con el empleado ya elegido arriba.
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([
+        SUGERIDO(1, 'Juan Pérez', 25000, 3),
+        SUGERIDO(2, 'Esteban', 12000, 2),
+      ]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+
+    cmp.elegirEmpleado(2);
+    cmp.abrirFormPago();
+    expect(cmp.nuevoPago.empleado_id).toBe(2);
+
+    // Y cambia con el selector: no queda pegado el primero.
+    cmp.cerrarFormPago();
+    cmp.elegirEmpleado(1);
+    cmp.abrirFormPago();
+    expect(cmp.nuevoPago.empleado_id).toBe(1);
+  });
+
+  it('con el combo en "Todos" el popup igual queda con alguien puesto', async () => {
+    // Nadie está elegido, así que va el primero que pueda recibir un pago. Un
+    // popup que abre con "Elegí..." y no se puede guardar es peor que uno que
+    // abre con un default y se ve cuál es.
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([
+        SUGERIDO(1, 'Juan Pérez', 25000, 3),
+        SUGERIDO(2, 'Esteban', 12000, 2),
+      ]),
+    });
+    expect(cmp.mostrarTodos).toBe(true);
+    cmp.abrirFormPago();
+    expect(cmp.nuevoPago.empleado_id).not.toBeNull();
+  });
+
+  it('el popup de pago a proveedor abre con el proveedor del selector', async () => {
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([
+        { id: 1, nombre: 'Quimicas del Sur', activo: true },
+        { id: 2, nombre: 'Otro', activo: true },
+      ]),
+      getCompras: () => Promise.resolve([
+        COMPRA(1, 1, 'Quimicas del Sur', 12000),
+        COMPRA(2, 2, 'Otro', 3000),
+      ]),
+      getPagosProveedor: () => Promise.resolve([
+        { id: 1, proveedor_id: 2, fecha: '2026-10-08', monto: 1000, metodo: 'transferencia', proveedores: { nombre: 'Otro', activo: true } },
+      ]),
+    });
+
+    cmp.elegirProveedor(1);
+    cmp.abrirFormPagoProveedor();
+    expect(cmp.nuevoPagoProveedor.proveedor_id).toBe(1);
+
+    cmp.cerrarFormPagoProveedor();
+    cmp.elegirProveedor(2);
+    cmp.abrirFormPagoProveedor();
+    expect(cmp.nuevoPagoProveedor.proveedor_id).toBe(2);
+  });
+
+  it('el popup de COMPRA abre con el proveedor del selector puesto', async () => {
+    // El buscador muestra `proveedorSeleccionado.nombre`, no un id: si solo
+    // pasara el id, la pantalla diría "no hay proveedor elegido" con uno ya
+    // asignado, que es el bug que el comentario de `abrirFormCompra` describe.
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([
+        { id: 1, nombre: 'Quimicas del Sur', activo: true },
+        { id: 2, nombre: 'Otro', activo: true },
+      ]),
+      getCompras: () => Promise.resolve([
+        COMPRA(1, 1, 'Quimicas del Sur', 12000),
+        COMPRA(2, 2, 'Otro', 3000),
+      ]),
+    });
+
+    cmp.elegirProveedor(1);
+    cmp.abrirFormCompra();
+    expect(cmp.proveedorSeleccionado).toBeTruthy();
+    expect(cmp.proveedorSeleccionado.nombre).toBe('Quimicas del Sur');
+    expect(cmp.busquedaProveedorPopup).toBe('');
+
+    cmp.cerrarFormCompra();
+    cmp.elegirProveedor(2);
+    cmp.abrirFormCompra();
+    expect(cmp.proveedorSeleccionado.nombre).toBe('Otro');
+  });
+
+  it('editar una compra manda el proveedor DE ESA compra, no el del selector', async () => {
+    // El default es para el alta. Si se está editando una compra concreta, lo
+    // que manda es la de esa fila, aunque el selector apunte a otro proveedor.
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([
+        { id: 1, nombre: 'Quimicas del Sur', activo: true },
+        { id: 2, nombre: 'Otro', activo: true },
+      ]),
+      getCompras: () => Promise.resolve([
+        COMPRA(1, 1, 'Quimicas del Sur', 12000),
+        COMPRA(2, 2, 'Otro', 3000),
+      ]),
+    });
+
+    cmp.elegirProveedor(1);
+    cmp.abrirFormCompra({
+      id: 2, proveedor_id: 2, fecha: '2026-10-08',
+      concepto: 'Shampoo', cantidad: 2, monto: 3000, notas: null,
+      proveedores: { nombre: 'Otro', activo: true },
+    });
+    expect(cmp.proveedorSeleccionado.nombre).toBe('Otro');
+  });
+
+  it('los popups abren con la fecha de HOY, no con la del período', async () => {
+    // Un pago es un movimiento de hoy. Si el popup abriera con la fecha de un mes
+    // viejo, el pago caería en el mes viejo y la tarjeta del período que estás
+    // mirando no se movería, que es justo lo que se vino a hacer.
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'A', 10000, 1)]),
+      getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Quimicas del Sur', activo: true }]),
+      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Quimicas del Sur', 12000)]),
+    });
+    const hoy = new Date().toLocaleDateString('en-CA');
+
+    cmp.elegirEmpleado(1);
+    cmp.abrirFormPago();
+    expect(cmp.nuevoPago.fecha).toBe(hoy);
+
+    cmp.elegirProveedor(1);
+    cmp.abrirFormPagoProveedor();
+    expect(cmp.nuevoPagoProveedor.fecha).toBe(hoy);
+  });
+
+  it('las fechas de las tablas van SIN año, igual que en Dashboard', () => {
+    // El Dashboard muestra "07/10" con su `formatearFechaSinAnio`. Caja
+    // mostraba "07/10/2026" y quedaban dos formatos para la misma columna en dos
+    // pantallas de la misma app. El año ya está arriba: dice "Octubre 2026".
+    const { cmp } = montar();
+    expect(cmp.formatearFechaCorta('2026-10-07')).toBe('07/10');
+    expect(cmp.formatearFechaCorta('2026-01-01')).toBe('01/01');
+    expect(cmp.formatearFechaCorta('2025-12-31')).toBe('31/12');
+  });
+
+  it('un formato que no es fecha se devuelve tal cual, sin romper la tabla', () => {
+    // Si la base devolviera otra cosa, la celda tiene que mostrar lo que vino en
+    // vez de "undefined/undefined": un texto feo es menos grave que una celda
+    // que muestra NaN.
+    const { cmp } = montar();
+    expect(cmp.formatearFechaCorta('')).toBe('');
+    expect(cmp.formatearFechaCorta('no-es-fecha')).toBe('no-es-fecha');
+    expect(cmp.formatearFechaCorta('2026-10')).toBe('2026-10');
+    // El caso que motiva el regex: con `split('-')` un texto con guiones se
+    // desarmaba en tres partes y la celda llegaba a mostrar `fecha/es`.
+    expect(cmp.formatearFechaCorta('2026-10-07T08:00')).toBe('07/10');
+  });
+});

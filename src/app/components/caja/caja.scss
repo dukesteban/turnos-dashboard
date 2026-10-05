@@ -658,3 +658,75 @@
   font-size: 0.85rem;
   line-height: 1.4;
 }
+
+
+// ============================================================
+// EN TELÉFONO: UNA TARJETA POR RENGLÓN, Y MAS FINAS
+// ============================================================
+//
+// El celu es el caso que estaba roto y por dos motivos distintos:
+//
+//  1. `.stats-ingresos` era la única grilla SIN media query: `repeat(3,
+//     minmax(0, 1fr))` en un pantalla de 360px deja tres columnas de 100px, y
+//     "Servicios más vendidos" se partía como "Servi / c más / vendi / dos".
+//     El `minmax(0, ...)` evita que la grilla desborde, pero no que el TEXTO se
+//     rompa a mitad de palabra.
+//
+//  2. Las otras grillas sí bajaban a una columna, pero a una columna GORDA: 18px
+//     de padding, un ícono de 44px y un número de 1.3rem por tarjeta. Tres de
+//     esos renglones se comen media pantalla para decir tres cosas, y el
+//     scroll para llegar al contenido es lo que hace que la pantalla parezca
+//     larga.
+//
+// La regla es una sola para todas: en celular, una tarjeta por renglón y con el
+// padding, el ícono y la letra achicados. El color, el número y la etiqueta se
+// quedan igual, porque son lo que hay que leer; lo que se achica es el marco.
+
+@media (max-width: 700px) {
+  // El ícono era 44px, más que la mitad del alto de la tarjeta. Con 34 entra
+  // la misma información en menos espacio y sigue siendo reconocible.
+  .stat-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+
+  .stat-card {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  // La respuesta que lleva el filete de color tiene el padding-left corriendo
+  // por el `border-left` de 4px: sin bajarlo, la tarjeta "Debe / Haber" queda
+  // con el texto 4px corrida respecto de las otras dos de la fila.
+  .stat-card.respuesta { padding-left: 10px; }
+
+  .stat-value { font-size: 1.1rem; }
+  .stat-label { font-size: 0.74rem; }
+}
+
+// Las grillas de tres: UNA por renglón en teléfono.
+//
+// Para `.stats-ingresos` el `1fr` es la parte que arregla la rotura de palabras:
+// con tres columnas de 100px no hay ancho para "Lavado completo", y partir un
+// nombre de servicio a mitad de palabra lo hace ilegible, que es peor que
+// hacerlo scrollear.
+.stats-ingresos,
+.stats-trio,
+.stats-resumen,
+.stats {
+  @media (max-width: 700px) {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+}
+
+// En tablet (700-900px) tres columnas de tres tarjetas siguen siendo
+// comfortablemente legibles, pero los nombres largos ya rozan el salto de
+// palabra. Dos columnas aísla el problema sin apilar todo.
+@media (max-width: 900px) {
+  .stats-ingresos,
+  .stats-trio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
