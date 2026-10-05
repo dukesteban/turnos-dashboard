@@ -9,6 +9,7 @@
 @use '../../../styles/buscador-crear';
 @use '../../../styles/tabla';
 @use '../../../styles/tabs';
+@use '../../../styles/acordeon';
 
 .caja-page {
   padding: 24px;
@@ -101,6 +102,19 @@
 
   @media (max-width: 800px) { grid-template-columns: repeat(2, 1fr); }
   @media (max-width: 480px) { grid-template-columns: 1fr; }
+}
+
+/* El resumen de arriba son las MISMAS tarjetas que las de Ingresos, pero son
+ * TRES y no cuatro, así que no puede usar el `repeat(4, 1fr)` de `.stats`: con
+ * cuatro columnas y tres tarjetas queda un hueco vacío al lado que se lee como
+ * que falta algo.
+ *
+ * Se re-declara solo el número de columnas; el resto (fondo, radio, sombra,
+ * ícono) lo sigue trayendo `.stat-card`. */
+.stats-resumen {
+  grid-template-columns: repeat(3, 1fr);
+
+  @media (max-width: 700px) { grid-template-columns: 1fr; }
 }
 
 .stat-card {
@@ -308,53 +322,6 @@
   gap: 16px;
 }
 
-// ── RESUMEN DE CAJA ──────────────────────────────────────────
-// Va arriba de las pestañas, no dentro de ninguna: el balance es el motivo de la
-// pantalla y tiene que estar visible desde las tres.
-.caja-resumen {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
-  padding: 16px 20px;
-  margin-bottom: 16px;
-}
-
-.caja-fila {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 7px 0;
-
-  &.total {
-    margin-top: 6px;
-    padding-top: 12px;
-    border-top: 1px solid #e2e8f0;
-    font-weight: 700;
-    font-size: 1.05rem;
-  }
-}
-
-.caja-label { color: #475569; }
-
-.caja-valor {
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-
-  &.verde { color: #15803d; }
-  &.rojo  { color: #b91c1c; }
-}
-
-.caja-nota {
-  margin: 10px 0 0;
-  font-size: 0.82rem;
-  color: #92400e;
-  background: #fffbeb;
-  border: 1px solid #fcd34d;
-  border-radius: 8px;
-  padding: 8px 10px;
-  line-height: 1.45;
-}
-
 // ── FORMULARIOS ──────────────────────────────────────────────
 // Los campos del popup (`.form-caja`, `.campo`, `.fila`) NO estan aca: despues
 // de que el popup de Proveedores se mudara a Personas se vio que la cajita de
@@ -386,4 +353,308 @@
 
   // Menos padding en celular: la tabla tiene que dejar lugar al scroll.
   .tabla-caja .tr { padding: 10px 12px; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// DETALLE DE COMISIONES (pestaña Empleados)
+//
+// Este bloque venía en la ficha del empleado, en Personas. Las clases se llaman
+// distinto a propósito de las de `.resumen-prov` (que son del desglose por
+// proveedor): así se puede borrar una sin romper la otra.
+// ══════════════════════════════════════════════════════════════
+
+.select-empleado {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  background: white;
+  cursor: pointer;
+  max-width: 220px;
+
+  &:focus { outline: none; border-color: #3b82f6; }
+}
+
+
+// Los cuadros del detalle de comisiones son `.stat-card`, los MISMOS de las tres
+// tarjetas de arriba y de las de la pestaña Ingresos. Se sacaron
+// `.detalle-resumen` y `.detalle-dato` de acá porque la app tenía dos estilos de
+// cuadro informativo conviviendo.
+.stats-detalle {
+  grid-template-columns: repeat(2, 1fr);
+  max-width: 480px;
+
+  @media (max-width: 700px) { grid-template-columns: 1fr; max-width: none; }
+}
+
+// Los tres de la pestaña Ingresos. `minmax(0, 1fr)` y no `1fr`: los dos
+// últimos son texto que puede ser largo ("Lavado completo"), y sin el 0 la
+// columna no baja del ancho de su contenido y la fila no se reparte.
+.stats-ingresos {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+// El `margin-bottom` de `.stats` (20px) queda raro adentro de un acordeón, que ya
+// tiene su padding y su separación.
+.acordeon-body .stats { margin-bottom: 16px; }
+
+// Encabezado de sección usado SOLO para alinear un botón a la derecha dentro
+// del acordeón. Sin esto queda un hueco vacío arriba del botón.
+.seccion-sin-borde {
+  border: none;
+  padding: 0 0 12px;
+  margin: 0;
+}
+
+.saldo-pendiente {
+  padding: 9px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+
+.saldo-vacio {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+// ============================================================
+// LECTURA DE LOS TRES MONTOS
+// ============================================================
+//
+// El criterio de la pantalla es uno solo: si hay que restar dos numeros para
+// saber cuanto se debe, la pantalla esta mal. Por eso los tres montos van
+// SIEMPRE juntos, en el mismo orden, y la diferencia ya viene calculada.
+//
+// El tercer cuadro no es "un dato mas", es LA RESPUESTA: por eso lleva un
+// filete del color en el borde izquierdo. Con solo pintar el icono (que es lo
+// que hacen .verde / .azul / etc.) los tres se ven igual de importantes y no
+// destaca ninguno.
+
+// Tres columnas, no las cuatro de .stats: con tres tarjetas y cuatro columnas
+// queda un hueco vacio al lado que se lee como que falta algo.
+.stats-trio {
+  grid-template-columns: repeat(3, 1fr);
+
+  @media (max-width: 800px) { grid-template-columns: 1fr; }
+}
+
+// Los tres cuadros de Empleados y Gastos van alineados ARRIBA, no centrados.
+//
+// `.stat-card` centra verticalmente su contenido, y con la nota de abajo la
+// tarjeta con mas texto quedaba con el titulo mas arriba que las otras dos:
+// "Falta pagar" flotaba y "Le debo" / "Le pague" no compartian linea. Con
+// `flex-start` las tres arrancan en el mismo lugar y la nota cuelga.
+//
+// `flex-start` y NO `stretch`: estirado, la nota de la tarjeta mas corta se
+// separaria del valor y las tres notas quedarian a distintas alturas.
+.stats-trio .stat-card {
+  align-items: flex-start;
+}
+
+// La nota puede venir VACIA (cuando no hay frase que poner), y sin espacio
+// reservado el valor de esa tarjeta se corre hacia arriba respecto de las otras
+// dos. `min-height` reserva una linea en las tres y los valores comparten linea
+// siempre. Este es el unico `min-height` de la pantalla y esta aca por eso.
+.stat-nota {
+  min-height: 1.15em;
+}
+
+.stat-card.respuesta {
+  // `border-left` y no `border`: cambiar el borde entero corre el box-shadow y
+  // la tarjeta "salta" un pixel al cambiar de estado.
+  border-left: 4px solid transparent;
+  padding-left: 14px;
+
+  &.rojo  { border-left-color: #b91c1c; }
+  &.verde { border-left-color: #15803d; }
+
+  // Y el numero tambien del color. El filete solo no alcanza en una pantalla
+  // chica: el filete son 4px, el numero es lo que se lee.
+  &.rojo  .stat-value { color: #b91c1c; }
+  &.verde .stat-value { color: #15803d; }
+}
+
+// La variante que faltaba en la lista de iconos.
+.stat-card.rojo .stat-icon { background: #fee2e2; }
+
+// La linea de abajo del cuadro: "3 turnos atendidos", "2 pagos registrados".
+//
+// Sin esto el cuadro tiene un numero suelto y no se entiende de donde salio.
+// Con esto el numero viene con su contexto y no hace falta abrir un acordeon
+// para saber si el empleado trabajo o no.
+.stat-nota {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+
+// ============================================================
+// QUIEN MIRAMOS
+//
+// El selector con su etiqueta. La etiqueta es lo que hace obvio que el
+// primer cuadro es de ESTE empleado y no de todos: sin ella, un nombre
+// arriba de tres numeros se lee como un titulo de la pantalla.
+// ============================================================
+.selector-seccion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+}
+
+.selector-bloque {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.selector-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+// El periodo a la derecha. Se muestra el texto y no un control porque el
+// control del periodo ya esta arriba, en la barra: repetirlo aqui seria un
+// segundo lugar del que se puede cambiar el mismo valor.
+.selector-periodo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.selector-valor {
+  font-size: 0.85rem;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+// La fila del empleado o proveedor que se esta mirando, en la tabla de todos.
+// Se resalta con un filete y no con un fondo: un fondo compite con el hover de
+// la tabla y los dos se pisan.
+.tabla tr.fila-actual td {
+  background: #eff6ff;
+  box-shadow: inset 3px 0 0 #1d4ed8;
+}
+
+// Texto terciario: notas, metodos, cosas que estan ahi pero no se leen.
+.celda-tenue {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// EL TOTAL EN EL ENCABEZADO DEL ACORDEÓN
+//
+// Con el acordeón cerrado, el encabezado es todo lo que se ve de esa tabla. Si
+// no dice nada, hay que abrirlo para saber si hay algo adentro. Con el total a la
+// vista, el acordeón se abre solo cuando uno quiere el detalle, no para enterarse
+// del número.
+//
+// Va en el MISMO `<span>` que el chevron, y no en uno aparte, para que hereden
+// los dos el mismo peso y no compitan entre ellos.
+// ══════════════════════════════════════════════════════════════
+.acordeon-total {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  // El `.chevron` tiene su propio color cuando está abierto; sin esto el total
+  // heredaría el azul y parecería un link.
+  white-space: nowrap;
+
+  .chevron { color: #94a3b8; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// DEBE Y HABER: dos columnas, dos colores
+//
+// En la pantalla NUNCA hay un número con signo. La diferencia entre "le debo" y
+// "me deben" la dicen dos columnas: "Debe" en rojo y "Haber" en verde.
+//
+// Cada celda lleva SIEMPRE un número, incluido el `$0` de la columna que no
+// aplica. Con una raya o un hueco, la fila parece incompleta; con `$0` se lee
+// "de este lado no hay nada", que es lo que pasa.
+// ══════════════════════════════════════════════════════════════
+.tabla {
+  .col-debe,
+  .col-haber {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+  }
+
+  // La de "Haber" un poco más ancha: su encabezado es una palabra más larga y
+  // con el mismo `width: 1%` la tabla la angosta y las dos columnas no cierran
+  // alineadas con las de arriba.
+  .col-haber { min-width: 78px; }
+  .col-debe  { min-width: 72px; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// LOS CUADROS EN ROJO, NO SOLO CON EL ICONO ROJO
+//
+// Hasta ahora las variantes `.verde` / `.azul` / `.rojo` de `.stat-card` solo
+// cambiaban el fondo del ÍCONO. Con eso, un cuadro que dice "Debo 12.000" y otro
+// que dice "Entró 12.000" se ven igual de importantes, y el color deja de ser la
+// señal principal — que es justo lo que se pidió: el color es lo que dice de qué
+// lado está el dinero.
+//
+// Se tiñe el fondo entero, suave, más el filete de la izquierda que ya tenía
+// `.respuesta`.
+// ══════════════════════════════════════════════════════════════
+.stat-card.rojo {
+  background: #fef2f2;
+
+  .stat-icon { background: #fee2e2; }
+}
+
+.stat-card.verde {
+  background: #f0fdf4;
+
+  .stat-icon { background: #dcfce7; }
+}
+
+// El valor del cuadro en rojo/verde también, no solo el ícono: el ícono son 20px
+// y el número es lo que se lee.
+.stat-card.rojo .stat-value  { color: #b91c1c; }
+.stat-card.verde .stat-value { color: #15803d; }
+
+
+// El aviso informativo dentro de un popup.
+//
+// Sale en el popup de "Registrar pago a proveedor" cuando el abono es MAYOR que
+// lo que se le debe, o sea cuando va a quedar a su favor. Es un aviso y no un
+// error: la operación es válida y a veces justamente lo que se quiere (se
+// adelanta plata). Por eso es azul y no rojo, y el botón de guardar queda
+// activo: la decisión es de quien está cargando el pago.
+.nota-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  font-size: 0.85rem;
+  line-height: 1.4;
 }

@@ -67,14 +67,16 @@ describe('Caja — pestañas', () => {
   it('arranca en Ingresos', () => {
     const { cmp } = montar();
     expect(cmp.esTab('ingresos')).toBe(true);
-    expect(cmp.esTab('compras')).toBe(false);
     expect(cmp.esTab('empleados')).toBe(false);
+    expect(cmp.esTab('gastos')).toBe(false);
   });
 
-  // El orden de la barra es Ingresos, Compras, Pagos a Empleados. El ABM de
-  // proveedores se mudó a Personas, así que la pestaña que antes se llamaba
-  // "Proveedores" ahora se llama "Compras": es lo que muestra.
-  it('la barra ofrece Ingresos, Compras y Pagos a Empleados, en ese orden', () => {
+  // El orden y los NOMBRES los pidio el usuario: Ingresos | Empleados | Gastos.
+  // Antes era Ingresos | Compras | Pagos a Empleados, que mezclaba "quien paga"
+  // con "que se compra". El ABM de proveedores se mudo a Personas, asi que la
+  // pestana que antes se llamaba "Proveedores" hoy muestra las compras y se
+  // llama "Gastos".
+  it('la barra ofrece Ingresos, Empleados y Gastos, en ese orden', () => {
     const { cmp, fixture } = montar();
     fixture.detectChanges();
     // El cast a HTMLButtonElement es por `click()` y `classList`: sin el,
@@ -85,14 +87,60 @@ describe('Caja — pestañas', () => {
     const textos = botones.map((b) => b.textContent!.trim());
     expect(textos.length).toBe(3);
     expect(textos[0]).toContain('Ingresos');
-    expect(textos[1]).toContain('Compras');
-    expect(textos[2]).toContain('Pagos a Empleados');
-    // Y cada botón enciende su propia pestaña.
+    expect(textos[1]).toContain('Empleados');
+    expect(textos[2]).toContain('Gastos');
+    // Y cada boton enciende su propia pestana.
+    //
+    // El orden de las claves va ACOMPANANDO al de los botones a proposito: si
+    // alguien cambia uno y no el otro, este test lo muestra en el `esTab` que
+    // falla, en vez de dejar una pestana que no abre nada.
+    const claves = ['ingresos', 'empleados', 'gastos'];
     for (let i = 0; i < botones.length; i++) {
       botones[i].click();
       fixture.detectChanges();
       expect(botones[i].classList.contains('activo')).toBe(true);
-      expect(cmp.esTab(['ingresos', 'compras', 'empleados'][i])).toBe(true);
+      expect(cmp.esTab(claves[i])).toBe(true);
+      // Las otras dos quedan apagadas: un `cambiarTab` que no limpia el estado
+      // anterior deja dos pestanas visibles a la vez.
+      for (let j = 0; j < claves.length; j++) {
+        if (j !== i) expect(cmp.esTab(claves[j])).toBe(false);
+      }
+    }
+  });
+
+  it('cada pestaña enciende SU propio cuerpo: ninguna queda vacía', () => {
+    // El modo de falla feo, y el que motivo este test: si el botón dice
+    // `cambiarTab('gastos')` pero el cuerpo dice `esTab('compras')`, la pestaña
+    // se enciende y aparece VACIA. No tira ningún error, no hay ningún
+    // warning, solo una pantalla en blanco donde debería haber información.
+    //
+    // Por eso no alcanza con mirar que el botón tenga la clase `activo`: hay que
+    // mirar que el CONTENIDO de esa pestaña esté en el DOM.
+    const { fixture } = montar();
+    const botones = Array.from(
+      fixture.nativeElement.querySelectorAll('.tabs button')
+    ) as HTMLButtonElement[];
+
+    // Un texto distintivo por pestaña, y se afirma que los otros dos NO están.
+    //
+    // Los tres tienen que ser ÚNICOS de su pestaña, no solo estar presentes: el
+    // test_affirma que los otros dos no aparecen, así que una marca repetida
+    // haría fallar la aserción por la pestaña equivocada. Por eso "Pagos que le
+    // hiciste" (que existe en Empleados Y en Gastos) no sirve como marca.
+    const marcas = [
+      'Servicio más vendido',   // Ingresos
+      'Turnos que atendió',     // Empleados
+      'Compras del período',    // Gastos
+    ];
+
+    for (let i = 0; i < botones.length; i++) {
+      botones[i].click();
+      fixture.detectChanges();
+      const texto = fixture.nativeElement.textContent;
+      expect(texto.includes(marcas[i])).toBe(true);
+      for (let j = 0; j < marcas.length; j++) {
+        if (j !== i) expect(texto.includes(marcas[j])).toBe(false);
+      }
     }
   });
 
@@ -103,9 +151,9 @@ describe('Caja — pestañas', () => {
     cmp.mensajePagos = '✅ Pago registrado.';
     cmp.mensaje = '✅ Proveedor agregado.';
 
-    cmp.cambiarTab('compras');
+    cmp.cambiarTab('gastos');
 
-    expect(cmp.esTab('compras')).toBe(true);
+    expect(cmp.esTab('gastos')).toBe(true);
     expect(cmp.mensajePagos).toBe('');
     expect(cmp.mensaje).toBe('');
   });
@@ -171,103 +219,141 @@ describe('Caja — balance', () => {
   });
 });
 
-describe('Caja — cómo se muestra el saldo', () => {
-  // El resumen tiene cuatro filas y el menos tiene que verse IGUAL en todas.
-  // Estaba `−$50.000` en los renglones pero `$-42.000` en "Queda en caja",
-  // porque ahí el menos lo sacaba el pipe `number`, que lo deja donde le queda.
+describe('Caja - el resumen de arriba', () => {
+  // EL RESUMEN SON TRES TARJETAS, NO UNA LISTA.
   //
-  // Los cuatro van con el signo adelante: `−$42.000`.
+  // Antes eran cuatro renglones de texto en `.caja-fila`, con "Queda en caja" al
+  // final. El usuario lo pidió así: la lista se leía como una planilla pegada
+  // arriba y no se parecía a nada de lo demás de la app.
+  //
+  // "Queda en caja" SE SACÓ, y esto no es un detalle de estilo: no hay caja chica,
+  // el dinero entra y sale por transferencia, así que el saldo siempre daba
+  // negativo y el cartel de "Da negativo..." aparecía casi siempre. Eso es
+  // exactamente como se ve una alarma que en realidad no dice nada.
+  // Se queda SOLO con los dígitos. No alcanza con sacar `.` y `,`: el signo de las
+  // salidas es el U+2212 (menos tipográfico), que en la consola se ve igual que
+  // un guion y en el `expect` no es el mismo caracter.
+  const norm = (t: string) => (t.match(/\d+/g) || []).join('');
 
-  const norm = (t: string) => t.replace(/[.,]/g, '').replace(/−/g, '-');
-
-  /** Las cuatro filas del resumen, ya renderizadas. */
+  /** Las tarjetas del resumen, ya renderizadas. */
   async function resumen(over: Record<string, any> = {}) {
     const r = montar({
       getGanancias: () => Promise.resolve([ganancia({ precio: 20000 })]),
       getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(50000)]),
-      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Químicas', 12000)]),
+      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Quimicas', 12000)]),
       getComisionesPeriodo: () => Promise.resolve([]),
       ...over,
     });
     await r.cmp.cargarDatos();
     r.fixture.detectChanges();
-    const filas: HTMLElement[] = Array.from(
-      r.fixture.nativeElement.querySelectorAll('.caja-resumen .caja-fila')
+    const cards: HTMLElement[] = Array.from(
+      r.fixture.nativeElement.querySelectorAll('.stats-resumen .stat-card')
     );
     return {
       cmp: r.cmp,
-      filas: filas.map((f) => {
-        const v = f.querySelector('.caja-valor') as HTMLElement;
-        return {
-          label: ((f.querySelector('.caja-label') as HTMLElement).textContent || '').trim(),
-          texto: norm((v.textContent || '').trim()),
-          crudo: (v.textContent || '').trim(),
-          rojo: v.classList.contains('rojo'),
-          verde: v.classList.contains('verde'),
-        };
-      }),
+      pagina: (r.fixture.nativeElement.textContent || ''),
+      tarjetas: cards.map((c) => ({
+        label: ((c.querySelector('.stat-label') as HTMLElement)?.textContent || '').trim(),
+        valor: ((c.querySelector('.stat-value') as HTMLElement)?.textContent || '').trim(),
+        icono: !!c.querySelector('.stat-icon'),
+        valorNorm: norm(((c.querySelector('.stat-value') as HTMLElement)?.textContent || '').trim()),
+      })),
     };
   }
 
-  it('"Queda en caja" negativo pone el menos ANTES del $', async () => {
-    // El bug reportado: se veía `$-42.000` con las dos filas de arriba en
-    // `−$50.000`. Mismo número, dos escrituras distintas.
-    const { cmp, filas } = await resumen();
+  it('son tres tarjetas con ícono, etiqueta y valor', async () => {
+    const { tarjetas } = await resumen();
+
+    expect(tarjetas.length).toBe(3);
+    for (const t of tarjetas) {
+      expect(t.icono).toBe(true);
+      expect(t.label).not.toBe('');
+      expect(t.valor).not.toBe('');
+    }
+  });
+
+  it('las tres cantidades: ingresos, pagos y gastos', async () => {
+    const { cmp, tarjetas } = await resumen({
+      // Se compraron 12.000 pero se pagaron 7.000: la tarjeta tiene que mostrar
+      // lo que SALIO de la cuenta (7.000), no lo comprado.
+      getPagosProveedor: () => Promise.resolve([
+        { id: 1, proveedor_id: 1, fecha: '2026-03-15', monto: 7000, metodo: 'transferencia', proveedores: { nombre: 'P', activo: true } },
+      ]),
+    });
+
+    expect(tarjetas[0].label).toContain('Ingresos');
+    expect(tarjetas[0].valorNorm).toBe('20000');
+
+    expect(tarjetas[1].label).toContain('Pagos a empleados');
+    expect(tarjetas[1].valorNorm).toBe('50000');
+
+    expect(tarjetas[2].label).toContain('Gastos');
+    expect(tarjetas[2].valorNorm).toBe('7000');
+
+    // Y que los números de las tarjetas sean los getters, no textos sueltos: si
+    // alguien cambia la cuenta, la tarjeta tiene que moverse con ella.
+    expect(cmp.totalIngresos).toBe(20000);
+    expect(cmp.totalPagadoEmpleados).toBe(50000);
+    expect(cmp.totalPagadoProveedores).toBe(7000);
+    // Y lo comprado sigue siendo 12.000: son dos números distintos a propósito.
+    expect(cmp.totalCompras).toBe(12000);
+  });
+
+  it('comprar NO es pagar: sin abonos, la tarjeta de Gastos va en 0', async () => {
+    // El bug reportado: compraste 12.000 y la tarjeta decía "−$12.000", que se
+    // leía como una deuda. Si no se abonó nada, no salió nada de la cuenta.
+    const { cmp, tarjetas } = await resumen();
+    expect(cmp.totalCompras).toBe(12000);
+    expect(cmp.totalPagadoProveedores).toBe(0);
+    expect(tarjetas[2].valorNorm).toBe('0');
+  });
+
+  it('"Queda en caja" NO aparece en ninguna parte', async () => {
+    // El pedido fue explícito y el motivo concreto. Este test evita que alguien
+    // lo vuelva a agregar "porque era informativo".
+    const { pagina, cmp } = await resumen();
+
+    expect(pagina).not.toContain('Queda en caja');
+    expect(pagina).not.toContain('Da negativo');
+
+    // El getter sigue existiendo (lo cubren otros tests de aritmética) pero ya
+    // no se muestra: se afirma que la cuenta es correcta igual.
     expect(cmp.balance).toBe(-42000);
-    const queda = filas[filas.length - 1];
-    expect(queda.label).toBe('Queda en caja');
-    expect(queda.texto).toBe('-$42000');
-    expect(queda.crudo.startsWith('-$')).toBe(false);   // el signo va adelante
-    expect(queda.rojo).toBe(true);
   });
 
-  it('ninguna fila del resumen pone el $ antes del menos', async () => {
-    const { filas } = await resumen();
-    for (const f of filas) {
-      expect(norm(f.crudo).startsWith('$-')).toBe(false);
-    }
-  });
-
-  it('las cuatro filas usan el mismo signo', async () => {
-    // Si una vuelve al guion ASCII y las otras quedan con U+2212, la pantalla
-    // muestra dos guiones que a simple vista son el mismo.
-    const { filas } = await resumen();
-    const conMenos = filas.filter((f) => f.crudo.includes('−'));
-    expect(conMenos.length).toBe(3);   // pagos, compras y queda en caja
-    for (const f of conMenos) {
-      expect(f.crudo.indexOf('−')).toBeLessThan(f.crudo.indexOf('$'));
-    }
-  });
-
-  it('"Queda en caja" positivo va en verde y SIN menos', async () => {
-    const { filas } = await resumen({
-      getGanancias: () => Promise.resolve([ganancia({ precio: 200000 })]),
+  it('el resumen se ve en las TRES pestañas, no solo en Ingresos', async () => {
+    // El bloque quedó arriba de las pestañas a propósito: los tres números son
+    // los que se usan para decidir, y tienen que estar a la vista esté donde
+    // esté. Por eso NO va dentro de ningún `*ngIf="esTab(...)"`.
+    const { cmp, fixture } = montar({
+      getGanancias: () => Promise.resolve([ganancia({ precio: 20000 })]),
       getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(50000)]),
-      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Químicas', 12000)]),
+      getCompras: () => Promise.resolve([]),
+      getComisionesPeriodo: () => Promise.resolve([]),
     });
-    const queda = filas[filas.length - 1];
-    expect(queda.texto).toBe('$138000');
-    expect(queda.crudo.includes('−')).toBe(false);
-    expect(queda.verde).toBe(true);
-    expect(queda.rojo).toBe(false);
+    await cmp.cargarDatos();
+
+    for (const t of ['ingresos', 'empleados', 'gastos']) {
+      cmp.cambiarTab(t);
+      fixture.detectChanges();
+      const n = fixture.nativeElement.querySelectorAll('.stats-resumen .stat-card').length;
+      expect(n).toBe(3);
+    }
   });
 
-  it('salida cero no inventa un menos', async () => {
-    // `−$0` sería ruido: no se pagó nada, no hay por qué restar.
-    const { filas } = await resumen({
-      getPagosEmpleado: () => Promise.resolve([]),
-      getCompras: () => Promise.resolve([]),
-    });
-    const pagos = filas.find((f) => f.label === 'Pagos a empleados');
-    expect(pagos).toBeTruthy();
-    // Estas dos filas llevan el signo fijo en el template, no por el helper.
-    // Se documenta el comportamiento actual: si algún día se limpia para que
-    // usen `signoDiferencia`, este test hay que cambiarlo.
-    expect((pagos as { texto: string }).texto).toBe('-$0');
+  it('las salidas van con el signo adelante, no el $ adelante', async () => {
+    // El bug reportado una vez: los renglones decían `-$50.000` y el saldo
+    // `$-42.000`. Con las tarjetas el signo es fijo en el template, pero el
+    // criterio se deja fijado igual.
+    const { tarjetas } = await resumen();
+    for (const t of [tarjetas[1], tarjetas[2]]) {
+      expect(t.valor.indexOf('-')).toBeLessThan(t.valor.indexOf('$'));
+    }
+    // Ingresos no lleva menos.
+    expect(tarjetas[0].valor.includes('-')).toBe(false);
   });
 });
-
-describe('Caja — sugerido vs pagado', () => {
+describe('Caja — totales a pagar', () => {
   it('cruza por empleado y calcula la diferencia', async () => {
     const { cmp } = montar({
       getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'Juan Pérez', 25000)]),
@@ -277,16 +363,16 @@ describe('Caja — sugerido vs pagado', () => {
     const juan = cmp.pagosPorEmpleado.find((f: any) => f.empleado_id === 1);
     expect(juan.sugerido).toBe(25000);
     expect(juan.pagado).toBe(30000);
-    expect(juan.diferencia).toBe(5000);   // se le pagó de más
+    expect(juan.faltaPagar).toBe(-5000);   // se le pagó de más: no falta nada
   });
 
-  it('diferencia negativa cuando se pagó menos de lo sugerido', async () => {
+  it('da positivo cuando se pagó menos de lo sugerido', async () => {
     const { cmp } = montar({
       getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'Juan Pérez', 25000)]),
       getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(20000)]),
     });
     await cmp.cargarDatos();
-    expect(cmp.pagosPorEmpleado[0].diferencia).toBe(-5000);
+    expect(cmp.pagosPorEmpleado[0].faltaPagar).toBe(5000);
   });
 
   it('un empleado con sugerencia y NINGÚN pago igual aparece (hay que pagarle)', async () => {
@@ -299,7 +385,7 @@ describe('Caja — sugerido vs pagado', () => {
     await cmp.cargarDatos();
     expect(cmp.pagosPorEmpleado.length).toBe(1);
     expect(cmp.pagosPorEmpleado[0].pagado).toBe(0);
-    expect(cmp.pagosPorEmpleado[0].diferencia).toBe(-25000);
+    expect(cmp.pagosPorEmpleado[0].faltaPagar).toBe(25000);
   });
 
   it('un pago cuyo empleado fue borrado no rompe la tabla', async () => {
@@ -382,18 +468,20 @@ describe('Caja — cómo se muestra la diferencia', () => {
     ]),
   };
 
+
   /**
    * Para comparar sin ruido de runtime.
    *
-   * Dos cosas normaliza:
-   *   · el separador de miles, porque el pipe `number` usa el locale: **jsdom
-   *     corre en `en-US` y escribe `19,000`, el browser en `es-AR` y escribe
-   *     `19.000`**. Un test que afirme el separador pasa en un lado y falla en
-   *     el otro.
-   *   · el signo, porque en pantalla es el tipográfico **U+2212** (`−`), no el
-   *     guion ASCII. Acá se baja todo a ASCII para que el assert se lea bien.
+   * Normaliza el separador de miles, porque el pipe `number` usa el locale:
+   * **jsdom corre en `en-US` y escribe `19,000`, el browser en `es-AR` y escribe
+   * `19.000`**. Un test que afirme el separador pasa en un lado y falla en el
+   * otro.
+   *
+   * NO baja ningún signo: en esta pantalla no hay ninguno. Ese es justamente el
+   * punto de estos tests, y normalizar los signos acá escondería justo lo que se
+   * quiere verificar.
    */
-  const norm = (t: string) => t.replace(/[.,]/g, '').replace(/−/g, '-');
+  const norm = (t: string) => t.replace(/[.,]/g, '');
 
   async function renderizado() {
     const r = montar(ARMADO);
@@ -401,95 +489,100 @@ describe('Caja — cómo se muestra la diferencia', () => {
     // La tabla vive dentro de la pestaña "empleados": sin esto no hay ni una celda.
     r.cmp.cambiarTab('empleados');
     r.fixture.detectChanges();
-    // Solo las filas de empleados: el `.tr-total` también tiene celda de
-    // diferencia, y sus valores no son los de ninguna fila.
+    // Solo las filas de empleados: el `tfoot` también tiene celdas de debe y
+    // haber, y sus valores no son los de ninguna fila.
     const celdas: HTMLElement[] = Array.from(
-      r.fixture.nativeElement.querySelectorAll('.tr:not(.tr-total) .celda-diferencia')
+      r.fixture.nativeElement.querySelectorAll('tbody .celda-diferencia')
     );
     return {
       cmp: r.cmp,
       crudos: celdas.map((c) => (c.textContent || '').trim()),
-      // Orden por sugerido de mayor a menor: 40.000, 15.000, 6.000.
+      // Orden por sugerido de mayor a menor: 40.000, 15.000, 6.000. Y por fila
+      // van DOS celdas: primero "Debe", después "Haber".
       textos: celdas.map((c) => norm((c.textContent || '').trim())),
       clases: celdas.map((c) => (c.classList.contains('verde') ? 'verde'
         : c.classList.contains('rojo') ? 'rojo' : 'sin-clase')),
     };
   }
 
-  it('la tabla tiene una celda de diferencia por empleado', async () => {
+  it('son DOS celdas por empleado: "Debe" y "Haber"', async () => {
+    // Antes era una columna con signo y había que mirar el `−` para saber de qué
+    // lado estaba. Ahora cada celda dice sola de qué lado es.
     const { textos } = await renderizado();
-    expect(textos.length).toBe(3);
+    expect(textos.length).toBe(6);
   });
 
-  it('positivo: SIN signo +, en verde', async () => {
-    const { textos, clases } = await renderizado();
-    expect(textos[2]).toBe('$19000');
-    expect(textos.some((t) => t.includes('+'))).toBe(false);
-    expect(clases[2]).toBe('verde');
-  });
+  // OJO CON EL ORDEN: `armarPagosPorEmpleado` ordena por sugerido de MAYOR a
+  // menor (40.000, 15.000, 6.000) y dentro de cada fila va "Debe" y después
+  // "Haber". O sea que las celdas salen en este orden:
+  //
+  //   [0] Debe del que falta 30.000   [1] Haber del que falta 30.000
+  //   [2] Debe del cuadrado           [3] Haber del cuadrado
+  //   [4] Debe del que sobra 19.000   [5] Haber del que sobra 19.000
 
-  it('negativo: con el menos ANTES del $, en rojo', async () => {
+  it('DEBE: en ROJO, en positivo, sin signo', async () => {
+    // 40.000 sugeridos, 10.000 pagados: le debo 30.000.
     const { textos, clases } = await renderizado();
-    expect(textos[0]).toBe('-$30000');
-    expect(textos.some((t) => t.includes('$-'))).toBe(false);
+    expect(textos[0]).toBe('$30000');
+    expect(textos.some((t) => t.includes('-'))).toBe(false);
     expect(clases[0]).toBe('rojo');
   });
 
-  it('cero: raya, en verde (cuadró exacto)', async () => {
+  it('HABER: en VERDE, en positivo, sin signo', async () => {
+    // 6.000 sugeridos, 25.000 pagados: me deben 19.000.
     const { textos, clases } = await renderizado();
-    expect(textos[1]).toBe('—');
-    expect(clases[1]).toBe('verde');
+    expect(textos[5]).toBe('$19000');
+    expect(textos.some((t) => t.includes('-'))).toBe(false);
+    expect(clases[5]).toBe('verde');
   });
 
-  it('el signo menos nunca queda atrás del $', async () => {
+  it('el cuadrado exacto deja las DOS columnas en $0', async () => {
+    // Ni raya ni hueco: `$0` en las dos, que es lo que hace legible la fila. Con
+    // una raya parece que falta un dato, y con un hueco la tabla rota.
+    const { textos, clases } = await renderizado();
+    expect(textos[2]).toBe('$0');
+    expect(textos[3]).toBe('$0');
+    // Ni rojo ni verde: el `$0` de una columna que no aplica es gris. Pintarlo
+    // del color de su columna haría que la mitad de la tabla pareciera "debo" o
+    // "me deben" cuando no hay nada de ninguno de los dos lados.
+    expect(clases[2]).toBe('sin-clase');
+    expect(clases[3]).toBe('sin-clase');
+  });
+
+  it('NINGUNA celda de la tabla tiene signo', async () => {
+    // Este es el test que cubre el pedido literal: ni `−` tipográfico (U+2212)
+    // ni guion ASCII. Si alguien reintroduce el signo, esto falla.
     const { crudos } = await renderizado();
-    const negativos = crudos.filter((t) => norm(t).startsWith('-'));
-    expect(negativos.length).toBe(1);
-    const n = norm(negativos[0]);
-    expect(n.indexOf('-')).toBe(0);
-    expect(n.indexOf('-')).toBeLessThan(n.indexOf('$'));
+    for (const t of crudos) {
+      expect(t.includes(String.fromCharCode(0x2212))).toBe(false);
+      expect(t.includes('-')).toBe(false);
+    }
   });
 
-  it('la fila de Total muestra la diferencia, no queda vacía', async () => {
-    // Las otras tres columnas del Total tienen número; esta quedaba en blanco y
-    // se notaba. Usa los mismos getters que las filas, así que no puede
-    // desincronizarse del detalle: 40.000 + 15.000 + 6.000 sugeridos, y
-    // 25.000 + 10.000 + 15.000 pagados -> -11.000.
+  it('una fila nunca tiene las dos columnas con plata', async () => {
+    // "Debe 30.000" y "Haber 30.000" al mismo tiempo sería una contradicción
+    // visible. Son la misma diferencia partida, así que solo una puede tener.
+    const { textos } = await renderizado();
+    for (let i = 0; i < textos.length; i += 2) {
+      const debe = textos[i] !== '$0';
+      const haber = textos[i + 1] !== '$0';
+      expect(debe && haber).toBe(false);
+    }
+  });
+
+  it('la fila de Total tiene las dos columnas con número', async () => {
     const { cmp, fixture } = montar(ARMADO);
     await cmp.cargarDatos();
     cmp.cambiarTab('empleados');
     fixture.detectChanges();
 
-    const total = fixture.nativeElement.querySelector('.tr-total .celda-diferencia');
-    expect(total).toBeTruthy();
-    expect(norm((total.textContent || '').trim())).toBe('-$11000');
-    expect(total.classList.contains('rojo')).toBe(true);
-  });
-
-  it('el Total de la diferencia es la suma de las diferencias de las filas', async () => {
-    // Si `totalDiferencia` se calculara de otra forma, el total dejaría de
-    // cerrar con el detalle que el usuario está mirando fila por fila.
-    const { cmp } = montar(ARMADO);
-    await cmp.cargarDatos();
-    const sumaFilas = cmp.pagosPorEmpleado.reduce(
-      (s: number, f: any) => s + f.diferencia, 0
-    );
-    expect(cmp.totalDiferencia).toBe(sumaFilas);
-    expect(cmp.totalDiferencia).toBe(cmp.totalPagadoEmpleados - cmp.totalSugerido);
-  });
-
-  it('si el total cuadra, muestra la raya', async () => {
-    const { cmp, fixture } = montar({
-      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'Juan', 10000)]),
-      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
-    });
-    await cmp.cargarDatos();
-    cmp.cambiarTab('empleados');
-    fixture.detectChanges();
-
-    const total = fixture.nativeElement.querySelector('.tr-total .celda-diferencia');
-    expect((total.textContent || '').trim()).toBe('—');
-    expect(total.classList.contains('verde')).toBe(true);
+    const celdas = fixture.nativeElement.querySelectorAll('tfoot .celda-diferencia');
+    expect(celdas.length).toBe(2);
+    // Total: 40.000 + 15.000 + 6.000 sugeridos = 61.000, y 25.000 + 10.000 +
+    // 15.000 pagados = 50.000. Debe = 11.000.
+    expect(norm((celdas[0].textContent || '').trim())).toBe('$11000');
+    expect(celdas[0].classList.contains('rojo')).toBe(true);
+    expect(norm((celdas[1].textContent || '').trim())).toBe('$0');
   });
 
   it('la celda va en negrita: es la columna que hay que mirar', async () => {
@@ -500,28 +593,104 @@ describe('Caja — cómo se muestra la diferencia', () => {
     await r.cmp.cargarDatos();
     r.cmp.cambiarTab('empleados');
     r.fixture.detectChanges();
-    expect(r.fixture.nativeElement.querySelectorAll('.tr:not(.tr-total) .celda-diferencia').length).toBe(3);
+    // Dos por fila, tres filas.
+    expect(r.fixture.nativeElement.querySelectorAll('tbody .celda-diferencia').length).toBe(6);
   });
 
-  it('el pipe recibe el valor en positivo, no el negativo', () => {
-    // Si el pipe recibiera el negativo, Angular sacaría el menos solo y
-    // quedaría `-$-30.000`.
-    const { cmp } = montar();
-    expect(norm(cmp.signoDiferencia(-30000))).toBe('-');
-    expect(cmp.signoDiferencia(19000)).toBe('');
-    expect(cmp.absDiferencia(-30000)).toBe(30000);
-    expect(cmp.claseDiferencia(-30000)).toBe('rojo');
-    expect(cmp.claseDiferencia(19000)).toBe('verde');
-    expect(cmp.claseDiferencia(0)).toBe('verde');
+
+  /** Solo las clases de color de las celdas, para no repetir el `montar`. */
+  async function renderizadoClasses() {
+    const r = montar(ARMADO);
+    await r.cmp.cargarDatos();
+    r.cmp.cambiarTab('empleados');
+    r.fixture.detectChanges();
+    const celdas: HTMLElement[] = Array.from(
+      r.fixture.nativeElement.querySelectorAll('tbody .celda-diferencia')
+    );
+    return {
+      clases: celdas.map((c) => (c.classList.contains('verde') ? 'verde'
+        : c.classList.contains('rojo') ? 'rojo' : 'sin-clase')),
+    };
+  }
+
+  it('ya NO hay signo en ninguna celda: la tabla es toda en positivo', async () => {
+    // Antes acá se testeaban `signoDiferencia` y `absDiferencia`, que armaban el
+    // `-30.000`. Los dos helpers están BORRADOS del componente, no sola vez
+    // dejando de usarse: no queda ningún camino por el que un signo aparezca
+    // en una celda. La columna "Debe" y la "Haber" parten la diferencia en dos
+    // positivos.
+    //
+    // Lo que se verifica acá es el resultado visible: ni `-` ni guion ASCII en
+    // ninguna celda, y el `$` siempre adelante del número.
+    const { crudos } = await renderizado();
+    expect(crudos.length).toBe(6);
+    for (const t of crudos) {
+      expect(t.includes('-')).toBe(false);
+      expect(t.includes(String.fromCharCode(0x2212))).toBe(false);
+      expect(t.indexOf('$')).toBe(0);
+    }
   });
 
-  it('el menos es el signo tipográfico, el mismo de las filas del resumen', () => {
-    // U+2212 y no el guion ASCII. Casi se ven iguales, pero si se comparan o se
-    // busca el texto no matchean, y la pantalla quedaría con dos guiones
-    // distintos según la fila.
+  it('el color va con la COLUMNA, no con el signo crudo', async () => {
+    // La columna "Debe" es roja y la "Haber" verde, por posición y no por el
+    // valor: así cada celda dice sola de qué lado está el dinero y no hace falta
+    // interpretar nada.
+    //
+    // Y hay un TERCER color para el `$0`: gris. No es un detalle, es lo que hace
+    // que la tabla se pueda leer de un tirón. Con dos columnas, la mitad de las
+    // celdas de cada fila son `$0`; si esas tomaran el color de su columna, la
+    // tabla sería una lista de rojos y verdes donde el color ya no dice nada.
+    const { clases } = await renderizadoClasses();
+
+    // El cuadrado exacto: las dos en gris, porque no debe nada a nadie y nadie le
+    // debe nada.
+    expect(clases[2]).toBe('sin-clase');
+    expect(clases[3]).toBe('sin-clase');
+  });
+  it('el color de cada celda va con SU PROPIA cantidad, no con el signo de la fila', () => {
+    // Este es el bug que los getters arreglan. Con el color atado al signo de la
+    // fila, un saldo a favor pintaba la celda "Debe" (que vale $0) en VERDE, y
+    // la tabla quedaba con las dos columnas en verde sin que el color dijera
+    // nada. Cada celda tiene que pintar por lo que VALE.
     const { cmp } = montar();
-    expect(cmp.signoDiferencia(-1)).toBe('−');
-    expect(cmp.signoDiferencia(-1)).not.toBe('-');
+
+    // Un saldo a favor: la celda "Debe" vale 0 (gris) y la "Haber" vale 25.000.
+    expect(cmp.claseDebe(-25000)).toBe('cero');
+    expect(cmp.claseHaber(-25000)).toBe('verde');
+
+    // Un saldo a deber: al revés.
+    expect(cmp.claseDebe(15000)).toBe('rojo');
+    expect(cmp.claseHaber(15000)).toBe('cero');
+
+    // Cuadrado exacto: las dos celdas valen 0, las dos grises.
+    expect(cmp.claseDebe(0)).toBe('cero');
+    expect(cmp.claseHaber(0)).toBe('cero');
+  });
+
+  it('una celda en $0 NUNCA sale roja ni verde', () => {
+    // Ninguna de las dos columnas puede "aparecer" con plata donde no la hay.
+    // Por eso el gris existe: es el único color del $0.
+    const { cmp } = montar();
+    for (const v of [0, -0, null, undefined, NaN]) {
+      expect(cmp.claseDebe(v as any)).toBe('cero');
+      expect(cmp.claseHaber(v as any)).toBe('cero');
+    }
+  });
+
+  it('en la tabla real el $0 de la columna que no aplica sale gris', async () => {
+    // El test de getters de arriba más el de celdas reales: los dos juntos. Los
+    // getters pueden estar bien y el template seguir conectandolo mal.
+    const { clases, textos } = await renderizado();
+    // Fila del que le sobran 19.000 (índice 4 y 5): debe $0 gris, haber verde.
+    expect(textos[4]).toBe('$0');
+    expect(clases[4]).toBe('sin-clase');
+    expect(textos[5]).toBe('$19000');
+    expect(clases[5]).toBe('verde');
+
+    // Fila del que le faltan 30.000 (índice 0 y 1): debe rojo, haber $0 gris.
+    expect(clases[0]).toBe('rojo');
+    expect(textos[1]).toBe('$0');
+    expect(clases[1]).toBe('sin-clase');
   });
 });
 
@@ -910,83 +1079,88 @@ describe('Caja — editar proveedores y compras', () => {
   });
 });
 
-describe('Caja — el pie de acciones está en la fila', () => {
+describe('Caja - las tablas tienen el estilo del Dashboard', () => {
   const listo = async (over: Record<string, any> = {}) => {
     const r = montar(over);
     await r.cmp.cargarDatos();
     return r;
   };
 
-  // BUG: las columnas se detectaban con `:has(> span:nth-child(6))` y la sexta
-  // celda de las compras es un `<button>`, no un `<span>`. La regla nunca
-  // matcheaba, la fila usaba la grilla de 5 columnas con 6 celdas y el botón se
-  // caía a una línea aparte.
-  it('la fila de compras declara la clase de acciones', async () => {
+  it('las tablas son <table> reales, no la grilla de <div>', async () => {
+    // Se cambiaron al estilo del Dashboard por coherencia visual. La razón de
+    // este test es otra: la grilla de `<div>`/`<span>` obliga a que el número de
+    // columnas esté duplicado en el SCSS (`grid-template-columns`) y en el
+    // template, y cuando no coinciden el botón se cae a una segunda línea. Un
+    // `<table>` no puede desincronizarse consigo mismo.
+    const { cmp, fixture } = await listo({
+      getCompras: () => Promise.resolve([{
+        id: 1, proveedor_id: 1, fecha: '2026-03-15', concepto: 'X', cantidad: 1,
+        monto: 100, notas: null, proveedores: { nombre: 'P', activo: true },
+      }]),
+    });
+    cmp.cambiarTab('gastos');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelectorAll('.tabla-caja').length).toBe(0);
+    expect(fixture.nativeElement.querySelectorAll('table.tabla').length).toBeGreaterThan(0);
+  });
+
+  it('la fila de compras tiene sus 6 celdas y las dos acciones juntas', async () => {
     const { cmp, fixture } = await listo({
       getCompras: () => Promise.resolve([{
         id: 1, proveedor_id: 1, fecha: '2026-03-15', concepto: 'Shampoo',
         cantidad: 2, monto: 48000, notas: null, proveedores: { nombre: 'Quimicas', activo: true },
       }]),
     });
-    cmp.cambiarTab('compras');
+    cmp.cambiarTab('gastos');
     fixture.detectChanges();
 
-    const filas = fixture.nativeElement.querySelectorAll('.tabla-caja .tr');
-    const conCompra = (Array.from(filas) as HTMLElement[])
-      .filter((f) => f.classList.contains('tr-con-acciones'));
-    expect(conCompra.length).toBeGreaterThan(0);
+    // Se busca la fila POR SUS BOTONES y no por posición: en la pestaña hay
+    // varias tablas (saldo, pagos, compras) y tomar "la primera" o "la última"
+    // depende del orden en que se rendericen.
+    const filas = Array.from(
+      fixture.nativeElement.querySelectorAll('table.tabla tbody tr')
+    ) as HTMLElement[];
+    const conDosBotones = filas.filter(
+      (f) => (f.querySelector('.celda-acciones')?.querySelectorAll('button').length || 0) === 2
+    );
+    expect(conDosBotones.length).toBe(1);
 
     // Editar y borrar van JUNTOS en una celda, no sueltos como celdas.
-    const filaCompra = conCompra[conCompra.length - 1];
-    const acciones = filaCompra.querySelector('.celda-acciones');
-    expect(acciones).toBeTruthy();
-    expect(acciones!.querySelectorAll('button').length).toBe(2);
-    // Y las celdas coinciden con las columnas de la grilla.
-    expect(filaCompra.children.length).toBe(6);
-
-    // En jsdom no hay layout, así que "está en la misma línea" no se puede
-    // medir por geometría. Lo que se verifica es lo que la rompió: la celda de
-    // acciones es UNA celda, no un botón suelto que la grilla no contaba.
+    //
+    // Son 6 columnas: Proveedor, Fecha, Concepto, Cant., Monto y Acciones. La
+    // del proveedor SOLO aparece cuando el selector está en "Todos" (que es el
+    // estado en que arranca): ahí la tabla muestra compras de varios proveedores
+    // al mismo tiempo y sin el nombre la fila no se sabe de quién es. Con un
+    // proveedor elegido desaparece, porque el nombre ya está arriba.
+    expect(conDosBotones[0].children.length).toBe(6);
   });
 
-  // La causa del botón en una segunda línea: la grilla se elegía con
-  // `:has(> span:nth-child(6))`, que NUNCA matcheaba porque la sexta celda es un
-  // `<button>`. La fila caía en la grilla de 5 columnas con 6 celdas y el último
-  // hijo se iba de fila.
-  //
-  // Aquí se comprueba la relación que importa: para cada tabla con acciones, la
-  // grilla que se declara tiene TANTAS columnas como celdas tiene la fila.
-  const TABLAS_CON_ACCIONES = [
-    { clase: 'tr-con-acciones', celdas: 6, etiqueta: 'compras', tab: 'compras' },
-    { clase: 'tr-pagos', celdas: 5, etiqueta: 'pagos', tab: 'empleados' },
-  ];
-
-  for (const t of TABLAS_CON_ACCIONES) {
-    it(`${t.etiqueta}: la fila tiene ${t.celdas} celdas`, async () => {
-      const { cmp, fixture } = await listo({
-        getCompras: () => Promise.resolve([{
-          id: 1, proveedor_id: 1, fecha: '2026-03-15', concepto: 'X', cantidad: 1,
-          monto: 100, notas: null, proveedores: { nombre: 'P', activo: true },
-        }]),
-        getProveedores: () => Promise.resolve([{ id: 1, nombre: 'P', activo: true }]),
-        getPagosEmpleado: () => Promise.resolve([{
-          id: 1, empleado_id: 1, fecha: '2026-03-15', monto: 100,
-          metodo: 'efectivo', empleados: { nombre: 'E', activo: true },
-        }]),
-      });
-      // La tabla vive en UNA pestaña: compras en 'compras', pagos en 'empleados'.
-      // Hay que medirla con su pestaña abierta.
-      cmp.cambiarTab(t.tab);
-      fixture.detectChanges();
-
-      const filas = (Array.from(fixture.nativeElement.querySelectorAll('.' + t.clase)) as HTMLElement[])
-        .filter((f) => !f.classList.contains('tr-cabecera'));
-      expect(filas.length).toBeGreaterThan(0);
-      for (const f of filas) {
-        expect(f.children.length).toBe(t.celdas);
-      }
+  it('la celda de acciones esta en la MISMA celda, no suelta', async () => {
+    // El bug que motivaba esto: la grilla se elegía con
+    // `:has(> span:nth-child(6))`, que nunca matcheaba porque la sexta celda es
+    // un botón, y el botón se caía a una segunda línea. Con `<table>` es
+    // imposible: cada hijo de la fila es una celda de la tabla.
+    const { cmp, fixture } = await listo({
+      getPagosEmpleado: () => Promise.resolve([{
+        id: 1, empleado_id: 1, fecha: '2026-10-05', monto: 100,
+        metodo: 'efectivo', empleados: { nombre: 'E', activo: true },
+      }]),
     });
-  }
+    cmp.cambiarTab('empleados');
+    fixture.detectChanges();
+
+    const filas = Array.from(
+      fixture.nativeElement.querySelectorAll('table.tabla tbody tr')
+    ) as HTMLElement[];
+    const conAcciones = filas.filter((f) => f.querySelector('.celda-acciones'));
+    expect(conAcciones.length).toBe(1);
+
+    // UNA sola celda de acciones, y es una celda de la fila (no un botón
+    // suelto al lado): por eso `children.length` son las 6 columnas.
+    expect(conAcciones[0].querySelectorAll('.celda-acciones').length).toBe(1);
+    expect(conAcciones[0].children.length).toBe(6);
+  });
 
   it('eliminar una compra pide confirmación antes de tocar la base', async () => {
     const spy = vi.spyOn(window, 'confirm').mockReturnValue(false);
@@ -1657,5 +1831,449 @@ describe('Caja — titulo', () => {
     cmp.fechaActual = new Date(2026, 9, 2);
     expect(cmp.tituloFecha).toMatch(/octubre/i);
     expect(cmp.tituloFecha).toMatch(/2026/);
+  });
+});
+
+describe('Caja — los tres montos del empleado y del proveedor elegidos', () => {
+  // ══════════════════════════════════════════════════════════════
+  // POR QUÉ ESTOS TESTS EXISTEN
+  //
+  // La pantalla promete que con los tres cuadros de arriba alcanza: cuánto le
+  // debo, cuánto le pagué y cuánto falta. Eso es un COMPROMISO con el usuario,
+  // y un compromiso así solo se verifica con números, no mirando la pantalla.
+  //
+  // El riesgo concreto es que los tres se calculen por separado y uno quede
+  // viejo: si `pague` se leyera de `pagos` y `debo` de `pagosPorEmpleado`, un
+  // cambio en uno no se propagaría al otro y la resta de abajo mentiría.
+  // ══════════════════════════════════════════════════════════════
+
+  const listo = async (over: Record<string, any> = {}) => {
+    const r = montar(over);
+    await r.cmp.cargarDatos();
+    return r;
+  };
+
+  // ── EMPLEADO ──────────────────────────────────────────────
+
+  it('los tres montos salen de la misma fila y la resta cierra', async () => {
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'Juan Pérez', 25000, 3)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+
+    expect(cmp.deboEmpleado).toBe(25000);
+    expect(cmp.pagueEmpleado).toBe(10000);
+    // 25.000 - 10.000: todavía hay 15.000 por dar.
+    cmp.elegirEmpleado(1);
+    expect(cmp.debeEmpleadoTotal).toBe(15000);
+  });
+
+  it('"Falta pagar" da NEGATIVO cuando se le pagó de más', async () => {
+    // Es el caso que el usuario reportó: se le pagaron 25.000 y no atendió nada.
+    // Decirle "debe 25.000" está mal; lo correcto es que NO le debe nada.
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'Juan Pérez', 0, 0)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(25000)]),
+    });
+
+    expect(cmp.deboEmpleado).toBe(0);
+    expect(cmp.pagueEmpleado).toBe(25000);
+    // NEGATIVO ya no existe en pantalla: se parte en dos cantidades.
+    cmp.elegirEmpleado(1);
+    expect(cmp.haberEmpleadoTotal).toBe(25000);
+    expect(cmp.textoSaldoEmpleado).toBe('A favor');
+  });
+
+  it('el cuadro de "Debe / Haber" es el mismo número que la fila de la tabla', async () => {
+    // Si el cuadro y la fila se calcularan por dos caminos distintos, el cuadro
+    // de arriba y la fila de abajo podrían mostrar números distintos.
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([
+        SUGERIDO(1, 'Juan Pérez', 25000, 3),
+        SUGERIDO(2, 'Esteban', 12000, 2),
+      ]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+
+    // Elegir PRIMERO y buscar la fila DESPUÉS, al revés de como estaba. Buscar
+    // la fila antes comparaba el empleado 1 (el que venía por defecto) contra
+    // los montos del 2 que se elegía después: dos empleados distintos, dos
+    // números distintos, y el test pasaba/fallaba sin que nada estuviera roto.
+    cmp.elegirEmpleado(2);
+    const fila = cmp.filaEmpleadoActual;
+    expect(fila).toBeTruthy();
+    expect(fila.empleado_id).toBe(2);
+
+    // El cuadro es la misma diferencia, partida en dos positivos.
+    expect(cmp.debeEmpleadoTotal + cmp.haberEmpleadoTotal).toBe(Math.abs(fila.faltaPagar));
+    expect(cmp.deboEmpleado).toBe(fila.sugerido);
+    expect(cmp.pagueEmpleado).toBe(fila.pagado);
+  });
+
+  it('cambiar de empleado cambia los tres montos', async () => {
+    // El selector tiene que mover los tres cuadros, no solo el detalle de abajo.
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([
+        SUGERIDO(1, 'Juan Pérez', 25000, 3),
+        SUGERIDO(2, 'Esteban', 12000, 2),
+      ]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+
+    cmp.elegirEmpleado(1);
+    expect(cmp.deboEmpleado).toBe(25000);
+
+    cmp.elegirEmpleado(2);
+    expect(cmp.deboEmpleado).toBe(12000);
+    // Esteban no tiene pagos registrados.
+    expect(cmp.pagueEmpleado).toBe(0);
+    cmp.elegirEmpleado(2);
+    expect(cmp.debeEmpleadoTotal).toBe(12000);
+  });
+
+  it('elegir un empleado NO vuelve a consultar la base', async () => {
+    // Un `(click)` que llamara a `cargarDatos()` haría una ida entera a la base
+    // para mostrar un dato que ya está en memoria.
+    const { cmp, mock } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'Juan Pérez', 25000, 3)]),
+    });
+    const antes = mock.llamadas.length;
+    cmp.elegirEmpleado(1);
+    expect(mock.llamadas.length).toBe(antes);
+  });
+
+  it('sin empleados cargados los tres montos dan 0, no NaN', async () => {
+    // Un `undefined`restado termina en `NaN` y la pantalla muestra "NaN" o "--".
+    const { cmp } = await listo({ getEmpleados: () => Promise.resolve([]) });
+    expect(cmp.empleadoActual).toBe(null);
+    expect(cmp.deboEmpleado).toBe(0);
+    expect(cmp.pagueEmpleado).toBe(0);
+    cmp.elegirEmpleado(2);
+    expect(cmp.debeEmpleadoTotal).toBe(0);
+    expect(cmp.haberEmpleadoTotal).toBe(0);
+  });
+
+  it('la frase del cuadro es SIEMPRE Debe, A favor, o vacia', async () => {
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([
+        SUGERIDO(1, 'A', 30000, 3),   // sugerido 30.000, pagado 10.000 -> debe 20.000
+        SUGERIDO(2, 'B', 20000, 2),   // sugerido 20.000, pagado 10.000 -> debe 10.000
+        SUGERIDO(3, 'C', 10000, 1),   // sugerido 10.000, pagado 20.000 -> A favor 10.000
+      ]),
+      getPagosEmpleado: () => Promise.resolve([
+        PAGO_JUAN(10000),
+        { id: 2, empleado_id: 2, fecha: '2026-10-05', monto: 10000, metodo: 'efectivo', empleados: null },
+        { id: 3, empleado_id: 3, fecha: '2026-10-05', monto: 20000, metodo: 'efectivo', empleados: null },
+      ]),
+    });
+
+    cmp.elegirEmpleado(1);
+    expect(cmp.textoSaldoEmpleado).toBe('Debo');
+    cmp.elegirEmpleado(2);
+    expect(cmp.textoSaldoEmpleado).toBe('Debo');
+    cmp.elegirEmpleado(3);
+    expect(cmp.textoSaldoEmpleado).toBe('A favor');
+  });
+
+  it('la frase del lado del empleado dice Debo cuando hay que pagarle', async () => {
+    // Aparte del test anterior porque NO se puede montar dos veces en el mismo
+    // `it`: el TestBed queda instanciado y la segunda montagem tira.
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'A', 30000, 3)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+    // 30.000 sugeridos, 10.000 pagados: faltan 20.000.
+    cmp.elegirEmpleado(1);
+    expect(cmp.debeEmpleadoTotal).toBe(20000);
+    expect(cmp.textoSaldoEmpleado).toBe('Debo');
+  });
+
+  // ── PROVEEDOR ─────────────────────────────────────────────
+
+  it('comprar NO es pagar: sin abonos, "Le debo" es lo comprado', async () => {
+    // El bug reportado: se compraron 12.000 y la tarjeta decía "−$12.000", que se
+    // leía como una deuda. Comprado es un gasto; la deuda es lo comprado menos
+    // lo pagado, y con nada pagado la deuda es exactamente lo comprado.
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Quimicas del Sur', activo: true }]),
+      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Quimicas del Sur', 12000)]),
+    });
+
+    expect(cmp.compreProveedor).toBe(12000);
+    expect(cmp.pagueProveedor).toBe(0);
+    cmp.elegirProveedor(1);
+    expect(cmp.debeProveedorTotal).toBe(12000);
+    expect(cmp.textoSaldoProveedorTotal).toBe('Debo');
+  });
+
+  it('con un abono parcial, "Le debo" es la diferencia', async () => {
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Quimicas del Sur', activo: true }]),
+      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Quimicas del Sur', 12000)]),
+      getPagosProveedor: () => Promise.resolve([
+        { id: 1, proveedor_id: 1, fecha: '2026-10-08', monto: 7000, metodo: 'transferencia', proveedores: { nombre: 'Quimicas del Sur', activo: true } },
+      ]),
+    });
+
+    expect(cmp.compreProveedor).toBe(12000);
+    expect(cmp.pagueProveedor).toBe(7000);
+    cmp.elegirProveedor(1);
+    expect(cmp.debeProveedorTotal).toBe(5000);
+  });
+
+  it('si se pagó todo, "Le debo" da 0 y no un número negativo', async () => {
+    // Un saldo en negativo con un cartel que dice "le debés" se lee al revés.
+    // Con cero, la pantalla dice cero y la frase dice que no debe nada.
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Quimicas del Sur', activo: true }]),
+      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Quimicas del Sur', 12000)]),
+      getPagosProveedor: () => Promise.resolve([
+        { id: 1, proveedor_id: 1, fecha: '2026-10-08', monto: 12000, metodo: 'transferencia', proveedores: { nombre: 'Quimicas del Sur', activo: true } },
+      ]),
+    });
+
+    cmp.elegirProveedor(1);
+    expect(cmp.debeProveedorTotal).toBe(0);
+    expect(cmp.haberProveedorTotal).toBe(0);
+    expect(cmp.textoSaldoProveedorTotal).toBe('');
+  });
+
+  it('cambiar de proveedor cambia los tres montos', async () => {
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([
+        { id: 1, nombre: 'Quimicas del Sur', activo: true },
+        { id: 2, nombre: 'Otro', activo: true },
+      ]),
+      getCompras: () => Promise.resolve([
+        COMPRA(1, 1, 'Quimicas del Sur', 12000),
+        COMPRA(2, 2, 'Otro', 3000),
+      ]),
+    });
+
+    cmp.elegirProveedor(1);
+    expect(cmp.compreProveedor).toBe(12000);
+    cmp.elegirProveedor(2);
+    expect(cmp.compreProveedor).toBe(3000);
+  });
+
+  it('el detalle de compras y de abonos es del proveedor elegido', async () => {
+    // Si el detalle no se filtrara, la tabla de abajo mostraría las compras de
+    // OTRO proveedor y el cuadro de arriba no cerraría con lo que hay debajo.
+    const { cmp } = await listo({
+      getProveedores: () => Promise.resolve([
+        { id: 1, nombre: 'Quimicas del Sur', activo: true },
+        { id: 2, nombre: 'Otro', activo: true },
+      ]),
+      getCompras: () => Promise.resolve([
+        COMPRA(1, 1, 'Quimicas del Sur', 12000),
+        COMPRA(2, 2, 'Otro', 3000),
+        COMPRA(3, 1, 'Quimicas del Sur', 2000),
+      ]),
+      getPagosProveedor: () => Promise.resolve([
+        { id: 1, proveedor_id: 1, fecha: '2026-10-08', monto: 5000, metodo: 'transferencia', proveedores: { nombre: 'Quimicas del Sur', activo: true } },
+        { id: 2, proveedor_id: 2, fecha: '2026-10-08', monto: 1000, metodo: 'transferencia', proveedores: { nombre: 'Otro', activo: true } },
+      ]),
+    });
+    // El primero: 2 compras y 1 abono.
+    cmp.elegirProveedor(1);
+    expect(cmp.comprasProveedorActual.length).toBe(2);
+    expect(cmp.pagosProveedorActual.length).toBe(1);
+    // 12.000 + 2.000 comprados, 5.000 pagados.
+    expect(cmp.compreProveedor).toBe(14000);
+    expect(cmp.pagueProveedor).toBe(5000);
+    expect(cmp.debeProveedorTotal).toBe(9000);
+
+    // El segundo: 1 compra y 1 abono.
+    cmp.elegirProveedor(2);
+    expect(cmp.comprasProveedorActual.length).toBe(1);
+    expect(cmp.pagosProveedorActual.length).toBe(1);
+    // 3.000 comprados, 1.000 pagados.
+    expect(cmp.compreProveedor).toBe(3000);
+    expect(cmp.pagueProveedor).toBe(1000);
+    expect(cmp.debeProveedorTotal).toBe(2000);
+  });
+
+
+  it('un id de empleado que no es un número cae al primero, no a NaN', async () => {
+    // `NaN !== null`, así que una comparación suelta lo deja pasar y los tres
+    // montos dan 0 sin que nada en pantalla explique por qué. Es un caso que no
+    // se llega a tocar desde el dropdown, pero deja la pantalla en un estado
+    // imposible de explicar, así que el getter lo cubre.
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'A', 25000, 3)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+
+    cmp.elegirEmpleadoDelCombo('no-es-un-numero');
+    expect(cmp.empleadoActual).not.toBeNaN();
+    expect(Number.isFinite(cmp.empleadoActual as number)).toBe(true);
+
+    // Y los montos no quedan todos en cero sin motivo.
+    expect(cmp.deboEmpleado).toBeGreaterThan(0);
+  });
+
+  it('sin proveedores cargados los tres montos dan 0, no NaN', async () => {
+    const { cmp } = await listo({ getProveedores: () => Promise.resolve([]) });
+    expect(cmp.proveedorActual).toBe(null);
+    expect(cmp.compreProveedor).toBe(0);
+    expect(cmp.pagueProveedor).toBe(0);
+    // Sale del modo "Todos" para afirmar sobre UN proveedor y no sobre el total.
+    expect(cmp.debeProveedorTotal).toBe(0);
+    expect(cmp.haberProveedorTotal).toBe(0);
+  });
+
+  it('si la tabla pagos_proveedor no existe, la pantalla igual carga', async () => {
+    // La migración 013 puede no estar aplicada en el proyecto. `cargarDatos` lo
+    // captura para que no se caiga TODA la pantalla por una tabla que falta.
+    const { cmp } = await listo({
+      getPagosProveedor: () => Promise.reject(new Error('relation "pagos_proveedor" does not exist')),
+      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Quimicas del Sur', 12000)]),
+    });
+
+    expect(cmp.pagosProveedor).toEqual([]);
+    // Y los otros datos siguen intactos: el total de compras no se pierde.
+    expect(cmp.totalCompras).toBe(12000);
+  });
+});
+
+describe('Caja — los cuadros no muestran el signo negativo', () => {
+  // ══════════════════════════════════════════════════════════════
+  // LO QUE PIDIO EL USUARIO, EXPRESO
+  //
+  //   · "no le pongas signos negativo"
+  //   · "en la frase pon A su favor"
+  //   · "que no sean frases largas"
+  //   · "con rojo y verde ya estaria, de ultima pone A su favor, si no nada"
+  //
+  // O sea: el numero va SIEMPRE en positivo, la frase solo aparece cuando el
+  // saldo es A SU FAVOR, y en los otros dos casos no dice nada porque el color
+  // ya lo dice.
+  //
+  // Estos tests miran el TEXTO RENDERIZADO, no el getter del numero: el getter
+  // sigue siendo negativo (es la cuenta correcta) y lo que cambia es que en
+  // pantalla no aparece el `−`. Un test del getter no_notaria_ nada de esto.
+  // ══════════════════════════════════════════════════════════════
+
+  const listo = async (over: Record<string, any> = {}) => {
+    const r = montar(over);
+    await r.cmp.cargarDatos();
+    return r;
+  };
+
+  const norm = (t: string) => t.replace(/[.,]/g, '').trim();
+
+  it('un saldo a favor se muestra POSITIVO, con "A su favor" y sin guion', async () => {
+    // Se le pagaron 25.000 y no atendio nada: el caso del "debo 25 mil".
+    const { cmp, fixture } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'Esteban', 0, 0)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(25000)]),
+    });
+    cmp.cambiarTab('empleados');
+    fixture.detectChanges();
+
+    const tarjetas = fixture.nativeElement.querySelectorAll('.stats-trio .stat-card');
+    const tercera = tarjetas[tarjetas.length - 1];
+    const valor = norm((tercera.querySelector('.stat-value').textContent || ''));
+    const nota = norm((tercera.querySelector('.stat-nota').textContent || ''));
+
+    // POSITIVO: sin el `−` (U+2212) ni el guion ASCII.
+    expect(valor).toBe('$25000');
+    expect(valor.includes('-')).toBe(false);
+    expect(valor.includes(String.fromCharCode(0x2212))).toBe(false);
+    expect(nota).toBe('A favor');
+  });
+
+  it('una deuda se muestra positiva, en rojo, y dice "Debo"', async () => {
+    const { cmp, fixture } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'Esteban', 30000, 3)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+    cmp.cambiarTab('empleados');
+    fixture.detectChanges();
+
+    const tarjetas = fixture.nativeElement.querySelectorAll('.stats-trio .stat-card');
+    const tercera = tarjetas[tarjetas.length - 1];
+    const valor = norm((tercera.querySelector('.stat-value').textContent || ''));
+    const nota = norm((tercera.querySelector('.stat-nota').textContent || ''));
+
+    expect(valor).toBe('$20000');
+    // La palabra NO es decorativa: el título del cuadro es "Debe / Haber", que
+    // no dice de qué lado está. Sin el "Debo" de abajo, un $20.000 en rojo al lado
+    // de un $25.000 en verde no sabría explicar de quién es cada uno.
+    expect(nota).toBe('Debo');
+    // Y el color también lo avisa: rojo.
+    expect(tercera.classList.contains('rojo')).toBe(true);
+  });
+
+  it('cuadra exacto: $0, sin frase, en verde', async () => {
+    const { cmp, fixture } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'Esteban', 10000, 1)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+    cmp.cambiarTab('empleados');
+    fixture.detectChanges();
+
+    const tarjetas = fixture.nativeElement.querySelectorAll('.stats-trio .stat-card');
+    const tercera = tarjetas[tarjetas.length - 1];
+    expect(norm((tercera.querySelector('.stat-nota').textContent || ''))).toBe('');
+    expect(tercera.classList.contains('verde')).toBe(true);
+    // El cero es `$0` y NO una raya. Con la raya, esta tarjeta se veía distinta
+    // de las dos de al lado que sí muestran `$0`, y un número que no aparece
+    // parece un dato que falta.
+    expect(norm((tercera.querySelector('.stat-value').textContent || ''))).toBe('$0');
+  });
+
+  it('en Gastos pasa lo mismo: "A favor" y sin signo', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Quimicas del Sur', activo: true }]),
+      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Quimicas del Sur', 5000)]),
+      getPagosProveedor: () => Promise.resolve([
+        { id: 1, proveedor_id: 1, fecha: '2026-10-08', monto: 12000, metodo: 'transferencia', proveedores: { nombre: 'Quimicas del Sur', activo: true } },
+      ]),
+    });
+    cmp.cambiarTab('gastos');
+    fixture.detectChanges();
+
+    const tarjetas = fixture.nativeElement.querySelectorAll('.stats-trio .stat-card');
+    const tercera = tarjetas[tarjetas.length - 1];
+    const valor = norm((tercera.querySelector('.stat-value').textContent || ''));
+
+    // Se le pagaron 12.000 sobre 5.000 comprados: 7.000 a su favor.
+    expect(valor).toBe('$7000');
+    expect(valor.includes(String.fromCharCode(0x2212))).toBe(false);
+    expect(norm((tercera.querySelector('.stat-nota').textContent || ''))).toBe('A favor');
+    expect(tercera.classList.contains('verde')).toBe(true);
+  });
+
+  it('la frase es SIEMPRE una de las TRES, nunca un parrafo', async () => {
+    // Un `.toContain` sobre la lista cerrada. Es lo que frena que vuelva la frase
+    // larga del principio: "Se le pago de mas, no le debes nada". El pedido fue
+    // una o dos palabras, y esta lista es de tres valores con dos palabras cada
+    // uno (o vacío).
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([
+        SUGERIDO(1, 'A', 30000, 3),
+        SUGERIDO(2, 'B', 20000, 2),
+        SUGERIDO(3, 'C', 10000, 1),
+      ]),
+      getPagosEmpleado: () => Promise.resolve([
+        PAGO_JUAN(10000),
+        { id: 2, empleado_id: 2, fecha: '2026-10-05', monto: 10000, metodo: 'efectivo', empleados: null },
+        { id: 3, empleado_id: 3, fecha: '2026-10-05', monto: 20000, metodo: 'efectivo', empleados: null },
+      ]),
+    });
+
+    // Las tres, y solo tres: "Debo", "A favor", y vacío en el cuadrado exacto.
+    const permitidas = ['', 'Debo', 'A favor'];
+    for (const id of [1, 2, 3]) {
+      cmp.elegirEmpleado(id);
+      expect(permitidas).toContain(cmp.textoSaldoEmpleado);
+    }
+
+    // Y que ninguna sea larga. Dos palabras es el techo.
+    for (const id of [1, 2, 3]) {
+      cmp.elegirEmpleado(id);
+      expect(cmp.textoSaldoEmpleado.split(' ').filter(Boolean).length).toBeLessThanOrEqual(2);
+    }
   });
 });

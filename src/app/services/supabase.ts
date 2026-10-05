@@ -965,6 +965,57 @@ export class SupabaseService {
     if (error) throw error;
   }
 
+  // ── PAGOS A PROVEEDORES ───────────────────────────────────────
+  //
+  // Es un LIBRO DE ABONOS, no una marca de "pagada" sobre la compra: a los
+  // proveedores se les paga por partes, así que una compra puede tener varios
+  // abonos y el saldo se calcula comparando comprado contra pagado.
+  //
+  // Requiere la migración 013. Mientras no esté aplicada, estas llamadas tiran
+  // error de PostgREST; `cargarDatos()` de Caja lo captura para que la pantalla
+  // no quede en blanco.
+
+  /** Abonos a proveedores del período, con el nombre ya resuelto. */
+  async getPagosProveedor(desde: string, hasta: string) {
+    const { data, error } = await this.supabase
+      .from('pagos_proveedor')
+      .select('*, proveedores(nombre, activo)')
+      .gte('fecha', desde)
+      .lte('fecha', hasta)
+      .order('fecha', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  async crearPagoProveedor(datos: any) {
+    const { data, error } = await this.supabase
+      .from('pagos_proveedor')
+      .insert(datos)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async actualizarPagoProveedor(id: number, datos: any) {
+    const { data, error } = await this.supabase
+      .from('pagos_proveedor')
+      .update(datos)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async eliminarPagoProveedor(id: number) {
+    const { error } = await this.supabase
+      .from('pagos_proveedor')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }
+
   /**
    * Comisión sugerida de TODOS los empleados en un período, en una sola pasada.
    *

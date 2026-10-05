@@ -188,6 +188,13 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
     actualizarCompra: (id: number, c: any) => Promise.resolve({ id, ...c }),
     eliminarCompra: () => Promise.resolve(),
 
+    // --- Caja: pagos a proveedores (migración 013) ---
+    // Mismo modelo que los de empleados: un libro de abonos, varios por compra.
+    getPagosProveedor: vacio,
+    crearPagoProveedor: (p: any) => Promise.resolve({ id: 1, ...p }),
+    actualizarPagoProveedor: (id: number, p: any) => Promise.resolve({ id, ...p }),
+    eliminarPagoProveedor: () => Promise.resolve(),
+
     // --- realtime: en tests no hay suscripciones ---
     suscribirTurnos: () => ({ unsubscribe: noop }),
     suscribirHorarios: () => ({ unsubscribe: noop }),

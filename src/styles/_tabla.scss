@@ -1,10 +1,20 @@
 // ============================================================
 // TABLA Y SECCIONES COMPARTIDAS
 // ------------------------------------------------------------
-// Vive aca porque lo usan DOS pantallas: Caja (compras, pagos y
-// proveedores) y Personas > Proveedores. Estaba todo en `caja.scss` y
-// cuando el ABM de proveedores se movio a Personas, duplicarlo habria
-// sido la manera rapida de que las dos tablas se desincronicen solas.
+// Vive acá porque lo usan TRES pantallas: Dashboard, Caja (compras,
+// pagos, saldos y el detalle de comisiones) y Personas > Proveedores. Estaba
+// todo en `caja.scss` y cuando el ABM de proveedores se movió a Personas,
+// duplicarlo habría sido la manera rápida de que las dos tablas se
+// desincronicen solas. Después pasó al revés: `.tabla` vivía solo en
+// `dashboard.scss` y "copiar el estilo de la tabla de Dashboard" para Caja
+// exigía copiar el bloque. Un partial por consumidor y nada de copias.
+//
+// OJO: los estilos de un componente Angular llevan su `[_ngcontent-xxx]`, así
+// que un partial NO matchea el template de otro componente por arte de música.
+// Lo que hace que funcione es que cada componente lo importe con `@use` en SU
+// propio SCSS, y entonces las reglas se compilan dentro de su stylesheet. Si un
+// día una pantalla nueva usa estas clases y no las ve, el primer suspecto es que
+// le falta el `@use`.
 //
 // Uso:  @use '../../../styles/tabla';
 // ============================================================
@@ -31,7 +41,131 @@
   padding: 24px 0;
 }
 
-// ── TABLAS ───────────────────────────────────────────────────
+// ── TABLA DE VERDAD (`<table class="tabla">`) ─────────────────
+//
+// El otro estilo de tabla, el que usa Dashboard y que Caja ahora adoptó para sus
+// cuatro tablas.
+//
+// Antes vivía SOLO en `dashboard.scss`, así que "copiar el estilo de la tabla
+// de Dashboard" significaba inevitably duplicarlo. Va acá para que sea de
+// verdad compartido: `dashboard.scss` y `caja.scss` lo traen por `@use` y no
+// tienen una copia cada uno.
+//
+// Las tablas de rejilla de más abajo (`.tabla-caja`) siguen existiendo para las
+// pantallas que las usan, y son un estilo DISTINTO a propósito: la rejilla
+// permite que cada tabla declare sus columnas sin pelearse por un colspan.
+.tabla-wrapper {
+  overflow-x: auto;
+  // Para que el scroll con el dedo no dispare el scroll de la página en iOS.
+  -webkit-overflow-scrolling: touch;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 0.8rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #e2e8f0;
+    // SIN `white-space: nowrap` a propósito: el `.tabla` del Dashboard nunca lo
+    // tuvo y en pantalla chica los encabezados largos ("EMPLEADO") bajan de
+    // línea antes que empujar la tabla. Quien necesite la columna sin partirla
+    // la pide con `.col-angosta`, que sí lo declara.
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
+    font-size: 0.9rem;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f8fafc; }
+
+  // "No hay turnos para hoy", dentro de la tabla. Es un `.vacio` ANIDADO y no el
+  // `.vacio` suelto de arriba de este archivo (que tiene padding 24px): este
+  // necesita 32px para que la fila vacía tenga aire de fila. El padding del de
+  // arriba no alcanzaba y el texto quedaba pegado al borde.
+  .vacio {
+    text-align: center;
+    color: #94a3b8;
+    padding: 32px;
+  }
+
+  // Fila de Total, en `<tfoot>`: es donde un lector de pantalla la encuentra, y
+  // no en un `<div>` suelto como estaba antes.
+  tfoot td {
+    font-weight: 700;
+    background: #f8fafc;
+    border-top: 2px solid #e2e8f0;
+  }
+
+  /* Columnas angostas: Fecha, Hora, Turnos, Cant.
+   *
+   * `width: 1%` + `white-space: nowrap` hace que la columna tome lo justo y le
+   * devuelva el resto a la que importa. Sin esto la celda reparte en partes
+   * iguales y "Fecha" se come un tercio de la pantalla con un "2026-10-01"
+   * adentro y un montón de blanco al lado. */
+  .col-angosta {
+    width: 1%;
+    white-space: nowrap;
+  }
+
+  .col-acciones {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+  }
+
+  .celda-principal { font-weight: 600; }
+
+  // La comisión es lo que hay que leer de esa tabla, así que negrita y verde.
+  .celda-comision {
+    font-weight: 700;
+    color: #15803d;
+    font-variant-numeric: tabular-nums;
+  }
+
+  // La diferencia y el saldo son lo que hay que mirar al cerrar el mes, así que
+  // van en negrita siempre. El color dice a favor de quién está la cuenta.
+  .celda-diferencia {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  // ===============================================================
+  // ROJO, VERDE Y GRIS: EL COLOR DICE DE QUÉ LADO ESTÁ EL DINERO
+  // ===============================================================
+  //
+  // Tres colores, y el tercero es el que hace que la tabla se pueda leer:
+  //
+  //   · rojo  = le debo plata a este (columna "Debe")
+  //   · verde = me deben plata (columna "Haber")
+  //   · gris  = NO HAY NADA de este lado (el `$0` de la columna que no aplica)
+  //
+  // El gris no es decorativo. Con dos columnas, la mitad de las celdas de cada
+  // fila son `$0`: si esas tomaran el color de su columna, la tabla sería una
+  // lista de rojos y verdes donde el color no dice nada. Con el gris, lo que
+  // brilla es lo que tiene plata.
+  //
+  // OJO: estas reglas viven en el bloque de `.tabla` y NO en el de `.tabla-caja`
+  // de más abajo. Ahí hay un `.verde` y un `.rojo` iguales, pero ese bloque es
+  // para la rejilla vieja; las tablas de Caja son `<table class="tabla">`, y con
+  // las reglas solo en `.tabla-caja` el `ngClass` ponía la clase pero el texto
+  // salía del color por defecto.
+  .rojo  { color: #b91c1c; }
+  .verde { color: #15803d; }
+  .cero  { color: #94a3b8; }
+}
+
+// ── TABLAS DE REJILLA (`.tabla-caja`) ────────────────────────
 // Rejilla y no <table>: cada tabla tiene columnas distintas y así cada una
 // define las suyas sin pelearse por un colspan.
 // ── SCROLL HORIZONTAL DE TABLAS ─────────────────────────────

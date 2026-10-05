@@ -4,6 +4,17 @@
 // precedan a cualquier otra regla.
 @use '../../../styles/popup';
 @use '../../../styles/buscador-crear';
+// `.tabla` y `.tabla-wrapper` se mudaron a `src/styles/_tabla.scss` para que Caja
+// pueda usar el MISMO estilo de tabla sin copiarlo. Antes vivían solo acá y
+// "copiar la tabla de Dashboard" era inevitable duplicar el bloque.
+//
+// OJO al mover un bloque: el primer intento de sacar `.tabla` de este archivo
+// casi se lleva por delante `.controles`, `.vistas`, `.navegacion`, `.btn-nav`,
+// `.btn-hoy`, `.fecha-titulo`, `.ir-a-fecha` y `.seccion-header`, que estaban en
+// medio. El Dashboard perdió el input de fecha y los botones se aplastaron. Va
+// el aviso acá a propósito: el `@use` no es lo peligroso de este archivo, lo
+// peligroso es el bloque que se mueve de lugar.
+@use '../../../styles/tabla';
 
 .dashboard-page {
   padding: 24px;
@@ -70,10 +81,6 @@
   padding: 24px;
   margin-bottom: 24px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-}
-
-.tabla-wrapper {
-  overflow-x: auto;
 }
 
 .controles {
@@ -205,37 +212,6 @@
   font-size: 0.85rem;
   cursor: pointer;
   &:hover { background: #e2e8f0; }
-}
-
-.tabla {
-  width: 100%;
-  border-collapse: collapse;
-
-  th {
-    text-align: left;
-    padding: 10px 12px;
-    font-size: 0.8rem;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid #e2e8f0;
-  }
-
-  td {
-    padding: 12px;
-    border-bottom: 1px solid #f1f5f9;
-    color: #1e293b;
-    font-size: 0.9rem;
-  }
-
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: #f8fafc; }
-
-  .vacio {
-    text-align: center;
-    color: #94a3b8;
-    padding: 32px;
-  }
 }
 
 .badge {

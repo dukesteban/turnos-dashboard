@@ -139,55 +139,20 @@
           </div>
         </div>
 
-        <!-- Resumen por período -->
-        <div class="resumen-periodo">
-          <div class="periodo-selector">
-            <button class="btn-periodo" [class.activo]="vistaComisiones === 'dia'" (click)="vistaComisiones = 'dia'; cargarComisiones()">
-              <span class="icono">📅</span> Día
-            </button>
-            <button class="btn-periodo" [class.activo]="vistaComisiones === 'semana'" (click)="vistaComisiones = 'semana'; cargarComisiones()">
-              <span class="icono">📅</span> Semana
-            </button>
-            <button class="btn-periodo" [class.activo]="vistaComisiones === 'mes'" (click)="vistaComisiones = 'mes'; cargarComisiones()">
-              <span class="icono">📅</span> Mes
-            </button>
-          </div>
+        <!--
+          SE MUDÓ EL "RESUMEN POR PERÍODO" A CAJA.
 
-          <div class="navegacion-fecha">
-            <button class="btn-nav" (click)="navegarPeriodo(-1)">‹</button>
-            <button class="btn-hoy" (click)="irAHoy()">Hoy</button>
-            <button class="btn-nav" (click)="navegarPeriodo(1)">›</button>
-            <span class="fecha-periodo">{{ formatearPeriodo() }}</span>
-          </div>
+          Este bloque decía "Servicios / Total a pagar" con el detalle turno por
+          turno del empleado elegido. Era un asunto de caja, no de la ficha: para
+          ver cuánto se le tiene que pagar a alguien había que abrir su ficha acá.
 
-          <div class="resumen">
-            <div class="resumen-item">
-              <span class="resumen-label">Servicios</span>
-              <span class="resumen-valor">{{ totalServiciosAtendidos }}</span>
-            </div>
-            <div class="resumen-item">
-              <span class="resumen-label">Total a pagar</span>
-              <span class="resumen-valor">${{ totalComisiones | number:'1.2-2' }}</span>
-            </div>
-          </div>
+          Ahora está en Caja → Empleados, como "Detalle de comisiones", con un
+          selector de empleado y el filtro Día/Semana/Mes de toda la pantalla.
 
-          <div class="servicios-lista">
-            <div *ngIf="cargandoComisiones" class="vacio-sm">Cargando...</div>
-            <div *ngIf="!cargandoComisiones">
-              <div *ngFor="let c of comisionesEmpleado" class="servicio-item">
-                <div class="servicio-fecha">{{ formatearFechaTurno(c.fecha) }} - {{ formatearHora(c.hora) }}</div>
-                <div class="servicio-nombre">{{ c.servicio_nombre }}</div>
-                <div class="servicio-monto">
-                  <span class="monto-total">${{ c.precio_final | number }}</span>
-                  <span class="monto-comision">+${{ c.comision | number:'1.2-2' }}</span>
-                </div>
-              </div>
-              <div *ngIf="comisionesEmpleado.length === 0" class="vacio-sm">Sin servicios en este período</div>
-            </div>
-          </div>
-        </div>
-        </div>
-      </div>
+          Lo que QUEDÓ en esta pantalla es el bloque de arriba (L118-140): los
+          porcentajes de comisión por servicio, que sí son parte de la ficha
+          (se editan acá, con el plumín).
+        -->
 
       <!-- JORNADA -->
       <div class="acordeon">

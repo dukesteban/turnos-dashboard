@@ -21,7 +21,7 @@ export class CajaComponent implements OnInit {
   // en `cargarDatos()`, porque el resumen del header (que está arriba de las
   // pestañas) necesita los tres números para cualquier pestaña.
   // `tab` es `string` y no una unión de literales a propósito. Con la unión
-  // ('ingresos' | 'compras' | 'empleados'), el type checker de templates de
+  // ('ingresos' | 'gastos' | 'empleados'), el type checker de templates de
   // Angular ESTRECHA el tipo después del primer `*ngIf="tab === 'ingresos'"` y
   // se queja con TS2367 de que comparar con 'empleados' no tiene sentido, aunque
   // el narrowing solo valga para ese bloque. Ampliar a string lo evita.
@@ -32,7 +32,14 @@ export class CajaComponent implements OnInit {
   // mismo valor por eso.
   tab: string = 'ingresos';
 
-  vista: 'dia' | 'mes' = 'mes';
+  /**
+ * Granularidad del período de toda la pantalla.
+ *
+ * `semana` se agregó porque el bloque "total a pagar por empleado" necesita
+ * ver una quincena: con solo Día y Mes no hay forma de mirar "cómo viene la
+ * segunda quincena" sin caer a un día y sumar 15 a mano.
+ */
+  vista: 'dia' | 'semana' | 'mes' = 'mes';
   fechaActual = new Date();
   turnos: any[] = [];
   cargando = false;
@@ -48,6 +55,24 @@ export class CajaComponent implements OnInit {
   pagosPorEmpleado: any[] = [];
   // Solo para el combo de "registrar pago". No se usan para calcular nada.
   todosLosEmpleados: any[] = [];
+  /**
+   * Porcentajes de comisión POR SERVICIO, que pisan al general del empleado.
+   *
+   * Va aparte de `comisionesPeriodo`: ese trae el total YA calculado por
+   * empleado, y este trae los porcentajes crudos que hacen falta para el detalle
+   * turno por turno de la pestaña Empleados.
+   */
+  comisionesServicio: any[] = [];
+
+  /**
+   * Abonos a proveedores del período. Requiere la migración 013.
+   *
+   * Va en `[]` si la migración no está aplicada: `cargarDatos()` lo captura para
+   * que la pantalla no quede en blanco.
+   */
+  pagosProveedor: any[] = [];
+  /** Comprado menos pagado, por proveedor. Ver `armarSaldoPorProveedor`. */
+  saldoPorProveedor: any[] = [];
   mostrarFormPago = false;
   nuevoPago: any = { empleado_id: null, fecha: '', monto: null, metodo: 'efectivo', notas: '' };
   guardandoPago = false;
@@ -77,21 +102,31 @@ export class CajaComponent implements OnInit {
   constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
 
   /**
-   * Columna "Diferencia" de "Sugerido vs pagado".
+   * Formato de la columna "Falta pagar".
    *
-   * `diferencia = pagado - sugerido`, así que:
-   *   · positiva = se pagó MÁS de lo sugerido  -> verde, `$19.000`
-   *   · negativa = se pagó MENOS de lo sugerido -> rojo, `-$19.000`
-   *   · cero     = cuadró exacto                -> verde, `—`
+   * `faltaPagar = sugerido - pagado`, así que:
+   *   · positiva = todavía se le debe      -> rojo,   `$19.000`
+   *   · negativa = se le pagó de más       -> verde,  `−$19.000`
+   *   · cero     = cuadró exacto            -> verde,  `—`
    *
-   * Dos decisiones que parecen arbitrarias y no lo son:
+   * ESTE SIGNO SE INVIYERTIÓ, y el nombre de la columna con él. Antes la
+   * columna se llamaba "Diferencia" y era `pagado - sugerido`: un empleado al que
+   * se le pagaron 25.000 y no atendió nada daba `+$25.000` en verde, que se leía
+   * como "le debés 25 mil" diciendo justo lo contrario.
+   *
+   * Ahora la columna dice "Falta pagar", y un número que se llama así y da
+   * NEGATIVO no se puede leer al revés: negativo es "no le debés nada".
+   *
+   * OJO: esto invierte la convención de color que se había fijado antes
+   * (positivo verde, negativo rojo). Ahora es al revés, y es A PROPÓSITO: el
+   * color acompaña al nombre de la columna, no al signo crudo.
+   *
+   * Dos decisiones más que parecen arbitrarias y no lo son:
    *
    * **El `+` no se muestra.** Acá todos los números son plata que salió de la
-   * caja, no variaciones de la ganancia: un `+$19.000` se lee como "ganó 19 mil"
-   * cuando en realidad es "se le pagó 19 mil más de lo que le correspondía", que
-   * es justo lo que hay que mirar para decidir si el porcentaje está mal.
+   * caja, no variaciones de la ganancia: un `+$19.000` se lee como "ganó 19 mil".
    *
-   * **El menos va antes del `$`.** `-$19.000` y no `$-19.000`: es como se
+   * **El menos va antes del `$`.** `−$19.000` y no `$-19.000`: es como se
    * escribe un saldo en negativo, y `$-` se lee como un signo de moneda.
    *
    * El signo y el color van en MÉTODOS y no en el `[class.x]` del template: son
@@ -104,23 +139,21 @@ export class CajaComponent implements OnInit {
    * `DecimalPipe` no es `providedIn: 'root'`. Inyectarlo tira NG0201.
    */
 
-  /** El signo va adelante del `$`. Vacío en positivo. */
-  signoDiferencia(d: number): string {
-    // Signo tipográfico U+2212, el mismo que usan las filas del resumen. El
-    // guion ASCII se vería casi igual pero es otro carácter: si someday se
-    // busca el texto o se compara, no matchean.
-    return d < 0 ? '−' : '';
-  }
 
-  /** Para que el pipe `number` no reciba el negativo y saque el menos solo. */
-  absDiferencia(d: number): number {
-    return Math.abs(d);
-  }
-
-  /** Verde si se pagó de más (o justo), rojo si se pagó de menos. */
-  claseDiferencia(d: number): string {
-    return d >= 0 ? 'verde' : 'rojo';
-  }
+  // ── LOS SIGNOS, EL NÚMERO CON SIGNO Y EL COLOR: CÓMO SE HACÍA ANTES ──
+  //
+  // Ver la nota de arriba, en el `import`. Antes de esta ronda, las celdas de la
+  // tabla usaban tres helpers (`signoDiferencia`, `absDiferencia`,
+  // `claseDiferencia`) para armar `−$25.000` en rojo o verde.
+  //
+  // YA NO EXISTEN, y no por limpieza: están borrados a propósito porque el
+  // pedido fue explícito ("no quiero positivo ni negativos"). La diferencia se
+  // parte en dos columnas, "Debe" y "Haber", y cada celda muestra SU cantidad en
+  // positivo con el color de SU columna. Un signo tipográfico en pantalla es
+  // justo lo que se pidió sacar, así que no queda ni el helper ni el camino que
+  // lo produciría.
+  //
+  // Lo que los reemplaza son `claseDebe` y `claseHaber`, más abajo.
 
   async ngOnInit() {
     await this.cargarHorarios();
@@ -173,7 +206,7 @@ export class CajaComponent implements OnInit {
     const { desde, hasta } = this.getRango();
     // Las tres pestañas en paralelo: son independientes y van a la misma base.
     // Con `await` una detrás de otra el usuario esperaría 3x lo necesario.
-    const [turnos, pagos, comisiones, compras, proveedores, empleados] = await Promise.all([
+    const [turnos, pagos, comisiones, compras, proveedores, empleados, comisionesServicio, pagosProveedor] = await Promise.all([
       this.supabase.getGanancias(desde, hasta),
       this.supabase.getPagosEmpleado(desde, hasta),
       this.supabase.getComisionesPeriodo(desde, hasta),
@@ -182,6 +215,24 @@ export class CajaComponent implements OnInit {
       // Activos solamente: el combo de pago no debería ofrecer a alguien dado
       // de baja. `getEmpleados()` con `soloActivos` por defecto.
       this.supabase.getEmpleados(),
+      // Los porcentajes POR SERVICIO, que pisan al general del empleado. Van
+      // encadenados porque necesitan los ids de `getEmpleados()`, pero siguen
+      // dentro del `Promise.all`: la pantalla no espera de más.
+      //
+      // Se necesitan para el detalle de comisiones de la pestaña Empleados, que
+      // muestra el porcentaje de cada turno. Sin esto, un empleado con "40% en
+      // lavado completo" vería todos sus turnos calculados con el general.
+      this.supabase.getEmpleados()
+        .then((emps: any[]) => this.supabase.getComisionesEmpleado(emps.map((e: any) => e.id))),
+
+      // Los abonos a proveedores. ÚNICA llamada de la tanda con `catch`: la
+      // tabla `pagos_proveedor` la crea la migración 013, y si esa migración no
+      // está aplicada en el proyecto el POST devuelve 404 y el `Promise.all`
+      // REVienta TODO: no se ven más ni los ingresos ni los pagos a empleados.
+      //
+      // Una lista vacía es mucho mejor que una pantalla en blanco por
+      // una tabla que todavía no existe en la base.
+      this.supabase.getPagosProveedor(desde, hasta).catch(() => []),
     ]);
     this.turnos = turnos;
     this.pagos = pagos;
@@ -189,10 +240,56 @@ export class CajaComponent implements OnInit {
     this.compras = compras;
     this.proveedores = proveedores;
     this.todosLosEmpleados = empleados;
+    this.comisionesServicio = comisionesServicio;
+    this.pagosProveedor = pagosProveedor;
     this.armarPagosPorEmpleado();
+    this.armarSaldoPorProveedor();
     this.cargando = false;
     this.cdr.detectChanges();
     this.scrollToHoy();
+  }
+
+  /**
+   * Saldo por proveedor: comprado menos pagado.
+   *
+   * Es el número que responde "¿le debo plata a este proveedor?". Va por
+   * proveedor y no por compra porque a los proveedores se les paga a cuenta:
+   * el abono del lunes puede estar saldando la compra de la semana anterior.
+   */
+  armarSaldoPorProveedor() {
+    const porId = new Map<number, any>();
+    this.compras.forEach((c: any) => {
+      const nombre = c.proveedores?.nombre || `Proveedor #${c.proveedor_id}`;
+      // `if (!has)` y NO un `set` a secas: con dos compras del mismo proveedor, un
+      // `set` sin condición RECREABA la fila en cada vuelta y el `+=` arrancaba
+      // de cero. El resultado era que `comprado` valía solo el monto de la última
+      // compra y `compras` tenía un solo elemento, aunque el proveedor tuviera
+      // cinco. Solo se nota con más de una compra del mismo proveedor, que es el
+      // caso normal de cualquier proveedor al que se le compra todas las semanas.
+      if (!porId.has(c.proveedor_id)) {
+        porId.set(c.proveedor_id, {
+          proveedor_id: c.proveedor_id, nombre, comprado: 0, pagado: 0, saldo: 0, compras: [] as any[],
+        });
+      }
+      const fila = porId.get(c.proveedor_id);
+      fila.nombre = nombre;
+      fila.comprado += Number(c.monto) || 0;
+      fila.compras.push(c);
+    });
+    this.pagosProveedor.forEach((p: any) => {
+      const nombre = p.proveedores?.nombre || `Proveedor #${p.proveedor_id}`;
+      if (!porId.has(p.proveedor_id)) {
+        porId.set(p.proveedor_id, {
+          proveedor_id: p.proveedor_id, nombre, comprado: 0, pagado: 0, saldo: 0, compras: [] as any[],
+        });
+      }
+      const fila = porId.get(p.proveedor_id);
+      fila.nombre = nombre;
+      fila.pagado += Number(p.monto) || 0;
+    });
+    this.saldoPorProveedor = [...porId.values()]
+      .map((f: any) => ({ ...f, saldo: f.comprado - f.pagado }))
+      .sort((a: any, b: any) => b.saldo - a.saldo || b.comprado - a.comprado);
   }
 
   // ── CAJA: EL NÚCLEO ────────────────────────────────────────
@@ -211,22 +308,631 @@ export class CajaComponent implements OnInit {
     return this.pagos.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
   }
 
-  /** Lo que se le pagó a los proveedores. */
+  /**
+   * Lo que se COMPRÓ a los proveedores en el período. Ojo: comprar no es pagar.
+   * Para lo que salió de la cuenta está `totalPagadoProveedores`.
+   */
   get totalCompras(): number {
     return this.compras.reduce((sum, c) => sum + (Number(c.monto) || 0), 0);
   }
 
-  /** Todos los salidas juntos. */
+  /**
+   * Lo que se le ABONÓ a los proveedores en el período.
+   *
+   * Es el número que va en la tarjeta "Gastos", y no `totalCompras`. Comprar
+   * 12.000 no significa deber 12.000: si compraste y no pagaste, no debés nada.
+   * El saldo por proveedor (`saldoPorProveedor`) es el que contesta eso.
+   */
+  get totalPagadoProveedores(): number {
+    return this.pagosProveedor.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
+  }
+
+  /**
+   * "DD/MM/YYYY" a partir de un "AAAA-MM-DD" de la base.
+   *
+   * Las tablas de Caja mostraban la fecha cruda ("2026-10-01") mientras el
+   * resto de la app muestra "01/10/2026". Se hace a mano y no con el pipe
+   * `date` porque el pipe usa la zona horaria del navegador: con una fecha
+   * "2026-10-01" devuelve 30/09 en un timezone negativo.
+   */
+  formatearFechaCorta(iso: string): string {
+    if (!iso) return '';
+    const [y, m, d] = String(iso).split('-');
+    if (!y || !m || !d) return iso;
+    return `${d}/${m}/${y}`;
+  }
+
+  // ── ACORDEONES ───────────────────────────────────────────────
+  //
+  // Todas las tablas de la pantalla van en un acordeón, como en Personas.
+  //
+  // El detalle de comisiones y "Totales a pagar" arrancan ABiertos: son lo que
+  // se viene a mirar en la pestaña. El resto arranca cerrado, que es el punto
+  // del accordion (la pantalla no es una lista interminable de tablas).
+  //
+  // Los flags son `boolean` y no un objeto porque cada uno va atado a un solo
+  // `*ngIf`: meterlos en un mapa por nombre agregaría una capa de indirección
+  // para no ganar nada.
+  //
+  // "Todos los empleados" y "Todos los proveedores" arrancan CERRADOS y están al
+  // FINAL de la pestaña: es la vista larga, para comparar, no la que se mira
+  // primero. Arriba están los tres cuadros del que elegiste.
+  //
+  // `acordeonDetalle` y `acordeonPagos` arrancan ABIERTOS porque son el detalle
+  // de a quién estás mirando, que es lo que se vino a ver.
+  acordeonDetalle = true;
+  acordeonPagos = true;
+  acordeonTotales = false;
+  acordeonSaldo = false;
+  acordeonPagosProv = false;
+  acordeonCompras = false;
+
+  // ── "TODOS" EN EL COMBO ──────────────────────────────────────
+  //
+  // La PRIMERA opción del selector, y el estado en el que arranca la pantalla.
+  //
+  // Por qué arranca en "Todos" y no en el primero de la lista: "Todos" es la
+  // pregunta que uno se hace al abrir la caja ("¿cuánto debo en total?"), y el
+  // nombre de un empleado es la segunda. Además, un selector que arranca en una
+  // persona obliga a EVERYONE a confirmar que esa era la que quería ver.
+  //
+  // Un `boolean` aparte y no un id centinela (tipo 0 o -1): el id viene de la
+  // base y no se sabe qué valores tiene. Con un `boolean` no hay colisión
+  // posible y `empleadoActual` sigue significando exactamente lo mismo.
+  mostrarTodos = true;
+
+  // ── PAGO A PROVEEDOR ──────────────────────────────────────────
+  mostrarFormPagoProveedor = false;
+  guardandoPagoProveedor = false;
+  mensajePagoProveedor = '';
+  mensajeErrorPagoProveedor = '';
+  nuevoPagoProveedor: any = {
+    proveedor_id: null, fecha: '', monto: null, metodo: 'transferencia', notas: '',
+  };
+
+  /**
+   * Abre el popup de pago a proveedor.
+   *
+   * Se pone la fecha de HOY y no la del período: un abono es un movimiento de
+   * hoy. Si se abriera con la fecha de un mes viejo, el pago caería en el mes
+   * viejo y la tarjeta "Gastos" del período que estás mirando no se movería, que
+   * es justo lo que se viene a hacer.
+   */
+  abrirFormPagoProveedor() {
+    const hoy = new Date().toLocaleDateString('en-CA');
+    this.nuevoPagoProveedor = {
+      proveedor_id: this.proveedoresActivos[0]?.id ?? null,
+      fecha: hoy,
+      monto: null,
+      metodo: 'transferencia',
+      notas: '',
+    };
+    this.mensajeErrorPagoProveedor = '';
+    this.mostrarFormPagoProveedor = true;
+    this.cdr.detectChanges();
+  }
+
+  cerrarFormPagoProveedor() {
+    this.mostrarFormPagoProveedor = false;
+    this.mensajeErrorPagoProveedor = '';
+    this.cdr.detectChanges();
+  }
+
+  /** El saldo pendiente de un proveedor, para avisar si el abono se pasa. */
+  saldoDeProveedor(proveedorId: number): number {
+    const fila = this.saldoPorProveedor.find((p: any) => p.proveedor_id === proveedorId);
+    return fila ? fila.saldo : 0;
+  }
+
+  /**
+   * Si el abono del popup va a dejar al proveedor a favor.
+   *
+   * Es un método y no una expresión en el template a propósito: el `Number()` de
+   * una cantidad que viene del `<input type="number">` no se puede escribir en el
+   * template, porque Angular no expone `Number` ahí (es TS2339, no de runtime).
+   *
+   * Se permite a propósito: a veces se adelanta plata para quedar a deber, y en
+   * ese caso el botón tiene que dejar pasar. Por eso esto avisa y no bloquea.
+   */
+  pagoProveedorLoDejaAFavor(): boolean {
+    const p = this.nuevoPagoProveedor;
+    if (!p.proveedor_id || !p.monto) return false;
+    return Number(p.monto) > this.saldoDeProveedor(Number(p.proveedor_id));
+  }
+
+  async guardarPagoProveedor() {
+    if (this.guardandoPagoProveedor) return;
+    this.mensajeErrorPagoProveedor = '';
+    const p = this.nuevoPagoProveedor;
+
+    if (!p.proveedor_id) {
+      this.mensajeErrorPagoProveedor = '❌ Elegí un proveedor.';
+      return;
+    }
+    if (!p.fecha) {
+      this.mensajeErrorPagoProveedor = '❌ Poné la fecha del pago.';
+      return;
+    }
+    if (!p.monto || Number(p.monto) <= 0) {
+      this.mensajeErrorPagoProveedor = '❌ El monto tiene que ser mayor a cero.';
+      return;
+    }
+
+    // Pagar de más se PERMITE a propósito: a veces se adelanta plata para
+    // quedar a deber, y en ese caso el botón tiene que dejar pasar. Por eso acá
+    // no hay bloqueo, solo un texto informativo que el template muestra cuando
+    // el abono supera el saldo pendiente.
+
+    this.guardandoPagoProveedor = true;
+    try {
+      await this.supabase.crearPagoProveedor({
+        proveedor_id: Number(p.proveedor_id),
+        fecha: p.fecha,
+        monto: Number(p.monto),
+        metodo: p.metodo,
+        notas: p.notas || null,
+      });
+      this.mensajePagoProveedor = '✅ Pago a proveedor registrado.';
+      this.mostrarFormPagoProveedor = false;
+      await this.cargarDatos();
+    } catch (e: any) {
+      // El mensaje mas común acá: la migración 013 no está aplicada en este
+      // proyecto, y PostgREST devuelve 404.
+      this.mensajeErrorPagoProveedor =
+        '❌ No se pudo guardar: ' + (e?.message || 'error desconocido') +
+        '. Si dice que la tabla no existe, falta aplicar la migración 013.';
+    } finally {
+      this.guardandoPagoProveedor = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async eliminarPagoProveedor(p: any) {
+    if (!confirm(`¿Borrar el pago de $${(Number(p.monto) || 0).toLocaleString('es-AR')} a ${p.proveedores?.nombre || 'este proveedor'}?`)) {
+      return;
+    }
+    try {
+      await this.supabase.eliminarPagoProveedor(p.id);
+      this.mensajePagoProveedor = '🗑️ Pago borrado.';
+      await this.cargarDatos();
+    } catch (e: any) {
+      this.mensajePagoProveedor = '❌ No se pudo borrar: ' + (e?.message || 'error desconocido');
+    }
+    this.cdr.detectChanges();
+  }
+
+  // ── DETALLE POR EMPLEADO ───────────────────────────────────────
+  /**
+   * Servicios que hizo UN empleado en el período, con su comisión.
+   *
+   * Esto venía en el detalle del empleado de Personas y se mudó acá: pagar a la
+   * gente es un asunto de caja, no de la ficha del empleado. Antes se necesite
+   * abrir la ficha de cada uno para ver cuánto se le generó; ahora es un
+   * selector arriba de la propia pestaña.
+   *
+   * Es un `.get` y no un async para que no haya dos fuentes de verdad: se calcula
+   * con los `turnos` que la caja YA tiene cargados para el período, así que no
+   * hay llamada nueva a la base y no puede desincronizarse de "Sugerido vs
+   * pagado", que usa los mismos turnos.
+   *
+   * `null` = no hay nadie elegido.
+   */
+  empleadoDetalle: number | null = null;
+
+  /**
+   * Turnos atendidos del período, con su comisión. Del empleado elegido, o
+   * de TODOS si el selector está en esa opción.
+   *
+   * En "Todos" se agrega la columna `empleado` a cada fila, porque sin ella un
+   * turno no se sabe de quién es. Viene de los MISMOS `turnos` que ya están
+   * cargados: no hay llamada nueva y no puede desincronizarse de los cuadros.
+   */
+  get comisionesDetalle(): { fecha: string, hora: string, servicio: string, precio: number, comision: number, empleado: string }[] {
+    const id = this.mostrarTodos ? null : this.empleadoActual;
+    return this.turnos
+      .filter((t) => t.estado === 'atendido' && (id === null || t.empleado_id === id))
+      .map((t) => {
+        const precio = Number(t.precio_final || t.precio) || 0;
+        return {
+          fecha: t.fecha,
+          // `hora_inicio` viene como "HH:MM:SS" de Postgres. Sin el `slice` la
+          // celda muestra "08:00:00" y la tabla parece un CSV.
+          hora: (t.hora_inicio || t.hora || '').slice(0, 5),
+          precio,
+          // El servicio REALMENTE hecho, que puede diferir del reservado (pidio
+          // completo y se hizo simple). Es sobre ese que se cobra la comisión.
+          servicio: t.servicio_nombre_final || t.servicio_nombre || 'Sin especificar',
+          comision: (precio * this.porcentajeComision(t)) / 100,
+          empleado: this.nombreDeEmpleado(t.empleado_id),
+        };
+      })
+      .sort((a, b) => (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
+  }
+
+  get totalComisionesDetalle(): number {
+    return this.comisionesDetalle.reduce((sum, c) => sum + c.comision, 0);
+  }
+
+  /**
+   * Porcentaje que le corresponde a este turno: el de su servicio si hay uno
+   * cargado, y si no el general del empleado.
+   *
+   * El orden importa y es el mismo que usa `getComisionesPeriodo` en el
+   * servicio: el específico pisa al general.
+   */
+  private porcentajeComision(turno: any): number {
+    const porServicio = this.comisionesServicio.find(
+      (c: any) =>
+        c.empleado_id === turno.empleado_id &&
+        c.servicio_id !== null &&
+        c.servicio_id === (turno.servicio_id_final ?? turno.servicio_id)
+    );
+    if (porServicio) return Number(porServicio.porcentaje) || 0;
+
+    const emp = this.todosLosEmpleados.find((e: any) => e.id === turno.empleado_id);
+    return Number(emp?.comision_porcentaje) || 0;
+  }
+
+  /** "el día" / "la semana" / "el mes", para los subtítulos. */
+  get tituloPeriodoCorto(): string {
+    return this.vista === 'dia' ? 'el día' : this.vista === 'semana' ? 'la semana' : 'el mes';
+  }
+
+  /**
+   * El empleado cuyo detalle se está mostrando, o `null` si no hay ninguno.
+   *
+   * UN SOLO LUGAR que resuelve el "default", y todo lo demás lo lee de acá: el
+   * `*ngIf` del bloque, el `[ngModel]` del select y el getter de las comisiones.
+   *
+   * Antes cada uno resoltaba por su cuenta contra `empleadoDetalle`, que arranca
+   * en `null`. Con el período vacío, el `*ngIf` decía que había un empleado
+   * (porque caía al primero de la lista) pero el getter devolvía lista vacía
+   * porque `empleadoDetalle` seguía en `null`: se veía un empleado elegido con
+   * cero servicios y ninguna fila. Dos fuentes de verdad para lo mismo.
+   *
+   * Si el usuario ya eligió, se respeta. Si no, va el primero que tenga algo
+   * que cobrar en el período; y si el período está vacío, el primero de la
+   * lista, para que el selector nunca quede en "-- Elegí --" sin motivo.
+   */
+  get empleadoActual(): number | null {
+    // `Number.isFinite` y no `!== null`: un id no numérico (un `NaN` de un
+    // `Number()` sobre algo raro) no es `null`, así que con la comparación sola
+    // pasaba de largo y los tres montos daban 0 sin que nada explicara por qué.
+    // Un id que no es un número es lo mismo que no haber elegido a nadie.
+    if (this.empleadoDetalle !== null && Number.isFinite(this.empleadoDetalle)) {
+      return this.empleadoDetalle;
+    }
+    const conTurnos = this.pagosPorEmpleado[0];
+    if (conTurnos) return conTurnos.empleado_id;
+    return this.todosLosEmpleados.length ? this.todosLosEmpleados[0].id : null;
+  }
+
+  // ── LOS TRES MONTOS DEL EMPLEADO ELEGIDO ────────────────────
+  //
+  // La fila de `pagosPorEmpleado` del empleado que está elegido en el selector.
+  //
+  // Por qué un getter y no un campo que se recalcula en `cargarDatos()`: los
+  // tres montos salen TODOS de la misma fila, y si cada uno fuera un campo
+  // aparte habría que acordarse de actualizarlos los tres juntos. Con un getter
+  // no hay forma de que uno quede viejo: o los tres se mueven o no se mueve
+  // ninguno. Y sale gratis, porque `pagosPorEmpleado` ya está en memoria.
+  get filaEmpleadoActual(): any {
+    if (this.empleadoActual === null) return null;
+    return this.pagosPorEmpleado.find(
+      (f: any) => f.empleado_id === this.empleadoActual
+    ) || null;
+  }
+
+  /**
+   * El nombre de un empleado por id, o el id si no se encuentra.
+   *
+   * Para la columna `empleado` de los detalles cuando el selector está en "Todos".
+   * Usa `pagosPorEmpleado` porque ya tiene el nombre resuelto (con el fallback
+   * para los empleados que fueron borrados); si el turno es de alguien que no
+   * tiene fila, cae al id, que es mejor que una celda vacía.
+   */
+  nombreDeEmpleado(empleadoId: number | null): string {
+    if (empleadoId === null || empleadoId === undefined) return 'Sin empleado';
+    const f = this.pagosPorEmpleado.find((x: any) => x.empleado_id === empleadoId);
+    if (f && f.nombre) return f.nombre;
+    const e = this.todosLosEmpleados.find((x: any) => x.id === empleadoId);
+    return e ? e.nombre : `Empleado #${empleadoId}`;
+  }
+
+  /** Lo que le corresponde por los turnos que atendió. De TODOS, el total. */
+  get deboEmpleado(): number {
+    if (this.mostrarTodos) return this.totalSugerido;
+    const f = this.filaEmpleadoActual;
+    return f ? Number(f.sugerido) || 0 : 0;
+  }
+
+  /** Lo que le efectivamente di. De TODOS, el total. */
+  get pagueEmpleado(): number {
+    if (this.mostrarTodos) return this.totalPagadoEmpleados;
+    const f = this.filaEmpleadoActual;
+    return f ? Number(f.pagado) || 0 : 0;
+  }
+
+  /** Lo que le compré. De TODOS, el total. */
+  get compreProveedor(): number {
+    if (this.mostrarTodos) return this.totalCompras;
+    const f = this.filaProveedorActual;
+    return f ? Number(f.comprado) || 0 : 0;
+  }
+
+  /** Lo que le aboné. De TODOS, el total. */
+  get pagueProveedor(): number {
+    if (this.mostrarTodos) return this.totalPagadoProveedores;
+    const f = this.filaProveedorActual;
+    return f ? Number(f.pagado) || 0 : 0;
+  }
+
+  /** Turnos atendidos. De TODOS, el total. */
+  get turnosEmpleadoActual(): number {
+    if (this.mostrarTodos) return this.totalAtendidos;
+    const f = this.filaEmpleadoActual;
+    return f ? Number(f.turnos) || 0 : 0;
+  }
+
+  /**
+   * Los pagos registrados: del empleado elegido, o de TODOS.
+   *
+   * Sale de la fila (`pagosPorEmpleado`), que ya tiene el array `pagos` de cada
+   * uno armado en `armarPagosPorEmpleado`. No se vuelve a filtrar `this.pagos`
+   * en el template: dos lugares que devuelven lo mismo son dos lugares que
+   * pueden dejar de devolverlo.
+   */
+  get pagosEmpleadoActual(): any[] {
+    if (this.mostrarTodos) return this.pagos;
+    const f = this.filaEmpleadoActual;
+    return f ? f.pagos : [];
+  }
+
+  /**
+   * Elegir un empleado tocando su fila de la tabla de todos.
+   *
+   * Solo cambia el selector: los tres cuadros de arriba y los acordeones de abajo
+   * ya leen de `empleadoActual`, así que no hay que volver a cargar nada de la
+   * base. Un `(click)` que llama a `cargarDatos()` sería peor: haría una ida
+   * entera para mostrar el mismo dato.
+   *
+   * SALE DEL MODO "Todos", y no es un detalle: si no lo hiciera, tocar una fila
+   * no cambiaría nada visible, porque los cuadros seguirían mostrando los
+   * totales de todos. El usuario toca una fila justamente para ver ESE empleado.
+   */
+  elegirEmpleado(id: number) {
+    this.mostrarTodos = false;
+    this.empleadoDetalle = id;
+  }
+
+  /** Igual que `elegirEmpleado`, del lado de los proveedores. */
+  elegirProveedor(id: number) {
+    this.mostrarTodos = false;
+    this.proveedorActualId = id;
+  }
+
+  /** Todos los segundos juntos. */
+
+  // ══════════════════════════════════════════════════════════════
+  // EL COMBO Y EL MODO "TODOS"
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Lo que el combo muestra: `"todos"` o el id del empleado.
+   *
+   * El `<option>` de "Todos" es un `value="todos"` (string) y los empleados van
+   * con `[ngValue]="e.id"` (número). Por eso este getter devuelve `string |
+   * number` y alterna entre los dos: si devolviera siempre un número, el primer
+   * `<option>` nunca coincidiría y el combo arrancaría mostrando al primer
+   * empleado con "Todos" marcado.
+   */
+  get seleccionEmpleado(): string | number {
+    return this.mostrarTodos ? 'todos' : (this.empleadoDetalle ?? 'todos');
+  }
+
+  /** Igual para el proveedor. Comparte el flag `mostrarTodos` a propósito. */
+  get seleccionProveedor(): string | number {
+    return this.mostrarTodos ? 'todos' : (this.proveedorActualId ?? 'todos');
+  }
+
+  /** `(ngModelChange)` del combo de empleados. */
+  elegirEmpleadoDelCombo(valor: string | number) {
+    if (valor === 'todos') {
+      this.mostrarTodos = true;
+      return;
+    }
+    this.mostrarTodos = false;
+    this.empleadoDetalle = Number(valor);
+  }
+
+  /** `(ngModelChange)` del combo de proveedores. */
+  elegirProveedorDelCombo(valor: string | number) {
+    if (valor === 'todos') {
+      this.mostrarTodos = true;
+      return;
+    }
+    this.mostrarTodos = false;
+    this.proveedorActualId = Number(valor);
+  }
+
+  /** Si hay al menos un empleado: si no, los cuadros no tienen nada que mostrar. */
+  get hayEmpleados(): boolean {
+    return this.todosLosEmpleados.length > 0;
+  }
+
+  /** Si hay al menos un proveedor. */
+  get hayProveedores(): boolean {
+    return this.proveedores.length > 0;
+  }
+
+  // ── FILA DEL PROVEEDOR ────────────────────────────────────────
+
+  /** La fila de `saldoPorProveedor` del proveedor elegido, o `null`. */
+  get filaProveedorActual(): any {
+    if (this.proveedorActual === null) return null;
+    return this.saldoPorProveedor.find(
+      (p: any) => p.proveedor_id === this.proveedorActual
+    ) || null;
+  }
+
+  /**
+   * Compras del proveedor elegido, o de TODOS.
+   *
+   * En "Todos" se arma concatenando los `compras` de cada fila de
+   * `saldoPorProveedor`, que ya vienen agrupadas. No se vuelve a filtrar
+   * `this.compras` en el template: dos lugares que devuelven lo mismo son dos
+   * lugares que pueden dejar de devolverlo.
+   */
+  get comprasProveedorActual(): any[] {
+    if (this.mostrarTodos) {
+      return this.saldoPorProveedor.flatMap((p: any) => p.compras || []);
+    }
+    const f = this.filaProveedorActual;
+    return f ? f.compras : [];
+  }
+
+  /** Abonos del proveedor elegido, o de TODOS. */
+  get pagosProveedorActual(): any[] {
+    if (this.mostrarTodos) return this.pagosProveedor;
+    if (this.proveedorActual === null) return [];
+    return this.pagosProveedor.filter(
+      (p: any) => p.proveedor_id === this.proveedorActual
+    );
+  }
+
+  /** El nombre de un proveedor por id, para las columnas de "Todos". */
+  nombreDeProveedor(proveedorId: number | null): string {
+    if (proveedorId === null || proveedorId === undefined) return 'Sin proveedor';
+    const f = this.saldoPorProveedor.find((x: any) => x.proveedor_id === proveedorId);
+    if (f && f.nombre) return f.nombre;
+    const p = this.proveedores.find((x: any) => x.id === proveedorId);
+    return p ? p.nombre : `Proveedor #${proveedorId}`;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // DEBE / HABER: dos cantidades, nunca un número con signo
+  // ══════════════════════════════════════════════════════════════
+  //
+  // Lo que se pidió explícitamente: nada de positivos ni negativos, rojo si es
+  // "debe" y verde si es "haber". La cuenta de adentro sigue siendo UNA sola con
+  // signo (`faltaPagar = sugerido - pagado`), pero a la pantalla se le parte en
+  // dos:
+  //
+  //   · `debe`  = lo que le debo yo,   siempre en positivo. Si hay algo, ROJO.
+  //   · `haber` = lo que me deben a mí, siempre en positivo. Si hay algo, VERDE.
+  //
+  // Nunca las dos a la vez: son la misma diferencia partida. Mostrar un
+  // `-$25.000` obligaba a recordar si el signo era mío o del otro, y el título
+  // "Falta pagar" al lado de "A favor" era directamente contradictorio.
+  //
+  // Cuando el selector está en "Todos", los dos son los totales del período.
+
+  /** Lo que le debo, del empleado elegido o de todos. */
+  get debeEmpleadoTotal(): number {
+    if (this.mostrarTodos) return this.totalFaltaPagar > 0 ? this.totalFaltaPagar : 0;
+    const f = this.filaEmpleadoActual;
+    if (!f) return 0;
+    const d = Number(f.faltaPagar) || 0;
+    return d > 0 ? d : 0;
+  }
+
+  /** Lo que me deben a mí, del empleado elegido o de todos. */
+  get haberEmpleadoTotal(): number {
+    if (this.mostrarTodos) return this.totalFaltaPagar < 0 ? -this.totalFaltaPagar : 0;
+    const f = this.filaEmpleadoActual;
+    if (!f) return 0;
+    const d = Number(f.faltaPagar) || 0;
+    return d < 0 ? -d : 0;
+  }
+
+  /** El número del cuadro: el único de los dos que hay. Nunca negativo. */
+  get saldoEmpleado(): number {
+    return this.debeEmpleadoTotal + this.haberEmpleadoTotal;
+  }
+
+  /** "Debo", "A favor", o nada si está en cero. UNA O DOS PALABRAS. */
+  get textoSaldoEmpleado(): string {
+    if (this.debeEmpleadoTotal > 0) return 'Debo';
+    if (this.haberEmpleadoTotal > 0) return 'A favor';
+    return '';
+  }
+
+  /** Lo que le debo al proveedor elegido, o a todos. */
+  get debeProveedorTotal(): number {
+    if (this.mostrarTodos) {
+      const d = this.totalCompras - this.totalPagadoProveedores;
+      return d > 0 ? d : 0;
+    }
+    const f = this.filaProveedorActual;
+    if (!f) return 0;
+    const s = Number(f.saldo) || 0;
+    return s > 0 ? s : 0;
+  }
+
+  /** Lo que me deben los proveedores, a mí. */
+  get haberProveedorTotal(): number {
+    if (this.mostrarTodos) {
+      const d = this.totalCompras - this.totalPagadoProveedores;
+      return d < 0 ? -d : 0;
+    }
+    const f = this.filaProveedorActual;
+    if (!f) return 0;
+    const s = Number(f.saldo) || 0;
+    return s < 0 ? -s : 0;
+  }
+
+  /** El número del cuadro del proveedor. Nunca negativo. */
+  get saldoProveedorTotal(): number {
+    return this.debeProveedorTotal + this.haberProveedorTotal;
+  }
+
+  /** "Debo", "A favor", o nada. */
+  get textoSaldoProveedorTotal(): string {
+    if (this.debeProveedorTotal > 0) return 'Debo';
+    if (this.haberProveedorTotal > 0) return 'A favor';
+    return '';
+  }
+
+  // ===============================================================
+  // EL COLOR DE UNA CELDA "DEBE" O "HABER"
+  // ===============================================================
+  // El color va con LA COLUMNA y con LA CANTIDAD DE ESA CELDA, nunca con el signo
+  // de la fila. Parece lo mismo y no lo es: si el saldo de la fila esta a favor,
+  // la celda "Debe" vale $0 y por eso tiene que salir GRIS, no verde. Con el
+  // signo de la fila salía verde, y una tabla con las dos columnas en verde y
+  // gris mezcladas no dice de qué lado está nada.
+  //
+  // Y hay TRES colores, no dos: el `$0` de la columna que no aplica es gris. Con
+  // dos columnas la mitad de las celdas de cada fila son `$0`, y si tomaran el
+  // color de su columna la tabla sería una lista de rojos y verdes donde el
+  // color ya no comunica nada.
+
+  /** La celda "Debe": roja si le debo plata a este, gris si no hay nada. */
+  claseDebe(saldo: number): string {
+    return Number(saldo) > 0 ? 'rojo' : 'cero';
+  }
+
+  /** La celda "Haber": verde si me deben plata, gris si no hay nada. */
+  claseHaber(saldo: number): string {
+    return Number(saldo) < 0 ? 'verde' : 'cero';
+  }
+
   get totalSalidas(): number {
     return this.totalPagadoEmpleados + this.totalCompras;
   }
 
   /**
-   * El número que importa: lo que quedó.
+   * Ingresos menos salidas del período.
    *
-   * Puede dar NEGATIVO, y está bien que se muestre. Si se pagaron comisiones de
-   * un mes anterior este mes, o se compró insumos por adelantado, la caja del
-   * período da negativo y eso es información real, no un error a tapar.
+   * YA NO SE MUESTRA en ninguna parte. El usuario lo sacó de la pantalla con un
+   * motivo concreto: no hay caja chica, el dinero entra y sale por
+   * transferencia, así que el saldo siempre daba negativo y el cartel de "Da
+   * negativo..." aparecía casi siempre, que es exactamente como se ve una alarma
+   * que en realidad no dice nada.
+   *
+   * El getter queda porque es una cuenta correcta y está cubierto por tests que
+   * documentan la aritmética. Si algún día se necesita el saldo REAL (con
+   * saldos iniciales por cuenta), este es el punto de partida.
    */
   get balance(): number {
     return this.totalIngresos - this.totalSalidas;
@@ -263,14 +969,49 @@ export class CajaComponent implements OnInit {
       fila.pagos.push(p);
     });
     this.pagosPorEmpleado = [...porId.values()]
-      .map((f: any) => ({ ...f, diferencia: f.pagado - f.sugerido }))
+      // `faltaPagar = sugerido - pagado`, y NO al revés.
+      //
+      // Con `pagado - sugerido` un empleado al que se le pagaron 25.000 y no
+      // atendió ningún turno daba `+$25.000` en verde, y eso se leía como "le
+      // debés 25 mil" cuando en realidad dice lo contrario: le pagaste de más y
+      // no le debés nada. Un número que se llama "falta pagar" y da NEGATIVO no
+      // se puede malinterpretar, y por eso el signo se invirtió junto con el
+      // nombre de la columna.
+      .map((f: any) => ({ ...f, faltaPagar: f.sugerido - f.pagado }))
       .sort((a: any, b: any) => b.sugerido - a.sugerido || b.pagado - a.pagado);
   }
 
-  /**
   /** Solo los activos: no tiene sentido cargar una compra a un proveedor dado de baja. */
   get proveedoresActivos(): any[] {
     return this.proveedores.filter((p: any) => p.activo);
+  }
+
+  /**
+   * Proveedor elegido en el RESUMEN de la pestaña Gastos.
+   *
+   * Distinto de `proveedorSeleccionado`, que es el del formulario de "Registrar
+   * compra". Son dos selectores porque son dos cosas distintas: uno es a quién le
+   * estoy mirando la cuenta, el otro a quién le estoy cargando una compra. Si
+   * fueran uno, registrar una compra cambiaría el resumen de arriba y sería
+   * desconcertante.
+   */
+  proveedorActualId: number | null = null;
+
+  /**
+   * El proveedor del resumen, con un default para que nunca quede en "-- Elegí --".
+   *
+   * Primero el que tenga saldo (comprado o pagado) en el período, que es el que
+   * está mirando algo; si el período está vacío, el primer proveedor activo.
+   *
+   * Es el mismo criterio que `empleadoActual`: un selector que arranca vacío
+   * muestra tres cuadros en cero que dicen "no pasa nada" cuando en realidad no
+   * se eligió a nadie.
+   */
+  get proveedorActual(): number | null {
+    if (this.proveedorActualId !== null) return this.proveedorActualId;
+    const conMovimiento = this.saldoPorProveedor[0];
+    if (conMovimiento) return conMovimiento.proveedor_id;
+    return this.proveedoresActivos.length ? this.proveedoresActivos[0].id : null;
   }
 
   /**
@@ -291,14 +1032,13 @@ export class CajaComponent implements OnInit {
   }
 
   /**
-   * La diferencia de TODOS los empleados, para la fila de Total.
+   * Lo que falta pagarle a TODOS los empleados, para la fila de Total.
    *
-   * Se arma con los mismos dos getters que ya summing las filas de arriba, así
-   * que no puede desincronizarse de la tabla: si el detalle no cierra, el total
-   * tampoco.
+   * `sugerido - pagado`, igual que las filas: si el detalle no cierra, el total
+   * tampoco. Positivo = todavía hay plata que dar; negativo = se pagó de más.
    */
-  get totalDiferencia(): number {
-    return this.totalPagadoEmpleados - this.totalSugerido;
+  get totalFaltaPagar(): number {
+    return this.totalSugerido - this.totalPagadoEmpleados;
   }
 
   /** Compras agrupadas por proveedor, de mayor a menor. */
@@ -613,13 +1353,26 @@ export class CajaComponent implements OnInit {
     if (this.vista === 'dia') {
       const d = formatLocal(this.fechaActual);
       return { desde: d, hasta: d };
-    } else {
-      const y = this.fechaActual.getFullYear();
-      const m = this.fechaActual.getMonth();
-      const desde = formatLocal(new Date(y, m, 1));
-      const hasta = formatLocal(new Date(y, m + 1, 0));
-      return { desde, hasta };
     }
+
+    if (this.vista === 'semana') {
+      // Lunes a domingo, como el `getComisionesPeriodo` y el bloque de pagos de
+      // Personas, que usan la misma convencion. El `getDay()` de un domingo es
+      // 0: sin el caso especial, la semana arrancaria en el lunes SIGUIENTE y
+      // un domingo solo quedaria fuera del período.
+      const lunes = new Date(this.fechaActual);
+      const dow = lunes.getDay();
+      lunes.setDate(lunes.getDate() - (dow === 0 ? 6 : dow - 1));
+      const domingo = new Date(lunes);
+      domingo.setDate(lunes.getDate() + 6);
+      return { desde: formatLocal(lunes), hasta: formatLocal(domingo) };
+    }
+
+    const y = this.fechaActual.getFullYear();
+    const m = this.fechaActual.getMonth();
+    const desde = formatLocal(new Date(y, m, 1));
+    const hasta = formatLocal(new Date(y, m + 1, 0));
+    return { desde, hasta };
   }
 
   // STATS
@@ -681,6 +1434,29 @@ export class CajaComponent implements OnInit {
         }
       });
       return Object.entries(horas).map(([label, v]) => ({ label, ...v }));
+    } else if (this.vista === 'semana') {
+      // 7 barras, una por día, ETIQUETADAS CON LA FECHA COMPLETA.
+      //
+      // El label no puede ser "LUN": la barra tiene que ser clickeable para
+      // saltar a ese día, y `irADia` reconstruye la fecha desde el label. Con
+      // el nombre del día no hay de qué sacar el día del mes.
+      const etiquetas = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+      const dias: { label: string, total: number, cantidad: number }[] =
+        this.diasDeLaSemana().map((d, i) => ({
+          label: `${etiquetas[i]} ${String(d.getDate()).padStart(2, '0')}`,
+          total: 0,
+          cantidad: 0,
+        }));
+
+      this.turnos.forEach((t) => {
+        const idx = dias.findIndex((b) => b.label.endsWith(` ${t.fecha?.slice(8, 10)}`));
+        if (idx >= 0) {
+          dias[idx].total += (t.estado === 'atendido' && t.precio_final ? t.precio_final : t.precio) || 0;
+          dias[idx].cantidad++;
+        }
+      });
+
+      return dias;
     } else {
       const y = this.fechaActual.getFullYear();
       const m = this.fechaActual.getMonth();
@@ -728,6 +1504,10 @@ export class CajaComponent implements OnInit {
       const d = new Date(this.fechaActual);
       d.setDate(d.getDate() + dir);
       this.fechaActual = d;
+    } else if (this.vista === 'semana') {
+      const d = new Date(this.fechaActual);
+      d.setDate(d.getDate() + dir * 7);
+      this.fechaActual = d;
     } else {
       // `setMonth` con overflow salta de mes: 31 de enero + 1 mes es "31 de
       // febrero", que Date normaliza a 3 de marzo. El usuario ve un salto de
@@ -746,10 +1526,17 @@ export class CajaComponent implements OnInit {
     this.cargarDatos();
   }
 
-  cambiarVista(v: 'dia' | 'mes') {
+  cambiarVista(v: 'dia' | 'semana' | 'mes') {
     this.vista = v;
     this.fechaActual = new Date();
     this.cargarDatos();
+  }
+
+  /** Días de la semana actual (lunes a domingo), para el gráfico y el título. */
+  private diasDeLaSemana(): Date[] {
+    const { desde } = this.getRango();
+    const [y, m, d] = desde.split('-').map((n) => parseInt(n, 10));
+    return Array.from({ length: 7 }, (_, i) => new Date(y, m - 1, d + i));
   }
 
   get tituloFecha(): string {
@@ -758,9 +1545,15 @@ export class CajaComponent implements OnInit {
       const d = String(this.fechaActual.getDate()).padStart(2,'0');
       const m = String(this.fechaActual.getMonth()+1).padStart(2,'0');
       return `${dias[this.fechaActual.getDay()]} ${d}/${m}`;
-    } else {
-      return nombreMes(this.fechaActual.getMonth(), this.fechaActual.getFullYear());
     }
+    if (this.vista === 'semana') {
+      // Rango, no el nombre del mes: una semana casi nunca cae entera en un mes.
+      const { desde, hasta } = this.getRango();
+      const [, m1, d1] = desde.split('-');
+      const [, m2, d2] = hasta.split('-');
+      return `${d1}/${m1} - ${d2}/${m2}`;
+    }
+    return nombreMes(this.fechaActual.getMonth(), this.fechaActual.getFullYear());
   }
 
   scrollToHoy() {
@@ -781,6 +1574,20 @@ export class CajaComponent implements OnInit {
   }
 
   irADia(label: string) {
+    if (this.vista === 'semana') {
+      // El label es "LUN 05": el prefijo da el día de la semana.
+      const idx = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'].indexOf(label.slice(0, 3));
+      if (idx < 0) return;
+      // Se parte del LUNES del rango y se suma el índice. Armar la fecha con el
+      // "día del mes" del label (el "05") se corre de mes en una semana que
+      // cruza el ejemplo: LUN 29/01 + "SÁB 01" daría 1 de enero, no el 1 de
+      // febrero que le corresponde.
+      const [y, m, d] = this.getRango().desde.split('-').map((n) => parseInt(n, 10));
+      this.fechaActual = new Date(y, m - 1, d + idx);
+      this.vista = 'dia';
+      this.cargarDatos();
+      return;
+    }
     if (this.vista !== 'mes') return;
     const dia = parseInt(label);
     const nueva = new Date(this.fechaActual.getFullYear(), this.fechaActual.getMonth(), dia);

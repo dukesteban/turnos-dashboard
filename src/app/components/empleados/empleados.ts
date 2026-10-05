@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
 import { problemaTelefono } from '../../utils/telefono';
 import {
-  nombreMes, normalizarJornada, DIAS, SlotJornada,
+  normalizarJornada, DIAS, SlotJornada,
   turnoTocadoPorAusencia, textoAusencia, jornadaCubre,
 } from '../../utils/fechas';
 
@@ -60,8 +60,6 @@ export class EmpleadosComponent implements OnInit {
   mensaje = '';
   mensajeError = '';
   busqueda = '';
-  vistaComisiones: 'dia' | 'semana' | 'mes' = 'dia';
-  fechaComision: Date = new Date();
 
   // Formulario
   nuevoNombre = '';
@@ -185,7 +183,10 @@ export class EmpleadosComponent implements OnInit {
     // anterior deja los cinco acordeones como los dejó y el que viene queda con
     // un panel de 4 pantallas abierto sin haberlo pedido.
     this.abrirSoloDatos();
-    await this.cargarComisiones();
+    // El "total a pagar del período" se mudó a Caja → Empleados. Acá ya no se
+    // llama a `calcularComisiones()`, que hacía una ida a la base POR CADA
+    // empleado que se abría, para alimentar un bloque que ya no existe en esta
+    // pantalla.
     await this.cargarComisionesPorServicio();
     await this.cargarAusencias();
     await this.cargarTurnosEnRiesgo();
@@ -467,38 +468,22 @@ export class EmpleadosComponent implements OnInit {
   }
 
   // COMISIONES
-  get fechaComisionISO(): string {
-    return this.formatearFechaLocal(this.fechaComision);
-  }
-
+  // Lo que queda aca es SOLO el detalle por servicio: los porcentajes que tiene
+  // este empleado en cada tipo de lavado, que son parte de la ficha (se editan
+  // aca, con el plumin).
+  //
+  // El "total a pagar del periodo", con el desglose turno por turno, se mudo a
+  // Caja -> Empleados. Por eso se sacaron `periodoComisiones`, `cargarComisiones`,
+  // `totalComisiones` y los getters de periodo: no los muestra nadie aca, y
+  // `cargarComisiones` pegaba a la base una vez por cada empleado que se abria.
+  //
+  // `formatearFechaLocal` se conserva: lo usa la validacion de ausencias.
   formatearFechaLocal(fecha: Date): string {
     const y = fecha.getFullYear();
     const m = String(fecha.getMonth() + 1).padStart(2, '0');
     const d = String(fecha.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
-
-  get periodoComisiones(): { desde: string, hasta: string } {
-    if (this.vistaComisiones === 'dia') {
-      return { desde: this.fechaComisionISO, hasta: this.fechaComisionISO };
-    }
-    if (this.vistaComisiones === 'semana') {
-      const inicio = new Date(this.fechaComision);
-      const dia = inicio.getDay();
-      const diff = dia === 0 ? -6 : 1 - dia;
-      inicio.setDate(inicio.getDate() + diff);
-      const fin = new Date(inicio);
-      fin.setDate(fin.getDate() + 6);
-      return { desde: this.formatearFechaLocal(inicio), hasta: this.formatearFechaLocal(fin) };
-    }
-    // Mes
-    const inicio = new Date(this.fechaComision.getFullYear(), this.fechaComision.getMonth(), 1);
-    const fin = new Date(this.fechaComision.getFullYear(), this.fechaComision.getMonth() + 1, 0);
-    return { desde: this.formatearFechaLocal(inicio), hasta: this.formatearFechaLocal(fin) };
-  }
-
-  comisionesEmpleado: any[] = [];
-  cargandoComisiones = false;
   comisionesPorServicio: any[] = [];
   servicios: any[] = [];
   editandoComisionServicio: number | null = null;
@@ -676,80 +661,6 @@ export class EmpleadosComponent implements OnInit {
 
   textoAusencia(a: any): string {
     return textoAusencia(a);
-  }
-
-  async cargarComisiones() {
-    if (!this.empleadoSeleccionado) {
-      this.comisionesEmpleado = [];
-      return;
-    }
-    this.cargandoComisiones = true;
-    const { desde, hasta } = this.periodoComisiones;
-    this.comisionesEmpleado = await this.supabase.calcularComisiones(
-      this.empleadoSeleccionado.id, desde, hasta
-    );
-    this.cargandoComisiones = false;
-    this.cdr.detectChanges();
-  }
-
-  get totalComisiones(): number {
-    return this.comisionesEmpleado.reduce((sum, c) => sum + c.comision, 0);
-  }
-
-  get totalServiciosAtendidos(): number {
-    return this.comisionesEmpleado.length;
-  }
-
-  async navegarPeriodo(dir: number) {
-    const d = new Date(this.fechaComision);
-    if (this.vistaComisiones === 'dia') {
-      d.setDate(d.getDate() + dir);
-    } else if (this.vistaComisiones === 'semana') {
-      d.setDate(d.getDate() + dir * 7);
-    } else {
-      d.setMonth(d.getMonth() + dir);
-    }
-    this.fechaComision = d;
-    await this.cargarComisiones();
-    this.cdr.detectChanges();
-  }
-
-  async irAHoy() {
-    this.fechaComision = new Date();
-    await this.cargarComisiones();
-    this.cdr.detectChanges();
-  }
-
-  formatearFecha(fecha: Date): string {
-    const dia = this.diasCompletos[fecha.getDay()];
-    const d = String(fecha.getDate()).padStart(2, '0');
-    const m = String(fecha.getMonth() + 1).padStart(2, '0');
-    return `${dia} ${d}/${m}`;
-  }
-
-  formatearPeriodo(): string {
-    if (this.vistaComisiones === 'dia') {
-      return this.formatearFecha(this.fechaComision);
-    }
-    const { desde, hasta } = this.periodoComisiones;
-    if (this.vistaComisiones === 'mes') {
-      // "Octubre 2026" en vez del rango de fechas
-      const [y, m] = desde.split('-');
-      return nombreMes(Number(m) - 1, Number(y));
-    }
-    const [, m1, d1] = desde.split('-');
-    const [, m2, d2] = hasta.split('-');
-    return `${d1}/${m1} - ${d2}/${m2}`;
-  }
-
-  formatearFechaTurno(fecha: string): string {
-    if (!fecha) return '';
-    const [y, m, d] = fecha.split('-');
-    return `${d}/${m}/${y}`;
-  }
-
-  formatearHora(hora: string): string {
-    return hora?.slice(0, 5) || '';
   }
 
   mostrarMensaje(msg: string) {
