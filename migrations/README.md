@@ -9,8 +9,14 @@ tal cual contra `ryf-lavadero`.
 | `turnos-test` | `ycrhgxwnikksmwyofzmv` | donde se prueba. La usan la app en Vercel y el bot de n8n |
 | `ryf-lavadero` | `tvzfsbudhuegsptaokng` | la de producción. Es la que tiene los datos |
 
-**La app desplegada apunta a `turnos-test`, no a ryf.** Mirá
-`src/environments/environment.prod.ts`.
+Dos apps, cada una con su base:
+
+| URL | ramas | base |
+|-----|-------|------|
+| `carwash-dashboard-mu.vercel.app` | `main` | `turnos-test` (`ycrhgxwnikksmwyofzmv`) |
+| `turnos-ryf.vercel.app` | `ryf` | `ryf-lavadero` (`tvzfsbudhuegsptaokng`) |
+
+Las dos quedaron al día con las mismas migraciones y la misma versión de la app.
 
 ---
 
@@ -34,8 +40,11 @@ conversación.
 | 012 `caja` | tal cual | creó `pagos_empleado`, `proveedores`, `compras_proveedor` |
 | 013 `pagos_proveedor` | tal cual | creó `pagos_proveedor` |
 | 014 `proveedores_domicilio` | tal cual | |
+| 015 `usuarios_roles` | tal cual | `usuarios.rol` + `empleado_id` |
+| 016 `rls_por_rol` | tal cual | las 17 politicas pasan a usar el rol del JWT de Supabase Auth |
+| 017 `correo_de_usuario` | tal cual | `public.correo_de_usuario()` para el login |
 
-Las 14 se corrieron una sola vez. Son idempotentes (`IF NOT EXISTS`,
+Las 17 se corrieron una sola vez en cada base. Son idempotentes (`IF NOT EXISTS`,
 `CREATE TABLE IF NOT EXISTS`, `DROP ... IF EXISTS`), así que volver a correrlas no
 rompe nada, **salvo la 008 y la 011**.
 
@@ -106,8 +115,8 @@ El índice único está en el backlog del proyecto.
 
 ### `metodos_pago`
 
-Le falta la policy `service_role_all`. Es de la creación inicial, no de una
-migración.
+Le falta la policy `service_role_all` vieja. Quedó reemplazada por las de la 016 el
+6/10/2026. Dato: la 016 la borra y crea la nueva. No es algo que falte.
 
 ### Cosas que NO se tocaron a propósito
 
