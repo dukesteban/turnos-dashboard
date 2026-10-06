@@ -394,3 +394,36 @@
 /* .puesto-dup: RETIRADO con la tabla `puestos` (migracion 011).
    Era el aviso "ya existe otro puesto con ese nombre". El mismo aviso para
    servicios y metodos de pago usa otras clases. */
+
+// ═══ USUARIOS ═══
+
+/* El aviso de "usuario empleado sin vincular".
+
+ * Es el caso que mas confunde de toda la pantalla de roles: la persona entra, ve
+ * los turnos de todo el mundo y no hay ningun aviso en ninguna parte que diga por
+ * que. Con esto se dice el problema Y la consecuencia, en la misma linea. */
+.vinculo-roto {
+  font-size: 0.72rem;
+  color: #9a3412;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  padding: 3px 6px;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+/* La nota que aclara el alcance del rol elegido, abajo del formulario de alta.
+ * Mas chica que `.nota-ayuda` porque es una aclaracion, no el texto principal. */
+.nota-ayuda-chica {
+  font-size: 0.78rem;
+  margin-top: 8px;
+}
+
+/* La fila de campos del alta de un usuario: el select de rol y el de empleado van
+ * uno al lado del otro con el boton al final. El ancho del select de empleado tiene
+ * que ser el mas grande de los tres porque los nombres son largos ("Esteban
+ * Agüero") y con un ancho chico el texto se corta a la mitad. */
+.form-nuevo-horario .campo select {
+  min-width: 140px;
+}

@@ -2,6 +2,7 @@ import { Component, OnInit, ChangeDetectorRef, ViewChild, ElementRef } from '@an
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { AuthService } from '../../services/auth';
 import { SupabaseService } from '../../services/supabase';
 import { nombreMes, fechaDesdeISO, fechaConAnio } from '../../utils/fechas';
 import { paraComparar, contiene } from '../../utils/texto';
@@ -104,8 +105,24 @@ export class CajaComponent implements OnInit {
     private supabase: SupabaseService,
     private cdr: ChangeDetectorRef,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private auth: AuthService
   ) {}
+
+  /**
+   * ¿Esta pantalla deja escribir?
+   *
+   * Es un getter y no una property con el valor guardado: el rol está en la sesión del
+   * navegador, así que si el usuario cierra sesión y entra otro, tiene que cambiar sin
+   * recargar. Con una property, el valor del anterior seguiría en la pantalla.
+   *
+   * El secretario la ve pero no escribe: ve los tres cuadros, ve las tablas, y no
+   * tiene ningún botón de guardar ni de borrar. Ver el comentario del template, que
+   * explica por qué `*ngIf` y no `disabled`.
+   */
+  get puedeEscribir(): boolean {
+    return this.auth.puedeEscribirCaja();
+  }
 
   /**
    * Formato de la columna "Falta pagar".

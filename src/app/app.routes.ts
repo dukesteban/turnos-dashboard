@@ -5,7 +5,7 @@ import { AgendaComponent } from './components/agenda/agenda';
 import { CajaComponent } from './components/caja/caja';
 import { PersonasComponent } from './components/personas/personas';
 import { LoginComponent } from './components/login/login';
-import { authGuard } from './services/auth.guard';
+import { authGuard, puedeVer } from './services/auth.guard';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -15,9 +15,11 @@ export const routes: Routes = [
   // rompe los links guardados y el historial del navegador. Lo que cambia es lo
   // que la pantalla MUESTRA, que ahora es la caja completa (ingresos + pagos +
   // compras), no solo los ingresos.
-  { path: 'ganancias', component: CajaComponent, canActivate: [authGuard] },
+  // Caja y Personas van con `puedeVer(...)`: el rol `empleado` no las tiene, y el
+  // `authGuard` solo no alcanza porque cualquiera puede escribir la URL a mano.
+  { path: 'ganancias', component: CajaComponent, canActivate: [authGuard, puedeVer('caja')] },
   // Alias para quien ya sepa que se llama Caja.
-  { path: 'caja', component: CajaComponent, canActivate: [authGuard] },
+  { path: 'caja', component: CajaComponent, canActivate: [authGuard, puedeVer('caja')] },
 
   // ── PERSONAS ──────────────────────────────────────────────────────
   // Clientes, Empleados y Proveedores bajo un mismo grupo, en pestañas.
@@ -31,7 +33,7 @@ export const routes: Routes = [
   // empleados`): se pueden compartir, "atrás" salta de pestaña, y `/clientes`
   // redirige bien.
   { path: 'personas', redirectTo: '/personas/clientes', pathMatch: 'full' },
-  { path: 'personas/:tab?', component: PersonasComponent, canActivate: [authGuard] },
+  { path: 'personas/:tab?', component: PersonasComponent, canActivate: [authGuard, puedeVer('personas')] },
 
   // Las dos rutas viejas siguen funcionando: redirigen a su pestaña. Nadie tiene
   // que cambiar un link guardado ni un acceso directo.
@@ -42,6 +44,8 @@ export const routes: Routes = [
   { path: 'clientes', redirectTo: '/personas/clientes' },
   { path: 'empleados', redirectTo: '/personas/empleados' },
 
-  { path: 'configuracion', component: ConfiguracionComponent, canActivate: [authGuard] },
+  // Configuracion es solo del admin: ahi se cambian horarios de atencion, precios y
+  // contrasenas, y nada de eso es del secretario.
+  { path: 'configuracion', component: ConfiguracionComponent, canActivate: [authGuard, puedeVer('configuracion')] },
   { path: '**', redirectTo: '' }
 ];

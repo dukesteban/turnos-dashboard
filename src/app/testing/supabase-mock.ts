@@ -113,6 +113,18 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
     empleadoPuedeAtender: () => Promise.resolve({ ok: true }),
     empleadoEstaOcupado: () => Promise.resolve(false),
 
+    // --- usuarios (pantalla de administracion) ---
+    // El usuario de prueba entra como admin, que es el unico rol que llega a esta
+    // pantalla. Devolver la misma fila en `crearUsuario` que en `getUsuarios` es lo que
+    // hace que el test vea el alta reflejada en la lista.
+    getUsuarios: () => Promise.resolve([
+      { id: 1, usuario: 'duk_e', password_hash: 'hash:x', rol: 'admin', empleado_id: null },
+    ]),
+    crearUsuario: (u: any) => Promise.resolve({ id: 99, ...u }),
+    actualizarUsuario: (id: number, datos: any) => Promise.resolve({ id, usuario: 'duk_e', rol: 'admin', empleado_id: null, ...datos }),
+    eliminarUsuario: () => Promise.resolve(),
+    hashDe: (p: string) => Promise.resolve(`hash:${p}`),
+
     // --- escritura ---
     editarTurno: () => Promise.resolve(),
     crearTurnoManual: () => Promise.resolve({}),
@@ -230,6 +242,27 @@ export function crearAuthMock(over: Record<string, any> = {}) {
   return {
     sha256: (s: string) => Promise.resolve(`hash:${s}`),
     getUsuario: () => 'duk_e',
+    // Los permisos. Por defecto admin, que es el rol con menos pantallas restringidas:
+    // un mock en admin hace que los tests que no son de roles sigan viendo todo, que
+    // es como estaba la app antes de que existieran.
+    //
+    // `getSesion` y no los metodos sueltos (`puedeVer`, `puedeEscribirCaja`) porque
+    // esos metodos leen el rol de la sesion. Asi el mock es coherente por dentro: si un
+    // test cambia el rol, todos los permisos cambian con el.
+    getSesion: () => ({ usuario: 'duk_e', rol: 'admin', empleado_id: null }),
+    getRol: () => 'admin',
+    getEmpleadoId: () => null,
+    esAdmin: () => true,
+    esSecretario: () => false,
+    esEmpleado: () => false,
+    puedeVer: (pantalla: string) => true,
+    puedeEscribirCaja: () => true,
+    puedeAdministrarUsuarios: () => true,
+    soloSusTurnos: () => false,
+    empleadoParaFiltrarTurnos: () => null,
+    isLoggedIn: () => true,
+    setSesion: () => {},
+    logout: () => {},
     ...over,
   };
 }

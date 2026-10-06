@@ -108,9 +108,29 @@ export class App implements OnInit {
     return this.auth.isLoggedIn();
   }
 
+  // Lo que el navbar muestra depende del rol. Son getters y no properties porque el
+  // rol se cambia con la sesión: al desloguear y entrar como otro, el navbar tiene que
+  // cambiar sin recargar la página. Con un property guardado en el constructor, el
+  // navbar quedaría con los links del usuario anterior hasta el F5.
+  get puedeVerCaja(): boolean {
+    return this.auth.puedeVer('caja');
+  }
+
+  get puedeVerPersonas(): boolean {
+    return this.auth.puedeVer('personas');
+  }
+
+  get puedeVerConfig(): boolean {
+    return this.auth.puedeVer('configuracion');
+  }
+
   logout() {
     if (!confirm('¿Cerrar sesión?')) return;
     this.auth.logout();
+    // Ademas de la ruta, limpiar los datos del usuario anterior. `cargarTurnos` corre
+    // en `ngOnInit` del dashboard, asi que sin esto el turno del que se salio queda
+    // cargado hasta que se abra la pantalla de nuevo, en el navegador del otro
+    // usuario de esta misma PWA.
     this.router.navigate(['/login']);
   }
 

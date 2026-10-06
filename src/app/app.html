@@ -10,10 +10,20 @@
     <a routerLink="/agenda" routerLinkActive="active">
       <span class="icono">📅</span><span class="texto"> Agenda</span>
     </a>
-    <!-- El link sigue apuntando a /ganancias para no romper URLs guardadas,
-         pero el texto es "Caja": la pantalla ya muestra ingresos, pagos y
-         compras, no solo lo que se ganó. -->
-    <a routerLink="/ganancias" routerLinkActive="active">
+    <!--
+      LOS LINKS DEPENDEN DEL ROL. `*ngIf` y no CSS: un link escondido con
+      `display: none` sigue en el DOM, se llega con el teclado y aparece en el
+      historial de la pagina.
+
+      Caja y Personas son de admin y secretario. Configuracion es solo del admin:
+      ahi van los horarios de atencion, los precios y las contrasenas.
+
+      Esto NO es seguridad, es orden de la pantalla. Las rutas tienen su propia
+      guard (ver `puedeVer` en auth.guard.ts) para que escribir la URL a mano no
+      sirva, y las 16 politicas de RLS de la base siguen abiertas a quien tenga
+      la key, que es publica.
+    -->
+    <a *ngIf="puedeVerCaja" routerLink="/ganancias" routerLinkActive="active">
       <span class="icono">💰</span><span class="texto"> Caja</span>
     </a>
     <!--
@@ -22,10 +32,10 @@
       marcado también en las tres pestañas: si no, solo se resalta en Clientes y
       uno no ve dónde está parado.
     -->
-    <a routerLink="/personas" routerLinkActive="active">
+    <a *ngIf="puedeVerPersonas" routerLink="/personas" routerLinkActive="active">
       <span class="icono">👥</span><span class="texto"> Personas</span>
     </a>
-    <a routerLink="/configuracion" routerLinkActive="active">
+    <a *ngIf="puedeVerConfig" routerLink="/configuracion" routerLinkActive="active">
       <span class="icono">⚙️</span><span class="texto"> Config</span>
     </a>
     <button class="btn-logout" (click)="logout()" title="Cerrar sesión">🚪</button>
@@ -54,7 +64,7 @@
           aria-label="Ahora no">✕</button>
 </div>
 
-<footer class="version-footer">v1.0.19</footer>
+<footer class="version-footer">v1.0.20</footer>
 
 <style>
   /* OJO: los estilos globales (body, font-family, reset) van en src/styles.scss.
