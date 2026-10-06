@@ -104,13 +104,20 @@ describe('App - contraseña', () => {
   });
 
   it('verifica la contraseña ACTUAL antes de cambiar nada', async () => {
-    const { cmp, mock } = montar({ verificarUsuario: () => Promise.resolve(null) });
+    const signIn = vi.fn().mockResolvedValue({ error: { message: 'bad' } });
+    const { cmp } = montar({
+      client: { auth: {
+        getSession: () => Promise.resolve({ data: { session: { user: { email: 'x@carwash.local' } } }, error: null }),
+        signInWithPassword: signIn,
+        updateUser: () => Promise.resolve({ error: null }),
+      } },
+    });
     cmp.passwordActual = 'malaclave';
     cmp.passwordNueva = 'nueva123';
     cmp.passwordRepetir = 'nueva123';
     await cmp.cambiarPassword();
     expect(cmp.mensajeErrorPassword).toMatch(/actual es incorrecta/i);
-    expect(mock.llamadas).not.toContain('cambiarPassword');
+    expect(signIn).toHaveBeenCalledWith({ email: 'x@carwash.local', password: 'malaclave' });
   });
 
   it('el cambio exitoso limpia los campos, suma al contador y deja el aviso a la vista', async () => {
@@ -163,37 +170,41 @@ describe('App - contraseña', () => {
     expect(btn.disabled).toBe(true);
   });
 
-  it('hashea antes de mandar: a la base viaja el hash, no la contraseña', async () => {
+  it('la clave actual se verifica con signIn, y updateUser manda la nueva: nunca el texto a la tabla', async () => {
+    // Lo que se prueba es que la app NO guarda la contraseña: desde la 016 la base
+    // no tiene `password_hash`, así que lo que va a Postgres es el token de Supabase
+    // Auth, no la clave. Si esto falla, alguien reactivó el guardado a mano.
     const enviados: string[] = [];
+    const si = vi.fn().mockImplementation((args: any) => { enviados.push(args.password); return Promise.resolve({ error: null }); });
+    const upd = vi.fn().mockImplementation((args: any) => { enviados.push(args.password); return Promise.resolve({ error: null }); });
     const { cmp } = montar({
-      verificarUsuario: (_u: string, h: string) => { enviados.push(h); return Promise.resolve({ id: 1 }); },
-      cambiarPassword: (_u: string, h: string) => { enviados.push(h); return Promise.resolve(); },
-    }, {
-      // El `sha256` va en el mock de AuthService, no en el de Supabase: son servicios
-      // distintos. Pasarlo por el primer objeto no hacía nada. Además devuelve un
-      // valor opaco: si devolviera el texto plano envuelto en algo, el
-      // `not.toContain('vieja123')` de abajo daría falso positivo.
-      sha256: (s: string) => Promise.resolve(s === 'vieja123' ? 'HASH_ACTUAL' : 'HASH_NUEVA'),
+      client: { auth: {
+        getSession: () => Promise.resolve({ data: { session: { user: { email: 'x@carwash.local' } } }, error: null }),
+        signInWithPassword: si,
+        updateUser: upd,
+      } },
     });
     cmp.passwordActual = 'vieja123';
     cmp.passwordNueva = 'nueva123';
     cmp.passwordRepetir = 'nueva123';
     await cmp.cambiarPassword();
-    expect(enviados).toEqual(['HASH_ACTUAL', 'HASH_NUEVA']);
-    expect(enviados).not.toContain('vieja123');
-    expect(enviados).not.toContain('nueva123');
+    expect(enviados).toEqual(['vieja123', 'nueva123']);
   });
 
-  it('el hash se calcula con el usuario logged-in, no con uno hardcodeado', async () => {
-    const usuarios: string[] = [];
+  it('el email para verificar es el de la sesión, no un string duro', async () => {
+    const si = vi.fn().mockResolvedValue({ error: null });
     const { cmp } = montar({
-      verificarUsuario: (u: string) => { usuarios.push(u); return Promise.resolve({ id: 1 }); },
-    }, { getUsuario: () => 'laura' });
+      client: { auth: {
+        getSession: () => Promise.resolve({ data: { session: { user: { email: 'laura@carwash.local' } } }, error: null }),
+        signInWithPassword: si,
+        updateUser: () => Promise.resolve({ error: null }),
+      } },
+    }, {});
     cmp.passwordActual = 'vieja123';
     cmp.passwordNueva = 'nueva123';
     cmp.passwordRepetir = 'nueva123';
     await cmp.cambiarPassword();
-    expect(usuarios).toEqual(['laura']);
+    expect(si).toHaveBeenCalledWith({ email: 'laura@carwash.local', password: 'vieja123' });
   });
 
   it('cerrar el popup limpia los campos y no avisa nada', () => {

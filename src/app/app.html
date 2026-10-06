@@ -18,10 +18,9 @@
       Caja y Personas son de admin y secretario. Configuracion es solo del admin:
       ahi van los horarios de atencion, los precios y las contrasenas.
 
-      Esto NO es seguridad, es orden de la pantalla. Las rutas tienen su propia
-      guard (ver `puedeVer` en auth.guard.ts) para que escribir la URL a mano no
-      sirva, y las 16 politicas de RLS de la base siguen abiertas a quien tenga
-      la key, que es publica.
+      Esto NO es seguridad por sí solo: la seguridad real la hacen las políticas de RLS
+      de la base (migración 016), que miran el rol que trae el JWT de Supabase Auth. El
+      `*ngIf` y la guard son solo para ordenar la pantalla.
     -->
     <a *ngIf="puedeVerCaja" routerLink="/ganancias" routerLinkActive="active">
       <span class="icono">💰</span><span class="texto"> Caja</span>
@@ -128,7 +127,7 @@
           aria-label="Ahora no">✕</button>
 </div>
 
-<footer class="version-footer">v1.0.21</footer>
+<footer class="version-footer">v1.0.22</footer>
 
 <style>
   /* OJO: los estilos globales (body, font-family, reset) van en src/styles.scss.

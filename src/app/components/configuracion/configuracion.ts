@@ -901,7 +901,7 @@ export class ConfiguracionComponent implements OnInit {
     try {
       await this.supabase.crearUsuario({
         usuario: nombre,
-        password_hash: await this.auth.sha256(clave),
+        password: clave,
         rol: this.nuevoUsuario.rol,
         empleado_id: empId,
       });
@@ -988,7 +988,7 @@ export class ConfiguracionComponent implements OnInit {
     const u = this.usuarioEditandoPassword;
     if (!u) return;
     try {
-      await this.supabase.actualizarUsuario(u.id, { password_hash: await this.auth.sha256(this.passwordDeOtroNueva) });
+      await this.supabase.resetearClaveUsuario(u.id, this.passwordDeOtroNueva);
       const nombre = u.usuario;
       this.cerrarPassword();
       this.mensajeUsuarios = `✅ Contraseña de "${nombre}" cambiada. Avisale a la persona.`;

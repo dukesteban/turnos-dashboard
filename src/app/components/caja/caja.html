@@ -14,11 +14,14 @@
     pasaria con un `*ngIf` en el `<td>`.
 
     Y el por que NO se controla aca la escritura de verdad: los metodos `guardarPago`,
-    `eliminarCompra` y los demas no Miran el rol. Si alguien los llama desde la consola
-    con un click, la escritura pasa. Ver `puedeEscribirCaja` en auth.ts.
+    `eliminarCompra` y los demas no miran el rol. Si alguien los llama desde la consola
+    con un click, la escritura PASABA antes de la 016. Ver `puedeEscribirCaja` en
+    auth.ts.
 
-    Las 16 politicas de RLS de la base siguen abiertas a quien tenga la key. Esta es
-    orden de pantalla, no seguridad.
+    Desde la migración 016 la base sí cierra: las políticas de RLS miran el rol del JWT
+    y hacen que un secretario no pueda escribir en pagos aunque le corra el método a
+    mano. Esta pantalla sigue siendo orden de interfaz, pero ya no es la única línea
+    de defensa.
   -->
 
   <!-- Controles -->

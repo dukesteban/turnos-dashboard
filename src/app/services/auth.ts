@@ -1,4 +1,7 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { BehaviorSubject } from 'rxjs';
+import type { Session } from '@supabase/supabase-js';
+import { SupabaseService } from './supabase';
 
 /**
  * Los tres roles de la app.
@@ -33,64 +36,94 @@ export interface Sesion {
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
+  private supabase = inject(SupabaseService);
 
-  private readonly KEY = 'auth_user';
   /**
-   * La sesión completa, en una clave aparte del nombre.
+   * La sesión actual, como observable. `null` si no hay.
    *
-   * En vez de meter el rol adentro de `auth_user` (que hoy es un string pelado) para no
-   * romper `getUsuario()`, que lo usan el login, el cambio de contraseña y el logout.
-   * Migrar los dos juntos se puede, pero entonces hay que tocar esos tres lugares y
-   * el cambio de contraseña se rompe si alguno se queda atrás.
-   *
-   * Y el nombre queda como estaba para que una sesión vieja (de antes de esta versión)
-   * siga siendo válida en vez de dejar a todos afuera con la app abierta.
+   * Antes de que existiera esto, la sesión se guardaba en `localStorage` bajo `auth_user`
+   * y la app la leía sin más. Eso servía para la pantalla, pero NO para la base: el JWT que
+   * se manda a Postgres no tiene rol, así que las políticas RLS no pueden distinguir al
+   * admin del empleado. Desde la migración 016, la sesión viene del JWT de Supabase Auth.
    */
-  private readonly KEY_SESION = 'auth_sesion';
+  private sesionSubject = new BehaviorSubject<Sesion | null>(null);
+  sesion$ = this.sesionSubject.asObservable();
 
-  async sha256(text: string): Promise<string> {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  /**
+   * Promesa de sesión resuelta. Las guards la esperan antes de decidir, para no botar a
+   * la persona al login durante el primer refresco de la app.
+   *
+   * Se resuelve una sola vez: supabase-js lee el localStorage en el constructor y la
+   * sesión queda disponible de inmediato. La promesa solo hace falta para no leer
+   * `sesionSubject` antes de que `getSession()` termine de resolverse.
+   */
+  private readonly lista: Promise<Sesion | null>;
+
+  constructor() {
+    this.lista = this.supabase.client.auth.getSession().then(({ data }) => {
+      const s = data.session ? this.armarSesion(data.session) : null;
+      this.sesionSubject.next(s);
+      return s;
+    });
+
+    // Cada cambio de estado de auth (login, logout, refresh, cambio de tab) actualiza la
+    // sesión. Esto incluye cuando se RENUEVA el token: sin esto el rol viejo del JWT
+    // puede seguir vivo si el admin lo bajó desde otra pestaña.
+    this.supabase.client.auth.onAuthStateChange((_evt, session) => {
+      this.sesionSubject.next(session ? this.armarSesion(session) : null);
+    });
   }
 
-  isLoggedIn(): boolean {
-    return !!localStorage.getItem(this.KEY);
+  /**
+   * La sesión como un objeto plano, o `null`. Sincrónica: lee el último valor emitido.
+   *
+   * Las guards NO la usan sin antes `await asegurarSesion()`, que garantiza que el
+   * primer `getSession()` ya terminó. Fuera de una guard, quien llama ya está dentro de
+   * una pantalla, y ahí la sesión ya se resolvió.
+   */
+  getSesion(): Sesion {
+    const s = this.sesionSubject.value;
+    if (s) return s;
+    // Sin sesión, no hay rol. Antes devolvía un admin por defecto, con lo que una sesión
+    // vieja o un localStorage editado a mano entraba como el rol con más permisos. Eso
+    // ya es historia: ahora, sin JWT no hay datos, y esto solo alimenta la pantalla.
+    return { usuario: '', rol: 'empleado', empleado_id: null };
+  }
+
+  /**
+   * Asegura que el primer `getSession()` ya terminó. Las guards la esperan antes de
+   * preguntar si hay sesión o qué rol tiene.
+   */
+  asegurarSesion(): Promise<Sesion | null> {
+    return this.lista;
+  }
+
+  private armarSesion(session: Session): Sesion {
+    const u = session.user;
+    return {
+      usuario: String(u.user_metadata?.['usuario'] ?? session.user.email ?? ''),
+      rol: (u.app_metadata?.['rol'] as Rol) ?? 'admin',
+      // El rol tiene que venir de app_metadata porque acá está el candado de la base:
+      // un usuario no puede tocarse el app_metadata a sí mismo, pero sí
+      // `user_metadata`. Si el rol viniera de `user_metadata`, un empleado podría
+      // hacer `supabase.auth.update({ data: { rol: 'admin' } })` y la pantalla lo
+      // vería como admin. La base no, porque las políticas leen `app_metadata`.
+      empleado_id: u.app_metadata?.['empleado_id']
+        ? Number(u.app_metadata['empleado_id'])
+        : null,
+    };
   }
 
   getUsuario(): string {
-    return localStorage.getItem(this.KEY) || '';
-  }
-
-  /**
-   * La sesión, o `null` si no hay.
-   *
-   * `JSON.parse` puede tirar si alguien edited el localStorage a mano o si quedó una
-   * escritura a medias, así que va en un try. Una sesión corrupta tiene que ser lo
-   * mismo que no tener sesión, no una pantalla en blanco.
-   *
-   * `admin` como valor por defecto cuando no hay sesión guardada: es el valor con más
-   * permisos, y es lo que hace que una sesión vieja (creada antes de que existiera el
-   * rol) siga funcionando. El costo es que un localStorage borrado a mano abre la app
-   * como admin en vez de cerrar; el login real está en la base, esto es lo que hay
-   * arriba de eso.
-   */
-  getSesion(): Sesion {
-    try {
-      const crudo = localStorage.getItem(this.KEY_SESION);
-      if (crudo) {
-        const s = JSON.parse(crudo);
-        if (s && s.usuario) {
-          return { usuario: String(s.usuario), rol: (s.rol || 'admin') as Rol, empleado_id: s.empleado_id ?? null };
-        }
-      }
-    } catch (e) {
-      // Sesion ilegible: se sigue por el nombre, que es lo unico que se puede saber.
-    }
-    return { usuario: this.getUsuario(), rol: 'admin', empleado_id: null };
+    return this.sesionSubject.value?.usuario ?? '';
   }
 
   getRol(): Rol {
-    return this.getSesion().rol;
+    // Sin sesión, el rol es el que MENOS permite ('empleado'), no admin. Antes este
+    // método devolvía 'admin' por defecto, con lo que un localStorage editado a mano
+    // (o una sesión vieja) entraba como el rol más poderoso. La base lo ignora: sin JWT
+    // no hay datos. Pero la pantalla no tiene que mentir.
+    return this.sesionSubject.value?.rol ?? 'empleado';
   }
 
   /**
@@ -103,8 +136,12 @@ export class AuthService {
    * falta.
    */
   getEmpleadoId(): number | null {
-    const v = this.getSesion().empleado_id;
+    const v = this.sesionSubject.value?.empleado_id;
     return typeof v === 'number' ? v : null;
+  }
+
+  isLoggedIn(): boolean {
+    return this.sesionSubject.value !== null;
   }
 
   esAdmin(): boolean { return this.getRol() === 'admin'; }
@@ -175,25 +212,8 @@ export class AuthService {
     return this.soloSusTurnos() ? this.getEmpleadoId() : null;
   }
 
-  login(usuario: string) {
-    localStorage.setItem(this.KEY, usuario);
-  }
-
-  /**
-   * Guardar la sesión al entrar.
-   *
-   * Se escribe DESPUÉS del nombre, no antes: si la app se cierra entre las dos
-   * escrituras, el nombre queda y la sesión no, que es el estado de una sesión vieja y
-   * la app sigue entrando como admin. Al revés, quedaría el nombre sin sesión, que es
-   * el mismo resultado pero del lado que menos información tiene.
-   */
-  setSesion(usuario: string, rol: Rol, empleado_id: number | null) {
-    localStorage.setItem(this.KEY, usuario);
-    localStorage.setItem(this.KEY_SESION, JSON.stringify({ usuario, rol, empleado_id }));
-  }
-
-  logout() {
-    localStorage.removeItem(this.KEY);
-    localStorage.removeItem(this.KEY_SESION);
+  /** Cierra la sesión de verdad: le avisa al servidor y borra el token local. */
+  async logout() {
+    await this.supabase.client.auth.signOut();
   }
 }

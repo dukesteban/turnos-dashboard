@@ -104,6 +104,11 @@ export class App implements OnInit {
     const nombre = config.find((c: any) => c.clave === 'nombre_negocio')?.valor || 'Hola!';
     this.nombreNegocio = nombre;
     localStorage.setItem('nombre_negocio', nombre);
+
+    // Cuando cambia la sesión (llega el token, el usuario sale), la vista tiene que
+    // enterarse. Son getters que leen `sesionSubject.value`, así que si nadie dispara
+    // `detectChanges`, el navbar queda con la sesión VIEJA hasta que algo refresque.
+    this.auth.sesion$.subscribe(() => this.cdr.detectChanges());
   }
 
   get isLoggedIn(): boolean {
@@ -225,17 +230,34 @@ export class App implements OnInit {
     this.guardandoPassword = true;
     this.cdr.detectChanges();
     try {
-      const usuario = this.auth.getUsuario();
-      const hashActual = await this.auth.sha256(this.passwordActual);
-      const registro = await this.supabase.verificarUsuario(usuario, hashActual);
-      if (!registro) {
-        this.mensajeErrorPassword = 'La contraseña actual es incorrecta.';
+      // Para verificar la clave actual hay que volver a pedir login con ella: supabase
+      // solo permite cambiar la clave de la sesión activa, y `updateUser` la cambia sin
+      // verificar la anterior. Si no, cualquiera que dejara el navegador abierto 5
+      // minutos podría cambiarle la clave al que estuviera logueado.
+      const emailSesion = this.supabase.client.auth.getSession()
+        .then(s => (s.data.session?.user?.email as string) ?? '');
+      const email = await emailSesion;
+      if (email) {
+        const { error: errLogin } = await this.supabase.client.auth.signInWithPassword({
+          email,
+          password: this.passwordActual,
+        });
+        if (errLogin) {
+          this.mensajeErrorPassword = 'La contraseña actual es incorrecta.';
+          this.guardandoPassword = false;
+          this.cdr.detectChanges();
+          return;
+        }
+      }
+      const { error: errUpdate } = await this.supabase.client.auth.updateUser({
+        password: this.passwordNueva,
+      });
+      if (errUpdate) {
+        this.mensajeErrorPassword = 'No se pudo cambiar la contraseña.';
         this.guardandoPassword = false;
         this.cdr.detectChanges();
         return;
       }
-      const hashNueva = await this.auth.sha256(this.passwordNueva);
-      await this.supabase.cambiarPassword(usuario, hashNueva);
       this.registrarCambioPassword();
       // El popup NO se cierra: el "Contraseña cambiada" vive adentro y si se cerrara
       // nadie lo leería nunca (quedaría un string en un componente invisible). Queda

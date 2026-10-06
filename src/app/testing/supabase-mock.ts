@@ -1,4 +1,5 @@
 import { SupabaseService } from '../services/supabase';
+import { BehaviorSubject } from 'rxjs';
 
 /**
  * Datos de prueba. Son COPIAS de los reales de `test-lavadero`: si el mock
@@ -118,12 +119,11 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
     // pantalla. Devolver la misma fila en `crearUsuario` que en `getUsuarios` es lo que
     // hace que el test vea el alta reflejada en la lista.
     getUsuarios: () => Promise.resolve([
-      { id: 1, usuario: 'duk_e', password_hash: 'hash:x', rol: 'admin', empleado_id: null },
+      { id: 1, usuario: 'duk_e', password_hash: '', rol: 'admin', empleado_id: null },
     ]),
-    crearUsuario: (u: any) => Promise.resolve({ id: 99, ...u }),
-    actualizarUsuario: (id: number, datos: any) => Promise.resolve({ id, usuario: 'duk_e', rol: 'admin', empleado_id: null, ...datos }),
-    eliminarUsuario: () => Promise.resolve(),
-    hashDe: (p: string) => Promise.resolve(`hash:${p}`),
+    crearUsuario: (u: any) => Promise.resolve({ ok: true, usuario: { id: 99, ...u } }),
+    actualizarUsuario: (id: number, datos: any) => Promise.resolve({ ok: true, usuario: { id, usuario: 'duk_e', rol: 'admin', empleado_id: null, ...datos } }),
+    eliminarUsuario: () => Promise.resolve({ ok: true }),
 
     // --- escritura ---
     editarTurno: () => Promise.resolve(),
@@ -176,8 +176,45 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
     updateMetodoPago: () => Promise.resolve(),
     deleteMetodoPago: () => Promise.resolve(),
     // --- Auth / password ---
-    verificarUsuario: () => Promise.resolve(true),
-    cambiarPassword: () => Promise.resolve(),
+    // YA NO ESTAN: `verificarUsuario`, `cambiarPassword`, `hashDe`. Desde la migración
+    // 016 el login usa Supabase Auth y los resets de clave van por la función de borde
+    // `resetearClaveUsuario`. Los tests que los usaban se migraron en la misma versión.
+    resetearClaveUsuario: (id: number, clave: string) => Promise.resolve({ ok: true }),
+
+    // --- Cliente de Supabase, solo lo que la app usa ---
+    // `client.auth.*` lo usa AuthService y el popup de cambio de clave del navbar.
+    // Por defecto devuelve "no hay sesión": los tests que verifican pantallas con sesión
+    // le pasan su propia versión por `over`.
+    client: {
+      auth: {
+        getSession: () => Promise.resolve({
+          data: {
+            session: {
+              user: {
+                email: 'duk_e@carwash.local',
+                user_metadata: { usuario: 'duk_e' },
+                app_metadata: { rol: 'admin' },
+              },
+            },
+          },
+          error: null,
+        }),
+        signInWithPassword: () => Promise.resolve({ data: { session: null }, error: null }),
+        updateUser: () => Promise.resolve({ data: { user: null }, error: null }),
+        signOut: () => Promise.resolve({ error: null }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: noop } } }),
+      },
+    },
+    // `functions.invoke` lo usan los métodos de usuarios que van a la función de borde.
+    // Por defecto responde { ok: true } para que los ABM de usuarios de la pantalla de
+    // Configuración no fallen en los tests que solo chequean el alta reflejada.
+    functions: {
+      invoke: (_fn: string, opts: any) => Promise.resolve({ data: { ok: true, usuario: opts?.body?.usuario ? { id: 99, ...opts.body } : {} }, error: null }),
+    },
+    // `rpc('correo_de_usuario')` lo usa el login. Por defecto devuelve el correo tal
+    // cual, sin transformar: los tests de login no chequean la transformación, esa va
+    // en los tests de la base.
+    rpc: (_fn: string, args: any) => Promise.resolve({ data: (args?.p_usuario || '') + '@carwash.local', error: null }),
 
     // --- Caja: pagos a empleados ---
     // `getComisionesPeriodo` es la versión de UNA consulta para todos los
@@ -240,7 +277,6 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
  */
 export function crearAuthMock(over: Record<string, any> = {}) {
   return {
-    sha256: (s: string) => Promise.resolve(`hash:${s}`),
     getUsuario: () => 'duk_e',
     // Los permisos. Por defecto admin, que es el rol con menos pantallas restringidas:
     // un mock en admin hace que los tests que no son de roles sigan viendo todo, que
@@ -261,8 +297,9 @@ export function crearAuthMock(over: Record<string, any> = {}) {
     soloSusTurnos: () => false,
     empleadoParaFiltrarTurnos: () => null,
     isLoggedIn: () => true,
-    setSesion: () => {},
-    logout: () => {},
+    asegurarSesion: () => Promise.resolve({ usuario: 'duk_e', rol: 'admin', empleado_id: null }),
+    sesion$: new BehaviorSubject({ usuario: 'duk_e', rol: 'admin', empleado_id: null }),
+    logout: () => Promise.resolve(),
     ...over,
   };
 }

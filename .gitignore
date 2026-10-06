@@ -50,3 +50,4 @@ memory.md
 ENCODING.md
 
 # (el arnes de tests viejo se elimino: ahora son .spec.ts con ng test)
+supabase/.temp/

@@ -2,9 +2,14 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService, Rol } from './auth';
 
-export const authGuard: CanActivateFn = () => {
+export const authGuard: CanActivateFn = async () => {
   const auth = inject(AuthService);
   const router = inject(Router);
+  // `asegurarSesion` espera el primer `getSession()`. Sin esto, una sesión válida del
+  // localStorage todavía no se leyó, `isLoggedIn()` da false, y la app bota a la
+  // persona al login apenas entra. Con el `await` la guard aguanta un rato y deja
+  // entrar si la sesión existe.
+  await auth.asegurarSesion();
   if (auth.isLoggedIn()) return true;
   router.navigate(['/login']);
   return false;
@@ -31,9 +36,10 @@ export const authGuard: CanActivateFn = () => {
  * debía.
  */
 export function puedeVer(pantalla: 'caja' | 'personas' | 'configuracion' | 'turnos'): CanActivateFn {
-  return () => {
+  return async () => {
     const auth = inject(AuthService);
     const router = inject(Router);
+    await auth.asegurarSesion();
     if (!auth.isLoggedIn()) {
       router.navigate(['/login']);
       return false;

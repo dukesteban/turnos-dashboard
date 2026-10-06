@@ -9,6 +9,17 @@ import { jornadaCubre, turnoTocadoPorAusencia, textoAusencia } from '../utils/fe
 export class SupabaseService {
   private supabase: SupabaseClient;
 
+  /**
+   * El cliente, por si alguien necesita algo que no está en los métodos (auth, auth,
+   * auth... o realtime propio). Todo el código de la app debería pasar por los métodos
+   * de esta clase: los métodos hacen lo mismo que `client.from(...)...` pero con
+   * errores manejados. Este getter existe para que AuthService pueda suscribirse a los
+   * cambios de sesión.
+   */
+  get client(): SupabaseClient {
+    return this.supabase;
+  }
+
   constructor() {
     this.supabase = createClient(
       environment.supabaseUrl,
@@ -37,28 +48,18 @@ export class SupabaseService {
   }
   
   // USUARIOS
-  /**
-   * Busca el usuario por nombre y contraseña, y devuelve el REGISTRO entero.
-   *
-   * Antes devolvía un booleano y el login guardaba solo el nombre. Con los roles eso no
-   * alcanza: hay que traer el `rol` y el `empleado_id` para armar la sesión, y no
-   * alcanza con traerlos después porque el login ya decidió que el usuario existe.
-   *
-   * `null` si no existe o si la contraseña no coincide. Es el mismo valor para los dos
-   * casos a propósito: el login muestra "usuario o contraseña incorrectos" y no dice
-   * cuál de las dos falló, porque decir cuál convierte el login en una forma de
-   * enumerar qué usuarios existen.
-   */
-  async verificarUsuario(usuario: string, passwordHash: string): Promise<any | null> {
-    const { data, error } = await this.supabase
-      .from('usuarios')
-      .select('id, usuario, rol, empleado_id')
-      .eq('usuario', usuario)
-      .eq('password_hash', passwordHash)
-      .maybeSingle();
-    if (error) return null;
-    return data || null;
-  }
+  //
+  // Los metodos de aca NO tocan la tabla `usuarios` directamente: va la función de borde
+  // `admin-usuarios`, que es la que tiene la clave de servicio para crear y borrar
+  // usuarios de auth. Sin eso, el que los llamara queda trabando: la tabla `usuarios`
+  // está protegida por RLS (solo admin), y la creación de un usuario de auth la hace
+  // GoTrue con esa clave.
+  //
+  // `getUsuarios` sí lee la tabla: solo dice QUÉ usuarios hay, no los crea ni los borra.
+  // La política de RLS para admin le da lector, un problema menos.
+  //
+  // `verificarUsuario` y `cambiarPassword` se eliminaron: el login ya no usa la tabla
+  // `usuarios` para verificar, lo hace Supabase Auth con la contrasena directa.
 
   /** Los usuarios, para la pantalla de administracion. */
   async getUsuarios(): Promise<any[]> {
@@ -70,45 +71,61 @@ export class SupabaseService {
     return data || [];
   }
 
-  async crearUsuario(datos: any) {
-    const { data, error } = await this.supabase
-      .from('usuarios')
-      .insert(datos)
-      .select()
-      .single();
-    if (error) throw error;
+  private async llamarUsuarios(cuerpo: Record<string, any>): Promise<any> {
+    const { data, error } = await this.supabase.functions.invoke('admin-usuarios', {
+      body: cuerpo,
+    });
+    if (error) {
+      // functions.invoke tira FunctionsHttpError con el body adentro. Ese body es el
+      // mensaje que armó la función ("Solo el administrador..."), y es el que hay que
+      // mostrar en pantalla, no un "Error 403".
+      const mensaje = await this.mensajeDeErrorDeFuncion(error);
+      throw new Error(mensaje);
+    }
+    if (!data?.ok) throw new Error(data?.error || 'No se pudo completar el pedido.');
     return data;
   }
 
-  async actualizarUsuario(id: number, datos: any) {
-    const { data, error } = await this.supabase
-      .from('usuarios')
-      .update(datos)
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+  private async mensajeDeErrorDeFuncion(error: any): Promise<string> {
+    try {
+      const respuesta = error?.context as Response | undefined;
+      if (respuesta && typeof respuesta.json === 'function') {
+        const cuerpo = await respuesta.json();
+        if (cuerpo?.error) return cuerpo.error;
+      }
+    } catch {
+      // Si no se pudo leer, se cae abajo con el mensaje genérico.
+    }
+    return error?.message || 'No se pudo completar el pedido.';
   }
 
-  /** Borra un usuario. El que esta logged in no puede borrarse a si mismo. */
-  async eliminarUsuario(id: number) {
-    const { error } = await this.supabase.from('usuarios').delete().eq('id', id);
-    if (error) throw error;
+  /** Crea un usuario: auth + fila en `usuarios`. */
+  crearUsuario(datos: { usuario: string; password?: string; clave?: string; rol: string; empleado_id?: number | null }) {
+    return this.llamarUsuarios({
+      accion: 'crear',
+      usuario: datos.usuario,
+      password: datos.password ?? datos.clave,
+      rol: datos.rol,
+      empleado_id: datos.empleado_id ?? null,
+    });
   }
 
-  /** El hash SHA-256 de una contrasena en texto plano. Para dar de alta y para resetear. */
-  async hashDe(password: string): Promise<string> {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  /** Cambia nombre, rol o empleado vinculado. */
+  actualizarUsuario(id: number, datos: { usuario?: string; rol?: string; empleado_id?: number | null; password_hash?: string }) {
+    if (datos.password_hash !== undefined) {
+      throw new Error('password_hash no se puede actualizar desde acá. Usá resetearClaveUsuario.');
+    }
+    return this.llamarUsuarios({ accion: 'actualizar', id, ...datos });
   }
 
-  async cambiarPassword(usuario: string, nuevoHash: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('usuarios')
-      .update({ password_hash: nuevoHash })
-      .eq('usuario', usuario);
-    if (error) throw error;
+  /** El admin le resetea la clave a otro usuario. */
+  resetearClaveUsuario(id: number, nuevaClave: string) {
+    return this.llamarUsuarios({ accion: 'resetear_clave', id, password: nuevaClave });
+  }
+
+  /** Borra un usuario. El que está logged-in no puede borrarse a sí mismo. */
+  eliminarUsuario(id: number) {
+    return this.llamarUsuarios({ accion: 'eliminar', id });
   }
 
   // TURNOS
