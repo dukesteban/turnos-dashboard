@@ -22,6 +22,155 @@
   margin: 0 auto;
 }
 
+// ═══ ACCESOS RÁPIDOS A CAJA ═══
+// Los tres "registrar" de Caja, siempre a mano desde la pantalla de turnos.
+//
+// SOLO EL SIGNO. El texto no se ve: lo muestra el tooltip del hover. Y no es
+// capricho de diseño, es una medida. Con el texto siempre a la vista la pill mide
+// 155px de ancho y el grupo arranca en x=813, que es justo donde termina el texto
+// de la tercera tarjeta de arriba ("Turnos pendientes"): le pisaba las últimas
+// letras y el número. Como círculo, el grupo mide 42px y arranca en 927, así que
+// solo pisa el padding de la tarjeta.
+//
+// EL TEXTO SIGUE EN EL DOM, OCULTO. No es decoración: es lo que muestra el tooltip
+// del hover y lo que lee el lector de pantalla. Por eso el botón lleva
+// `aria-label` y NO `title`: con los dos aparecen DOS tooltips, el de CSS al toque
+// y el nativo del sistema un segundo después, y el que se ve es el que no se
+// pidió.
+//
+// LA ALTURA ESTÁ MEDIDA PARA NO TAPAR EL "➕ NUEVO TURNO". El navbar mide 56 y
+// ahora está SIEMPRE en y=0 (por el `margin: 0` del body, que está explicado en
+// styles.scss), así que `top: 64px` da los mismos 8px de aire scrolleando o no. El
+// encabezado de "Turnos de hoy" va de y=245 a y=281 y el grupo termina en 202. Si se
+// le agrega un cuarto botón, o se agrandan los círculos, ese botón empieza a quedar
+// debajo: el alto del grupo es 42*3 + 6*2 = 138, y hay que volver a medir.
+//
+// `top: 64px` y NO `56px`: con el navbar en y=0, a 56 el círculo quedaría pegado
+// abajo de la barra, sin aire, y con el borde de 2px parece que es parte de ella.
+//
+// `position: fixed` y no `sticky` dentro del flujo: si ocuparan lugar, empujarían
+// los cuadros de arriba hacia abajo y cambiarían el alto de la primera pantalla
+// cada vez que se agregara uno. Flotando, la pantalla no se mueve.
+//
+// `z-index: 60`: arriba del contenido (que no lleva z-index) y abajo del navbar
+// (100) y de los popups (1000). Si fuera 100+, al scrollear pasarían por ENCIMA de
+// la barra y quedarían medio cortados al pegarse al borde superior.
+.acciones-rapidas {
+  position: fixed;
+  top: 64px;
+  right: 14px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.accion-rapida {
+  position: relative;
+  display: block;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover .accion-signo { transform: scale(1.1); }
+  &:active .accion-signo { transform: scale(0.94); }
+  // `focus-visible` y no `focus`: al tocar con el mouse no tiene que quedar un
+  // marco azul alrededor del círculo, pero con teclado sí tiene que verse dónde
+  // estás. El tooltip sí sale con el foco (abajo): el teclado no tiene hover.
+  &:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 3px; border-radius: 50%; }
+}
+
+// Círculo con borde del color y `+` del mismo color: el signo se ve teñido (que es
+// lo que distingue una acción de otra de un vistazo) y la pastilla sigue
+// resaltando sobre una fila de tabla o sobre una tarjeta blanca.
+.accion-signo {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--c);
+  color: var(--c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.16);
+  transition: transform 0.15s ease, background 0.15s ease;
+
+  .accion-rapida:hover & { background: var(--fondo); }
+}
+
+// EL TOOLTIP Y CÓMO SALTA. El texto se muestra con el mouse ENCIMA del botón y
+// con el FOCO del botón, pero en cada dispositivo por un motivo distinto, y por eso
+// los dos casos van en media queries y no juntos:
+//
+//   · con mouse (hover: hover) -> `:hover` y `:focus-visible`. Con `:focus` pelado
+//     no, porque al hacer clic con el mouse el botón queda enfocado y el tooltip se
+//     quedaría pegado arriba de todo lo que se tocase después.
+//   · sin mouse (hover: none, o sea el celular) -> `:focus`. Al apretar un botón el
+//     celular le da foco y ahí aparece el nombre; se va al apretar otro. Sin esto el
+//     celular queda con tres círculos de colores que no dicen qué abren.
+//
+// Sale a la IZQUIERDA y no arriba: los botones están pegados al borde derecho, así
+// que hacia la derecha no hay lugar y la etiqueta se saldría de la ventana.
+//
+// `right: calc(100% + 8px)` y no `left: -100%`: el botón tiene ancho de contenido
+// (el texto no ocupa lugar, es `position: absolute`), así que 100% es el ancho del
+// círculo, no el de la etiqueta.
+.accion-texto {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  background: #1e293b;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+  // Sin `transition` de `transform` a propósito: se mueve con el círculo y con el
+  // translate del medio se vería deslizarse de abajo hacia arriba.
+  transition: opacity 0.12s ease;
+}
+
+@media (hover: hover) {
+  .accion-rapida:hover .accion-texto,
+  .accion-rapida:focus-visible .accion-texto { opacity: 1; }
+}
+
+@media (hover: none) {
+  // Celular: apretar muestra el nombre. Ver el bloque de arriba para por qué acá es
+  // `:focus` pelado y no `:focus-visible`.
+  .accion-rapida:focus .accion-texto { opacity: 1; }
+}
+
+// Un color por salida de dinero, y son los mismos de las dos pestañas de Caja:
+//   · naranja  lo que sale para la gente de la casa (pago a empleado)
+//   · rojo     lo que se toma y hay que devolver (deuda)
+//   · verde    lo que se abona (pago a proveedor)
+// Los `--fondo` son tintes del mismo color, no grises: al pasar el mouse el círculo
+// se tiñe y tiene que leerse como el mismo botón, no como uno distinto.
+.accion-naranja { --c: #ea580c; --fondo: #ffedd5; }
+.accion-rojo     { --c: #dc2626; --fondo: #fee2e2; }
+.accion-verde    { --c: #15803d; --fondo: #dcfce7; }
+
+// En celular el círculo baja un poco y se pega más al borde. Ojo: el texto NO se
+// saca acá a la fuerza. Tres etiquetas siempre visibles en una pantalla angosta
+// tapan la columna derecha de la tabla de turnos, que es la que se mira todos los
+// días. Con el `:focus` del media query de arriba el nombre aparece al apretar.
+@media (max-width: 640px) {
+  .acciones-rapidas { top: 62px; right: 10px; }
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

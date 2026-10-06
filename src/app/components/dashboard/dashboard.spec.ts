@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { DashboardComponent } from './dashboard';
 import { SupabaseService } from '../../services/supabase';
 import {
@@ -26,11 +27,27 @@ import {
 
 function montar(over: Record<string, any> = {}) {
   const mock = crearSupabaseMock(over);
+  // El Router va de mentira y anota: estos botones NO abren nada acá, saltan a
+  // Caja con `?accion=...`. Con las rutas reales un `navigate` a `/ganancias`
+  // desde un TestBed sin `RouterTestingModule` no encuentra destino, y el test
+  // necesita ademas poder verificar ADONDE se mando.
+  const navegaciones: { args: any[]; extra: any }[] = [];
   TestBed.configureTestingModule({
-    providers: [{ provide: SupabaseService, useValue: mock }],
+    providers: [
+      { provide: SupabaseService, useValue: mock },
+      {
+        provide: Router,
+        useValue: {
+          navigate: (args: any[], extra: any) => {
+            navegaciones.push({ args, extra });
+            return Promise.resolve(true);
+          },
+        },
+      },
+    ],
   });
   const cmp = TestBed.createComponent(DashboardComponent).componentInstance;
-  return { cmp, mock };
+  return { cmp, mock, navegaciones };
 }
 
 /** Monta y deja correr `ngOnInit`, que es lo que carga empleados y teléfonos. */
@@ -840,5 +857,62 @@ describe('Dashboard - saltar a una fecha', () => {
 
     cmp.irAFechaTurnos('2026-09-05');    // septiembre: ninguno
     expect(cmp.turnosFiltrados.length).toBe(0);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// LOS TRES BOTONES FLOTANTES DE ARRIBA A LA DERECHA
+//
+// Son accesos rapidos a los tres "registrar" de Caja. El riesgo NO es que no
+// naveguen: es que el Dashboard y Caja se desincronicen. Si alguien renombra una
+// accion en `irACaja` y no en `CajaComponent.abrirAccionDeUrl`, el boton lleva a
+// una pantalla sin popup y sin avisar nada, y eso se descubre cuando el usuario ya
+// esta por cargar el pago. Estos tests fijan el contrato de los tres lados de esa
+// cadena: el nombre de la accion, la ruta y el parametro.
+// ═════════════════════════════════════════════════════════════════════
+
+describe('Dashboard - los botones flotantes a Caja', () => {
+  it('cada boton navega a Caja con SU parametro, no con el del otro', () => {
+    // La confusion entre "pago a empleado" y "pago a proveedor" es el riesgo real de
+    // tener los dos con el mismo signo `+`: cargar un abono a un proveedor en la
+    // fila de un empleado es un error que la base NO avisa.
+    const { cmp, navegaciones } = montar({});
+
+    cmp.irACaja('pago-empleado');
+    cmp.irACaja('deuda');
+    cmp.irACaja('pago-proveedor');
+
+    expect(navegaciones.length).toBe(3);
+    expect(navegaciones[0].args).toEqual(['/ganancias']);
+    expect(navegaciones[0].extra.queryParams).toEqual({ accion: 'pago-empleado' });
+    expect(navegaciones[1].extra.queryParams).toEqual({ accion: 'deuda' });
+    expect(navegaciones[2].extra.queryParams).toEqual({ accion: 'pago-proveedor' });
+  });
+
+  it('los tres botones son los tres que el template declara', () => {
+    // Si el template suma un cuarto boton, este test falla hasta que se agregue la
+    // accion al union type de `irACaja`. Es la version economica de "no te olvides
+    // de la cuarta".
+    const { cmp } = montar({});
+    const acciones: any[] = ['pago-empleado', 'deuda', 'pago-proveedor'];
+    for (const a of acciones) {
+      // Que acepte el valor es lo que prueba que esta en la union type.
+      expect(() => cmp.irACaja(a)).not.toThrow();
+    }
+    expect(acciones.length).toBe(3);
+  });
+
+  it('el boton NO abre nada en el Dashboard: solo navega', async () => {
+    // Los formularios viven en Caja. Si el Dashboard mostrara un popup propio,
+    // la misma regla de guardado estaria en dos archivos y con el tiempo una
+    // version se actualiza y la otra no.
+    const { cmp, navegaciones } = montar({});
+    await cmp.ngOnInit();
+    navegaciones.length = 0;
+
+    cmp.irACaja('deuda');
+
+    expect(cmp.mostrarPopup).toBe(false);
+    expect(navegaciones.length).toBe(1);
   });
 });

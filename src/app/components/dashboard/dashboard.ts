@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { SupabaseService } from '../../services/supabase';
 import { nombreMes, fechaDesdeISO } from '../../utils/fechas';
 import { contiene } from '../../utils/texto';
@@ -111,7 +112,32 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return turno?.empleado_id ?? null;
   }
 
-  constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
+  constructor(
+    private supabase: SupabaseService,
+    private cdr: ChangeDetectorRef,
+    private router: Router
+  ) {}
+
+  /**
+   * Los tres botones flotantes de arriba a la derecha.
+   *
+   * NO duplican la acción: los popups viven en `CajaComponent`, no acá. El botón
+   * salta a Caja con `?accion=...` y Caja abre el popup que corresponde (ver
+   * `CajaComponent.abrirAccionDeUrl`).
+   *
+   * Por qué un parámetro de URL y no un servicio con un flag: la URL sobrevive a un
+   * F5 y a que el usuario pase el link, así que el mismo enlace vuelve a abrir el
+   * popup. Con un flag en memoria, recargar la página lo cerraba en silencio y
+   * parecía un botón que a veces no anda.
+   *
+   * `union` y no `string` a propósito: es la lista cerrada de los tres botones, y
+   * si uno se agrega o se renombra el compilador avisa en vez de dejar un botón que
+   * navega a una acción que Caja no conoce (que abriría la pantalla sin popup, sin
+   * decir nada).
+   */
+  irACaja(accion: 'pago-empleado' | 'deuda' | 'pago-proveedor') {
+    this.router.navigate(['/ganancias'], { queryParams: { accion } });
+  }
 
   async ngOnInit() {
     await this.cargarTurnos();

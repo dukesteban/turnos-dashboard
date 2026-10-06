@@ -1,6 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import { SupabaseService } from '../../services/supabase';
 import { nombreMes, fechaDesdeISO } from '../../utils/fechas';
 import { paraComparar, contiene } from '../../utils/texto';
@@ -99,7 +100,12 @@ export class CajaComponent implements OnInit {
   mensaje = '';
   mensajeError = '';
 
-  constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
+  constructor(
+    private supabase: SupabaseService,
+    private cdr: ChangeDetectorRef,
+    private route: ActivatedRoute,
+    private router: Router
+  ) {}
 
   /**
    * Formato de la columna "Falta pagar".
@@ -158,6 +164,57 @@ export class CajaComponent implements OnInit {
   async ngOnInit() {
     await this.cargarHorarios();
     await this.cargarDatos();
+    this.cdr.detectChanges();
+    // DESPUES de `cargarDatos`, no antes: los tres popups arman sus valores por
+    // defecto con las listas de empleados y proveedores (el que est� elegido en el
+    // combo de arriba). Si se abriran con la pantalla todavia vacia, el popup
+    // abriria con el id `null` y habria que elegir a mano.
+    this.abrirAccionDeUrl();
+  }
+
+  /**
+   * Abre el popup que pide la URL con `?accion=...`.
+   *
+   * Es el otro lado de los tres botones flotantes del Dashboard
+   * (`DashboardComponent.irACaja`): los popups viven ACA, as�� que el boton de
+   * afuera no abre nada, navega con el parametro y esta funcion lo cumple. Vive
+   * en Caja y no en los popups porque los tres son de este componente.
+   *
+   * ANTES de abrir: cambia a la pestaña y abre el acordeón que contiene el boton.
+   * Si el popup aparece sobre "Ingresos" y despues de cerrarlo el usuario ve la
+   * lista de turnos, no la de pagos, queda con la sensaci�n de que se guardo en
+   * alg�n lado equivocado.
+   *
+   * LIMPIA el parametro antes de abrir (y con `replaceUrl`, sin sumar una entrada
+   * al historial): si se dejara, recargar la pagina con F5 volveria a abrir el
+   * popup, y el usuario que recien guardo y quiere ver la lista tendria que cerrar
+   * el popup otra vez. Con `replaceUrl` el boton "atras" del navegador tampoco
+   * devuelve el estado con el parametro.
+   *
+   * Un valor desconocido se ignora en silencio en vez de tirar error: el parametro
+   * puede venir escrito a mano o de un link guardado de una version anterior.
+   */
+  private abrirAccionDeUrl() {
+    const accion = this.route.snapshot.queryParamMap.get('accion');
+    if (!accion) return;
+
+    // Limpiar primero: si `abrirForm...` llegara a fallar, igual la URL ya quedo
+    // limpia y no queda un popup trabado en cada recarga.
+    this.router.navigate([], { relativeTo: this.route, replaceUrl: true });
+
+    if (accion === 'pago-empleado') {
+      this.cambiarTab('empleados');
+      this.acordeonPagos = true;
+      this.abrirFormPago();
+    } else if (accion === 'deuda') {
+      this.cambiarTab('gastos');
+      this.acordeonCompras = true;
+      this.abrirFormCompra();
+    } else if (accion === 'pago-proveedor') {
+      this.cambiarTab('gastos');
+      this.acordeonPagosProv = true;
+      this.abrirFormPagoProveedor();
+    }
     this.cdr.detectChanges();
   }
 

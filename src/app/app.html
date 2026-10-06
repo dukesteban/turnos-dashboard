@@ -54,7 +54,7 @@
           aria-label="Ahora no">✕</button>
 </div>
 
-<footer class="version-footer">v1.0.16</footer>
+<footer class="version-footer">v1.0.17</footer>
 
 <style>
   /* OJO: los estilos globales (body, font-family, reset) van en src/styles.scss.
@@ -139,7 +139,9 @@
      terminaba en dos scrollbars (el de la grilla y el de la pagina) y no se
      sabia con cual se estaba scrolleando.
 
-     El detalle de que es 112 y no 96 esta en styles.scss, junto a la variable. */
+     El detalle de por qué la variable vale 96 y no 56 está en styles.scss, junto a
+     la definición: es el navbar (56) más el footer (40). Antes sumaban 112, que
+     incluía los 16px del margen del body que ya no existe. */
   .main-content { min-height: calc(100vh - var(--chrome-app)); }
 
   @media (max-width: 640px) {

@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { CajaComponent } from './caja';
 import { SupabaseService } from '../../services/supabase';
 import { crearSupabaseMock, ganancia } from '../../testing/supabase-mock';
@@ -16,17 +17,37 @@ import { crearSupabaseMock, ganancia } from '../../testing/supabase-mock';
  *      conocidas (31 de enero + 1 mes = 3 de marzo).
  */
 
-function montar(over: Record<string, any> = {}) {
+function montar(over: Record<string, any> = {}, accion: string | null = null) {
   const mock = crearSupabaseMock(over);
+  // Se registran las navegaciones a mano en vez de usar `provideRouter`: este
+  // componente solo navega una vez (limpiar el `?accion=`), y con las rutas reales
+  // un `navigate` sin destino registrado tira. Ademas los tests necesitan VER la
+  // navegacion, no que se cumpla.
+  const navegaciones: { args: any[]; extra: any }[] = [];
   TestBed.configureTestingModule({
-    providers: [{ provide: SupabaseService, useValue: mock }],
+    providers: [
+      { provide: SupabaseService, useValue: mock },
+      {
+        provide: ActivatedRoute,
+        useValue: { snapshot: { queryParamMap: convertToParamMap(accion ? { accion } : {}) } },
+      },
+      {
+        provide: Router,
+        useValue: {
+          navigate: (args: any[], extra: any) => {
+            navegaciones.push({ args, extra });
+            return Promise.resolve(true);
+          },
+        },
+      },
+    ],
   });
   // Se devuelve el `fixture` y no solo la instancia: los tests de DOM necesitan
   // `fixture.detectChanges()`. `cmp.cdr` es privado y no se puede tocar desde
   // afuera.
   const fixture = TestBed.createComponent(CajaComponent);
   const cmp = fixture.componentInstance;
-  return { cmp, mock, fixture };
+  return { cmp, mock, fixture, navegaciones };
 }
 
 /** mocked sincrónico: el mock devuelve promesas ya resueltas. */
@@ -2619,5 +2640,109 @@ describe('Caja - los popups y la coherencia entre las dos pestanas', () => {
       // la clase, el alto se rompe. Se verifica el texto vacío también.
       expect(r.textContent).toBe('\u00a0');
     }
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// EL `?accion=` DE LOS BOTONES FLOTANTES DEL DASHBOARD
+//
+// El Dashboard no tiene los popups: navega a Caja con `?accion=pago-empleado` (o
+// `deuda`, o `pago-proveedor`) y esta pantalla abre el popup. Estos tests fijan las
+// tres cosas que pueden salir mal:
+//
+//   1. que la acción NO llegue al popup (el botón navega y no pasa nada),
+//   2. que el popup abra antes de que `cargarDatos` termine, con las listas de
+//      empleados y proveedores vacías y sin poder preseleccionar a nadie,
+//   3. que el `?accion=` quede pegado en la URL y cada recarga abra el popup otra vez.
+//
+// Y una cuarta, de coherencia: que el popup abra en la PESTAÑA donde vive el botón
+// que lo abrió, no en "Ingresos".
+// ═════════════════════════════════════════════════════════════════════
+
+describe('Caja - los botones flotantes del Dashboard', () => {
+  it('sin ?accion= no abre ningun popup y no navega', async () => {
+    // El caso normal: se entra a Caja desde el navbar, sin parametro. Acá NO puede
+    // pasar nada, ni aparecer un popup solo porque el parametro quedo de una visita
+    // anterior.
+    const { cmp, navegaciones } = montar({});
+    await cmp.ngOnInit();
+
+    expect(cmp.mostrarFormPago).toBe(false);
+    expect(cmp.mostrarFormCompra).toBe(false);
+    expect(navegaciones.length).toBe(0);
+  });
+
+  it('?accion=deuda abre el popup de nueva deuda, en la pestaña de gastos', async () => {
+    const { cmp } = montar({}, 'deuda');
+    await cmp.ngOnInit();
+
+    expect(cmp.mostrarFormCompra).toBe(true);
+    expect(cmp.tab).toBe('gastos');
+    // El acordeón de compras abre junto: si el popup se cierra y debajo esta la
+    // lista de otra cosa, el usuario no ve donde se guardo.
+    expect(cmp.acordeonCompras).toBe(true);
+  });
+
+  it('?accion=pago-empleado abre el popup de pago, en la pestaña de empleados', async () => {
+    const { cmp } = montar({}, 'pago-empleado');
+    await cmp.ngOnInit();
+
+    expect(cmp.mostrarFormPago).toBe(true);
+    expect(cmp.tab).toBe('empleados');
+    expect(cmp.acordeonPagos).toBe(true);
+  });
+
+  it('?accion=pago-proveedor abre el popup de abono, en la pestaña de gastos', async () => {
+    const { cmp } = montar({}, 'pago-proveedor');
+    await cmp.ngOnInit();
+
+    expect(cmp.mostrarFormPagoProveedor).toBe(true);
+    expect(cmp.tab).toBe('gastos');
+    expect(cmp.acordeonPagosProv).toBe(true);
+  });
+
+  it('el popup abre con los datos ya cargados: puede preseleccionar al empleado', async () => {
+    // El orden importa: `abrirAccionDeUrl` corre DESPUES de `cargarDatos()`. Si
+    // corriera antes, el combo de empleados estaria vacio y el popup abriria con
+    // "Elegi el empleado" aunque ya haya uno solo en la lista.
+    const { cmp } = montar({
+      getEmpleados: () => Promise.resolve([
+        { id: 1, nombre: 'Juan Pérez', activo: true },
+        { id: 2, nombre: 'Esteban Díaz', activo: true },
+      ]),
+    }, 'pago-empleado');
+    await cmp.ngOnInit();
+
+    expect(cmp.todosLosEmpleados.length).toBe(2);
+    expect(cmp.nuevoPago.empleado_id).toBe(1);
+  });
+
+  it('limpia el ?accion= de la URL con replaceUrl, para que el F5 no lo reabra', async () => {
+    const { cmp, navegaciones } = montar({}, 'deuda');
+    await cmp.ngOnInit();
+
+    expect(navegaciones.length).toBe(1);
+    // `replaceUrl` y no un navigate normal: con un navigate se suma una entrada al
+    // historial y el boton "atras" devuelve a la URL CON el parametro, que reabre
+    // el popup.
+    expect(navegaciones[0].extra.replaceUrl).toBe(true);
+    expect(navegaciones[0].args.length).toBe(0);
+  });
+
+  it('un ?accion= desconocido no abre nada y tampoco tira', async () => {
+    // El parametro puede venir escrito a mano o de un link guardado de una version
+    // anterior. Que sea una pantalla en blanco con el popup trabado seria peor que
+    // no hacer nada.
+    const { cmp, navegaciones } = montar({}, 'inventado');
+    let fallo: any = null;
+    try { await cmp.ngOnInit(); } catch (e) { fallo = e; }
+    expect(fallo).toBeNull();
+
+    expect(cmp.mostrarFormPago).toBe(false);
+    expect(cmp.mostrarFormCompra).toBe(false);
+    expect(cmp.mostrarFormPagoProveedor).toBe(false);
+    // La URL se limpia igual: si no, el `?accion=inventado` queda pegado para
+    // siempre y ni el F5 lo saca.
+    expect(navegaciones.length).toBe(1);
   });
 });

@@ -1,5 +1,47 @@
 <div class="dashboard-page">
 
+<!--
+    ACCESOS RÁPIDOS A CAJA
+    Los tres "registrar" que antes había que buscar dentro de Caja: pago a
+    empleado, nueva deuda y pago a proveedor. Flotan arriba a la derecha porque son
+    las tres cosas que se cargan todos los días y siempre desde la pantalla de
+    turnos.
+
+    En pantalla se ve SOLO el `+`. El nombre está en el DOM pero oculto, y es lo que
+    muestra el tooltip al pasar el mouse (y al apretar, en el celular). Con el
+    texto siempre visible el grupo medía 155px de ancho y pisaba el final de la
+    tercera tarjeta de arriba; como círculo mide 42px.
+
+    NO van con `title`: el navegador mostraría su propio tooltip un segundo después
+    del nuestro y quedarían los dos encimados. El `aria-label` hace el mismo trabajo
+    para un lector de pantalla, que es para lo que `title` está bueno igual.
+
+    No abren nada acá: los popups son de Caja, así que navegan con `?accion=...`
+    (`irACaja`) y Caja abre el que corresponde. Duplicar los formularios en las dos
+    pantallas sería tener la misma regla de guardado en dos lugares, y en el camino
+    una versión se actualiza y la otra no.
+  -->
+  <div class="acciones-rapidas">
+    <button type="button" class="accion-rapida accion-naranja"
+            (click)="irACaja('pago-empleado')"
+            aria-label="Nuevo pago a empleados">
+      <span class="accion-signo">+</span>
+      <span class="accion-texto">Pago a empleados</span>
+    </button>
+    <button type="button" class="accion-rapida accion-rojo"
+            (click)="irACaja('deuda')"
+            aria-label="Nueva deuda con proveedor">
+      <span class="accion-signo">+</span>
+      <span class="accion-texto">Nueva deuda</span>
+    </button>
+    <button type="button" class="accion-rapida accion-verde"
+            (click)="irACaja('pago-proveedor')"
+            aria-label="Nuevo pago a proveedor">
+      <span class="accion-signo">+</span>
+      <span class="accion-texto">Pago a proveedor</span>
+    </button>
+  </div>
+
   <!-- Stats -->
   <div class="stats">
     <div class="stat-card">

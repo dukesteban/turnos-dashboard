@@ -18,15 +18,19 @@
  *
  *   56  navbar
  *   40  .version-footer (12 de padding + el renglón de texto)
- *   16  el margin default del body (8 arriba + 8 abajo)
  *
- * OJO con el 16: no hay `margin: 0` en el body, sigue el del navegador. Ponerlo
- * en cero haría la app más alta y más prolija (la navbar dejaría de tener el
- * margen blanco a los costados), pero cambia TODAS las pantallas, así que es un
- * cambio aparte. Acá se descuenta y listo.
+ * POR QUÉ 96 Y NO 112
+ *
+ * Antes daba 112 porque al `body` le sobraba el `margin: 8px` del navegador (8
+ * arriba + 8 abajo) y había que descontarlo. Con el `margin: 0` de más abajo esos
+ * 16px ya no existen.
+ *
+ * Si se vuelve a poner un margen en el `body`, esto tiene que volver a 112 o la
+ * página scrollea 16px en todas las pantallas. La cuenta para no hacer la
+ * aritmética a mano: navbar + footer + (margen de body arriba + margen de body abajo).
  */
 :root {
-  --chrome-app: 112px;
+  --chrome-app: 96px;
 }
 
 /* `box-sizing: border-box` en TODO.
@@ -44,7 +48,34 @@
   box-sizing: border-box;
 }
 
+/* `margin: 0` y no el de 8px que pone el navegador, Y NO POR PROLIJO: por el navbar.
+ *
+ * El navbar es `position: sticky; top: 0`, así que con el margen del body quedaba
+ * con un escalón, en dos posiciones distintas según el scroll:
+ *
+ *   sin scroll   y=8  → y=64    (el margen del body lo corría hacia abajo)
+ *   scrolleado   y=0  → y=56    (ya está pegado)
+ *
+ * Eso rompía lo que sea `position: fixed` con un `top` fijo abajo del navbar: los
+ * botones flotantes de la derecha del Dashboard quedan a `top: 64px`, así que sin
+ * scroll terminaban PEGADOS al navbar (terminaba en 64, el botón arrancaba en 64)
+ * y con scroll quedaban bien separados. Medido, era justo lo que se veía.
+ *
+ * La otra mitad del motivo es que el navbar no llegaba a los bordes: con una franja
+ * blanca de 8px a los costados y arriba, en cualquier pantalla.
+ *
+ * EL CONTENIDO DE LAS PÁGINAS NO SE MUEVE: cada pantalla tiene su propio
+ * `padding: 24px` (`.dashboard-page`, `.agenda-page`, `.caja-page`, los popups...), y
+ * eso ya estaba contando el padding. Lo único que cambia de lugar es el navbar, que
+ * es justo lo que se quería arreglar, y `--chrome-app` de arriba, que ya descuenta
+ * los 16px que dejaron de existir.
+ *
+ * Si algún día esto vuelve a tener margen, hay que revisar las dos pantallas que
+ * usan `100vh - var(--chrome-app)`: `.main-content` en app.html y `.agenda-page` en
+ * agenda.scss.
+ */
 body {
+  margin: 0;
   font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
 }
 

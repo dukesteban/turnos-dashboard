@@ -9,10 +9,9 @@
  * lleva la grilla: esta página es una columna flex de alto fijo y la grilla se
  * estira a lo que sobra (`flex: 1`), en vez de medir su alto a mano.
  *
- * El alto disponible es la ventana menos el chrome fijo de la app (navbar, pie
- * de versión y el margin default del body). Va con la MISMA variable que el
- * `min-height` de `.main-content` en app.html, y el detalle de esos 112px esta
- * en styles.scss.
+ * El alto disponible es la ventana menos el chrome fijo de la app (navbar y pie
+ * de versión). Va con la MISMA variable que el `min-height` de `.main-content` en
+ * app.html, y el detalle de esos 96px esta en styles.scss.
  */
 .agenda-page {
   padding: 24px;
