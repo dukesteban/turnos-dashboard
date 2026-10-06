@@ -119,33 +119,48 @@ describe('Personas > Proveedores — alta (popup)', () => {
 
   it('exige nombre', async () => {
     const { cmp, mock } = await listo();
-    cmp.nuevoProveedor = { nombre: '   ', contacto: '', telefono: '', notas: '' };
+    cmp.nuevoProveedor = { nombre: '   ', contacto: '', telefono: '', domicilio: '', notas: '' };
     await cmp.guardarNuevo();
     expect(cmp.mensajeError).toMatch(/nombre es obligatorio/i);
     expect(mock.llamadas).not.toContain('crearProveedor');
   });
+
 
   it('guarda con trim y manda null en los opcionales vacios', async () => {
     const guardados: any[] = [];
     const { cmp } = await listo({
       crearProveedor: (d: any) => { guardados.push(d); return Promise.resolve({ id: 9, ...d }); },
     });
-    cmp.nuevoProveedor = { nombre: '  Quimicas del Sur ', contacto: ' Ana ', telefono: ' 123 ', notas: '' };
+    cmp.nuevoProveedor = { nombre: '  Quimicas del Sur ', contacto: ' Ana ', telefono: ' 123 ', domicilio: ' Av. Corrientes 1234 ', notas: '' };
     await cmp.guardarNuevo();
     expect(guardados.length).toBe(1);
     expect(guardados[0].nombre).toBe('Quimicas del Sur');
     expect(guardados[0].contacto).toBe('Ana');
     expect(guardados[0].telefono).toBe('123');
+    expect(guardados[0].domicilio).toBe('Av. Corrientes 1234');
     // Vacio -> null, no cadena vacia: en la base la columna es nullable y una
     // cadena vacia es un valor distinto de "no lleno".
     expect(guardados[0].notas).toBeNull();
+  });
+
+  it('un domicilio vacio va como null, no como cadena vacia', async () => {
+    // El caso del que NO tenemos dato. La app muestra "—" cuando es null, así que
+    // mandarlo como '' haría que en la pantalla se vea un campo vacío en vez de
+    // "no lo sé", que son dos cosas distintas.
+    const guardados: any[] = [];
+    const { cmp } = await listo({
+      crearProveedor: (d: any) => { guardados.push(d); return Promise.resolve({ id: 9, ...d }); },
+    });
+    cmp.nuevoProveedor = { nombre: 'Ledesma', contacto: '', telefono: '', domicilio: '   ', notas: '' };
+    await cmp.guardarNuevo();
+    expect(guardados[0].domicilio).toBeNull();
   });
 
   it('un proveedor valido se guarda, se cierra el popup y avisa', async () => {
     const { cmp } = await listo({
       crearProveedor: () => Promise.resolve({ id: 9, nombre: 'Ledesma', activo: true }),
     });
-    cmp.nuevoProveedor = { nombre: 'Ledesma', contacto: '', telefono: '', notas: '' };
+    cmp.nuevoProveedor = { nombre: 'Ledesma', contacto: '', telefono: '', domicilio: '', notas: '' };
     await cmp.guardarNuevo();
     expect(cmp.mostrarFormProveedor).toBe(false);
     expect(cmp.mensaje).toMatch(/agregado/i);
@@ -157,7 +172,7 @@ describe('Personas > Proveedores — alta (popup)', () => {
       getProveedores: () => Promise.resolve([]),
       crearProveedor: () => Promise.resolve({ id: 9, nombre: 'Ledesma', activo: true }),
     });
-    cmp.nuevoProveedor = { nombre: 'Ledesma', contacto: '', telefono: '', notas: '' };
+    cmp.nuevoProveedor = { nombre: 'Ledesma', contacto: '', telefono: '', domicilio: '', notas: '' };
     await cmp.guardarNuevo();
     expect(cmp.proveedorSeleccionado).toBeNull();
   });
@@ -166,7 +181,7 @@ describe('Personas > Proveedores — alta (popup)', () => {
     const { cmp, mock } = await listo({
       getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Ledesma', activo: true }]),
     });
-    cmp.nuevoProveedor = { nombre: '  ledesma ', contacto: '', telefono: '', notas: '' };
+    cmp.nuevoProveedor = { nombre: '  ledesma ', contacto: '', telefono: '', domicilio: '', notas: '' };
     await cmp.guardarNuevo();
     expect(cmp.mensajeError).toMatch(/ya existe/i);
     expect(mock.llamadas).not.toContain('crearProveedor');
@@ -179,17 +194,17 @@ describe('Personas > Proveedores — alta (popup)', () => {
     const { cmp, mock } = await listo({
       getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Cañada', activo: true }]),
     });
-    cmp.nuevoProveedor = { nombre: 'Canada', contacto: '', telefono: '', notas: '' };
+    cmp.nuevoProveedor = { nombre: 'Canada', contacto: '', telefono: '', domicilio: '', notas: '' };
     await cmp.guardarNuevo();
     expect(cmp.mensajeError).toBe('');
     expect(mock.llamadas).toContain('crearProveedor');
   });
 
-  it('el popup tiene 4 campos', async () => {
+  it('el popup tiene 5 campos', async () => {
     const { cmp, fixture } = await listo();
     cmp.mostrarFormProveedor = true;
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelectorAll('.popup-body input').length).toBe(4);
+    expect(fixture.nativeElement.querySelectorAll('.popup-body input').length).toBe(5);
   });
 
   // Los mismos nombres de clase que el popup de Nuevo Turno. Si un dia
@@ -274,11 +289,12 @@ describe('Personas > Proveedores - editar (panel de detalle)', () => {
 
   it('los null del panel llegan como cadena vacia, no como "null"', async () => {
     const { cmp } = await listo({
-      getProveedores: () => Promise.resolve([{ ...PROV, contacto: null, telefono: null, notas: null }]),
+      getProveedores: () => Promise.resolve([{ ...PROV, contacto: null, telefono: null, domicilio: null, notas: null }]),
     });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
     expect(cmp.proveedorSeleccionado.contacto).toBe('');
     expect(cmp.proveedorSeleccionado.telefono).toBe('');
+    expect(cmp.proveedorSeleccionado.domicilio).toBe('');
     expect(cmp.proveedorSeleccionado.notas).toBe('');
   });
 
@@ -295,16 +311,16 @@ describe('Personas > Proveedores - editar (panel de detalle)', () => {
 
   // â”€â”€ EL BOTON UNICO â”€â”€
   //
-  // Antes habia un lapiz POR CAMPO. Cuatro lapices en columna parecen cuatro
+  // Antes habia un lapiz POR CAMPO. Varios lapices en columna parecen tantos
   // acciones y el que de verdad se editaba a menudo quedaba sin destino claro.
   // Ahora hay UN "Editar" para todo el bloque, como Configuracion > General.
 
-  it('en reposo los cuatro campos son de SOLO LECTURA', async () => {
+  it('en reposo los cinco campos son de SOLO LECTURA', async () => {
     const { cmp, fixture } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
     cmp.seleccionarProveedor(cmp.proveedores[0]);
     fixture.detectChanges();
     const campos = fixture.nativeElement.querySelectorAll('.detalle-seccion .campo-editable');
-    expect(campos.length).toBe(4);
+    expect(campos.length).toBe(5);
     for (const c of Array.from(campos) as HTMLElement[]) {
       expect((c.querySelector('input') as HTMLInputElement).hasAttribute('readonly')).toBe(true);
     }

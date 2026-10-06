@@ -58,11 +58,12 @@ export class ProveedoresComponent implements OnInit {
   guardando = false;
   cargando = true;
 
-  /** Los cuatro campos del panel, en el orden en que se muestran. */
+  /** Los cinco campos del panel, en el orden en que se muestran. */
   readonly CAMPOS: { clave: string; label: string; placeholder: string }[] = [
     { clave: 'nombre', label: 'Nombre', placeholder: 'Ej: Químicas del Sur' },
     { clave: 'contacto', label: 'Contacto', placeholder: 'Quién atiende' },
     { clave: 'telefono', label: 'Teléfono', placeholder: '' },
+    { clave: 'domicilio', label: 'Domicilio', placeholder: 'Ej: Av. Corrientes 1234' },
     { clave: 'notas', label: 'Notas', placeholder: '' },
   ];
 
@@ -99,10 +100,14 @@ export class ProveedoresComponent implements OnInit {
    * momento de seleccionar, "cancelar" siempre vuelve a donde estabas.
    */
   private crearSeleccion(p: any): any {
+    // TODOS los campos van en `valores`, y no solo los editables: un campo que
+    // queda afuera conserva el `null` de la base y el input muestra "null" en
+    // vez de vacío. `notas` estuvo afuera durante un tiempo por eso.
     const valores = {
       nombre: p.nombre || '',
       contacto: p.contacto || '',
       telefono: p.telefono || '',
+      domicilio: p.domicilio || '',
       notas: p.notas || '',
     };
     return {
@@ -197,14 +202,15 @@ export class ProveedoresComponent implements OnInit {
         nombre,
         contacto: (sel.contacto ?? '').trim() || null,
         telefono: (sel.telefono ?? '').trim() || null,
+        domicilio: (sel.domicilio ?? '').trim() || null,
         notas: (sel.notas ?? '').trim() || null,
       };
       await this.supabase.actualizarProveedor(sel.id, datos);
 
       const idx = this.proveedores.findIndex((p: any) => p.id === sel.id);
       if (idx >= 0) Object.assign(this.proveedores[idx], datos);
-      Object.assign(sel, { ...datos, notas: datos.notas || '', contacto: datos.contacto || '', telefono: datos.telefono || '' });
-      sel._original = { nombre, contacto: sel.contacto, telefono: sel.telefono, notas: sel.notas };
+      Object.assign(sel, { ...datos, notas: datos.notas || '', contacto: datos.contacto || '', telefono: datos.telefono || '', domicilio: datos.domicilio || '' });
+      sel._original = { nombre, contacto: sel.contacto, telefono: sel.telefono, domicilio: sel.domicilio, notas: sel.notas };
       sel.editando = false;
       this.mostrarMensaje('✅ Proveedor actualizado.');
     } catch (e) {
@@ -233,7 +239,7 @@ export class ProveedoresComponent implements OnInit {
     this.mensajeError = '';
     // Siempre arranca limpio: si se abrio, se cerro sin guardar y se volvio a
     // abrir, tiene que venir vacio y no con el intento anterior a medias.
-    this.nuevoProveedor = { nombre: '', contacto: '', telefono: '', notas: '' };
+    this.nuevoProveedor = { nombre: '', contacto: '', telefono: '', domicilio: '', notas: '' };
     this.mostrarFormProveedor = true;
     this.cdr.detectChanges();
   }
@@ -267,6 +273,7 @@ export class ProveedoresComponent implements OnInit {
       nombre: this.nuevoProveedor.nombre.trim(),
       contacto: this.nuevoProveedor.contacto.trim() || null,
       telefono: this.nuevoProveedor.telefono.trim() || null,
+      domicilio: this.nuevoProveedor.domicilio.trim() || null,
       notas: this.nuevoProveedor.notas.trim() || null,
     };
     try {
@@ -293,7 +300,7 @@ export class ProveedoresComponent implements OnInit {
    * `#12` sin nombre en el historial de Caja.
    */
   async inactivarProveedor(p: any) {
-    if (!confirm(`¿Inactivar "${p.nombre}"? Las compras ya registradas se mantienen.`)) return;
+    if (!confirm(`¿Inactivar "${p.nombre}"? Las deudas ya registradas se mantienen.`)) return;
     try {
       await this.supabase.inactivarProveedor(p.id);
       await this.cargarDatos();

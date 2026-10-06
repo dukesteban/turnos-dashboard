@@ -173,9 +173,9 @@
       </div>
 
       <p class="nota-ayuda">
-        Inactivar no borra: las compras ya registradas siguen apuntando a este
-        proveedor. Reactivarlo lo vuelve a ofrecer en el popup de "Registrar
-        compra" de Caja.
+        Inactivar no borra: las deudas ya registradas siguen apuntando a este
+        proveedor. Reactivarlo lo vuelve a ofrecer en el popup de "Nueva deuda"
+        de Caja.
       </p>
     </div><!-- /.detalle-seccion -->
 
@@ -210,6 +210,11 @@
             <label>Teléfono</label>
             <input type="text" [(ngModel)]="nuevoProveedor.telefono" (ngModelChange)="mensajeError = ''" />
           </div>
+        </div>
+        <div class="campo">
+          <label>Domicilio</label>
+          <input type="text" [(ngModel)]="nuevoProveedor.domicilio"
+                 placeholder="Ej: Av. Corrientes 1234" (ngModelChange)="mensajeError = ''" />
         </div>
         <div class="campo">
           <label>Notas <span class="opcional">(opcional)</span></label>

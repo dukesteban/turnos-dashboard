@@ -1431,20 +1431,20 @@ export class CajaComponent implements OnInit {
       this.cerrarFormCompra();
       this.nuevaCompra = { proveedor_id: null, fecha: '', concepto: '', cantidad: 1, monto: null, notas: '' };
       await this.cargarDatos();
-      this.mostrarMensaje(eraEdicion ? '✅ Compra actualizada.' : '✅ Compra registrada.');
+      this.mostrarMensaje(eraEdicion ? '✅ Deuda actualizada.' : '✅ Deuda registrada.');
     } catch (e) {
-      this.mensajeError = '❌ No se pudo guardar la compra.';
+      this.mensajeError = '❌ No se pudo guardar la deuda.';
     }
     this.guardando = false;
     this.cdr.detectChanges();
   }
 
   async eliminarCompra(c: any) {
-    if (!confirm(`¿Borrar la compra "${c.concepto}"?`)) return;
+    if (!confirm(`¿Borrar la deuda "${c.concepto}"?`)) return;
     try {
       await this.supabase.eliminarCompra(c.id);
       await this.cargarDatos();
-      this.mostrarMensaje('✅ Compra eliminada.');
+      this.mostrarMensaje('✅ Deuda eliminada.');
     } catch (e) {
       this.mensajeError = '❌ No se pudo eliminar.';
     }

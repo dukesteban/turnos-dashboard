@@ -697,7 +697,7 @@
   <div *ngIf="mostrarFormCompra" class="popup-overlay" (click)="cerrarFormCompra()">
     <div class="popup" (click)="$event.stopPropagation()">
       <div class="popup-header">
-        <h3>{{ editandoCompra ? '📦 Editar compra' : '📦 Registrar compra' }}</h3>
+        <h3>{{ editandoCompra ? '📝 Editar deuda' : '📝 Nueva deuda' }}</h3>
         <button class="btn-cerrar" (click)="cerrarFormCompra()">✕</button>
       </div>
 
@@ -778,7 +778,7 @@
 
       <div class="popup-acciones">
         <button class="btn-atendido" [disabled]="guardando" (click)="guardarCompra()">
-          {{ guardando ? 'Guardando...' : (editandoCompra ? '💾 Guardar cambios' : '💾 Guardar compra') }}
+          {{ guardando ? 'Guardando...' : (editandoCompra ? '💾 Guardar cambios' : '💾 Guardar deuda') }}
         </button>
         <button class="btn-cancelado" (click)="cerrarFormCompra()">↩️ Cancelar</button>
       </div>
@@ -828,7 +828,7 @@
         <div class="stat-info">
           <span class="stat-label">Le compré</span>
           <span class="stat-value">${{ compreProveedor | number }}</span>
-          <span class="stat-nota">{{ comprasProveedorActual.length }} {{ comprasProveedorActual.length === 1 ? 'compra' : 'compras' }}</span>
+          <span class="stat-nota">{{ comprasProveedorActual.length }} {{ comprasProveedorActual.length === 1 ? 'deuda' : 'deudas' }}</span>
         </div>
       </div>
 
@@ -913,10 +913,10 @@
     </div>
   </div>
 
-  <!-- ═══ COMPRAS DEL PERÍODO ═══ -->
+  <!-- ═══ COMPRAS / SERVICIOS DEL PERÍODO ═══ -->
   <div class="acordeon">
     <div class="acordeon-header" (click)="acordeonCompras = !acordeonCompras">
-      <span>📦 Compras del período</span>
+      <span>📦 Compras / Servicios</span>
       <span class="acordeon-total">
         {{ comprasProveedorActual.length }} · ${{ compreProveedor | number }}
         <span class="chevron" [class.abierto]="acordeonCompras">›</span>
@@ -927,12 +927,12 @@
       <div class="seccion-header seccion-sin-borde">
         <span></span>
         <button class="btn-primary" (click)="abrirFormCompra()">
-          ➕ Registrar compra
+          ➕ Nueva deuda
         </button>
       </div>
 
       <div *ngIf="comprasProveedorActual.length === 0" class="vacio">
-        No le compraste nada en este período
+        No le debiste nada a este proveedor en este período
       </div>
 
       <div *ngIf="comprasProveedorActual.length > 0" class="tabla-wrapper">
@@ -988,7 +988,7 @@
     <div class="acordeon-body" [class.visible]="acordeonSaldo">
 
       <div *ngIf="saldoPorProveedor.length === 0" class="vacio">
-        No hay compras ni pagos en este período
+        No hay deudas ni pagos en este período
       </div>
 
       <div *ngIf="saldoPorProveedor.length > 0" class="tabla-wrapper">
