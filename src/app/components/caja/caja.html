@@ -13,9 +13,35 @@
       <button [class.activo]="vista === 'mes'" (click)="cambiarVista('mes')">📆 Mes</button>
     </div>
     <div class="navegacion">
-      <button class="btn-nav" (click)="navegar(-1)">‹</button>
+      <button class="btn-nav" (click)="navegar(-1)"><</button>
       <button class="btn-hoy" (click)="irHoy()">{{ vista === 'dia' ? 'Hoy' : 'Actual' }}</button>
-      <button class="btn-nav" (click)="navegar(1)">›</button>
+      <button class="btn-nav" (click)="navegar(1)">></button>
+      <!--
+        Ir a una fecha cualquiera. Mismo truco que Dashboard y Agenda: un
+        `<input type="date">` TRANSPARENTE encima de un botón con el ícono, y que
+        sea el navegador el que abra su calendario. Sin `showPicker()` ni
+        JavaScript.
+
+        El input va con `[value]` y NO con `[(ngModel)]` a propósito: el valor
+        cambia SOLO cuando el usuario elige una fecha, y no cuando se navega con
+        los `<`/`>` o se aprieta "Actual". Con `ngModel` el input reescribía su
+        propio valor en cada cambio de estado y el calendario abría en el día que
+        se estaba mirando en vez del que el usuario acababa de elegir.
+
+        El `[value]` es el `AAAA-MM-DD` de HOY y no el de `fechaActual`, por la
+        misma razón: si se pone el de `fechaActual`, al elegir un día el `change`
+        dispara y el input se reescribe con la fecha nueva, que ya es la elegida.
+        Ir con el de hoy deja el input como "lo que elegí", que es lo que el
+        calendario tiene que mostrar.
+      -->
+      <span class="ir-a-fecha">
+        <span class="btn-nav btn-calendario" aria-hidden="true">📅</span>
+        <input type="date"
+               class="input-calendario"
+               [value]="hoyISO()"
+               (change)="irAFecha($any($event.target).value)"
+               aria-label="Ir a una fecha" />
+      </span>
     </div>
     <div class="fecha-titulo">{{ tituloFecha }}</div>
   </div>
@@ -223,7 +249,7 @@
     Que sean tres y no uno es el punto. Con un solo número "Compras a empleados
     -$12.000" no se sabe si se debe. Con los tres, la respuesta se lee sola.
 
-    Abajo de los cuadros, TODO lo demás va en acordeones: los turnos que atendió, los
+    Abajo de los cuadros, TODO lo demás va en acordeones: los turnos atendidos, los
     pagos que le hiciste, y al FINAL la tabla con todos los empleados para
     comparar. Los dos primeros arrancan abiertos (son el detalle del que estás
     mirando) y el de todos cerrado (es la vista larga).
@@ -323,7 +349,7 @@
   -->
   <div class="acordeon">
     <div class="acordeon-header" (click)="acordeonDetalle = !acordeonDetalle">
-      <span>🧾 Turnos que atendió</span>
+      <span>🧾 Turnos atendidos</span>
       <span class="acordeon-total">
         {{ comisionesDetalle.length }} · ${{ totalComisionesDetalle | number:'1.0-0' }}
         <span class="chevron" [class.abierto]="acordeonDetalle">›</span>
@@ -374,10 +400,10 @@
     </div>
   </div>
 
-  <!-- ═══ PAGOS QUE LE HICISTE ═══ -->
+  <!-- ═══ PAGOS REALIZADOS ═══ -->
   <div class="acordeon">
     <div class="acordeon-header" (click)="acordeonPagos = !acordeonPagos">
-      <span>🧮 Pagos que le hiciste</span>
+      <span>🧮 Pagos realizados</span>
       <span class="acordeon-total">
         {{ pagosEmpleadoActual.length }} · ${{ pagueEmpleado | number:'1.0-0' }}
         <span class="chevron" [class.abierto]="acordeonPagos">›</span>
@@ -826,10 +852,10 @@
     </div>
   </ng-container>
 
-  <!-- ═══ PAGOS QUE LE HICISTE ═══ -->
+  <!-- ═══ PAGOS REALIZADOS ═══ -->
   <div class="acordeon">
     <div class="acordeon-header" (click)="acordeonPagosProv = !acordeonPagosProv">
-      <span>🧮 Pagos que le hiciste</span>
+      <span>🧮 Pagos realizados</span>
       <span class="acordeon-total">
         {{ pagosProveedorActual.length }} · ${{ pagueProveedor | number }}
         <span class="chevron" [class.abierto]="acordeonPagosProv">›</span>

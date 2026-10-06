@@ -776,3 +776,44 @@
 .stat-nota-vacia {
   visibility: hidden;
 }
+
+
+// Ir a una fecha con el calendario.
+//
+// Mismo truco que Dashboard y Agenda: un `<input type="date">` TRANSPARENTE
+// encima de un botón con el ícono, y que sea el navegador el que abra su
+// calendario. Sin `showPicker()` ni JavaScript, que es la única forma de que
+// funcione en todos los navegadores sin preguntar permisos.
+//
+// Va acá y no se copia el de Dashboard porque los botones de esta barra miden
+// 32px y los de allá son más grandes; si mañana se unifican, este bloque se
+// borra y queda el de Dashboard.
+.ir-a-fecha {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+// El ícono es decorativo: el que recibe el clic es el input de arriba, que está
+// en toda la caja. Sin `pointer-events: none` los dos se pelean por el mismo
+// pixel y el input deja de abrir el calendario en la mitad de los casos.
+.btn-calendario {
+  pointer-events: none;
+  font-size: 1rem;
+}
+
+// `opacity: 0` y NO `display: none`: con cualquiera de los otros dos el input no
+// existe para el navegador y el calendario no abre. Y nada de `visibility:
+// hidden`, por la misma razón.
+.input-calendario {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  background: transparent;
+  cursor: pointer;
+}

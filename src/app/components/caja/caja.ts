@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectorRef, ViewChild, ElementRef } from '@an
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
-import { nombreMes } from '../../utils/fechas';
+import { nombreMes, fechaDesdeISO } from '../../utils/fechas';
 import { paraComparar, contiene } from '../../utils/texto';
 
 @Component({
@@ -355,45 +355,48 @@ export class CajaComponent implements OnInit {
     return `${m[3]}/${m[2]}`;
   }
 
-  // ── ACORDEONES ───────────────────────────────────────────────
+  // ── ACORDEONES ─────────────────────────────────────────────────
   //
-  // Todas las tablas de la pantalla van en un acordeón, como en Personas.
-  //
-  // El detalle de comisiones y "Totales a pagar" arrancan ABiertos: son lo que
-  // se viene a mirar en la pestaña. El resto arranca cerrado, que es el punto
-  // del accordion (la pantalla no es una lista interminable de tablas).
+  // Todas las tablas de la pantalla van en un acordeón, como en Personas. El
+  // punto del acordeón es que la pantalla NO sea una lista interminable de
+  // tablas: arriba están los tres cuadros, que son la respuesta, y abajo el
+  // detalle se abre solo cuando se va a buscar.
   //
   // Los flags son `boolean` y no un objeto porque cada uno va atado a un solo
   // `*ngIf`: meterlos en un mapa por nombre agregaría una capa de indirección
   // para no ganar nada.
   //
   // LAS DOS PESTAÑAS ARRANCAN IGUAL, y es a propósito. Las dos tienen la misma
-  // forma:
+  // forma, y las tres cosas coinciden:
   //
-  //   1. el detalle de lo que se elige arriba   → ABIERTO
-  //   2. los pagos/abonos que le hiciste         → ABIERTO
-  //   3. todos, para comparar                    → CERRADO, y AL FINAL
+  //   1. el detalle de lo que se elige arriba   CERRADO
+  //   2. los pagos/abonos que le hiciste         CERRADO
+  //   3. todos, para comparar                    CERRADO, y AL FINAL
   //
-  // Los dos primeros abren porque son el detalle de a quién estás mirando, que es
-  // lo que se vino a ver. El tercero cierra y va al final porque es la vista
-  // larga, de apoyo, no la que hay que leer primero.
+  // TODO cerrado, a pedido del usuario. La razón de fondo: al abrir la pestaña
+  // hay que ver el número del empleado o del proveedor, y el detalle desplegado
+  // compite con la vista y empuja todo hacia abajo.
   //
-  // Antes los de Gastos abrían TODOS cerrados y los de Empleados los dos primeros
-  // abiertos. No es que uno estuviera mal: es que dos pantallas que se leen igual
-  // no pueden abrir distinto. Saltar de una a otra y tener que abrir a mano lo
-  // mismo es la clase de fricción que hace que una pantalla parezca más
-  // complicada de lo que es.
+  // Antes Empleados abría los dos primeros y Gastos no abría ninguno, que es
+  // peor que cualquier otra opción: dos pantallas que se leen igual arrancaban
+  // distinto. La coherencia entre las dos importa más que qué estado exacto se
+  // elige.
+  //
+  // Y que el tercero esté AL FINAL además de cerrado: si "Todos los empleados"
+  // quedara arriba, el primer acordeón de la pantalla sería la vista larga de
+  // comparar y no el detalle de quien se está mirando.
   //
   // OJO: cambiar estos flags NO reinicia la pantalla. Un acordeón que se abrió se
-  // queda abierto al cambiar de período, así que el "arranca abierto" es solo del
+  // queda abierto al cambiar de período, así que el "arranca cerrado" es solo del
   // primer arranque.
-  acordeonDetalle = true;
-  acordeonPagos = true;
+  acordeonDetalle = false;
+  acordeonPagos = false;
   acordeonTotales = false;
   acordeonSaldo = false;
-  acordeonPagosProv = true;
-  acordeonCompras = true;
-  // ── "TODOS" EN EL COMBO ──────────────────────────────────────
+  acordeonPagosProv = false;
+  acordeonCompras = false;
+
+  // ── "TODOS" EN EL COMBO ──────────────────────────────────────────
   //
   // La PRIMERA opción del selector, y el estado en el que arranca la pantalla.
   //
@@ -1656,6 +1659,31 @@ export class CajaComponent implements OnInit {
 
   irHoy() {
     this.fechaActual = new Date();
+    this.cargarDatos();
+  }
+
+  /**
+   * Ir a una fecha elegida del calendario.
+   *
+   * Mismo criterio que `irAFechaTurnos` del Dashboard: no hay que recalcular nada
+   * a mano, porque `tituloFecha`, `getRango()` y todas las consultas salen de
+   * `fechaActual`. Con mover esa variable se reacomodan el título, el período y
+   * las tres pestañas juntas.
+   *
+   * El `change` dispara con el `value` del input, que es `AAAA-MM-DD`.
+   * `fechaDesdeISO` es la función que lo descompone a MEDIANOIE LOCAL, y no un
+   * `new Date(iso)` a secas: el spec de `Date` parsea "2026-08-15" como medianoche
+   * UTC, que en Argentina (UTC-3) cae el día ANTERIOR a las 21:00 local. El día
+   * corrido es el peor tipo de bug, porque no tira error: solo muestra mal.
+   *
+   * Si el usuario borra el input a mano el `change` dispara con un string vacío,
+   * y en ese caso no se toca la fecha: `fechaDesdeISO` devuelve `null` y el `if`
+   * lo filtra.
+   */
+  irAFecha(iso: string) {
+    const d = fechaDesdeISO(iso);
+    if (!d) return;
+    this.fechaActual = d;
     this.cargarDatos();
   }
 

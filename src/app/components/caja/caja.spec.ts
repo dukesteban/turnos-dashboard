@@ -124,13 +124,17 @@ describe('Caja — pestañas', () => {
     // Un texto distintivo por pestaña, y se afirma que los otros dos NO están.
     //
     // Los tres tienen que ser ÚNICOS de su pestaña, no solo estar presentes: el
-    // test_affirma que los otros dos no aparecen, así que una marca repetida
-    // haría fallar la aserción por la pestaña equivocada. Por eso "Pagos que le
-    // hiciste" (que existe en Empleados Y en Gastos) no sirve como marca.
+    // test afirma que los otros dos no aparecen, así que una marca repetida
+    // haría fallar la aserción por la pestaña equivocada.
+    //
+    // Por eso el título del acordeón NO sirve como marca: "Pagos realizados"
+    // está en las dos pestañas de salida, y "Turnos atendidos" está en el cuadro
+    // de Ingresos y en el acordeón de Empleados. Las tres marcas van por el título
+    // de la tabla grande de cada una, que solo existe en su pestaña.
     const marcas = [
-      'Servicio más vendido',   // Ingresos
-      'Turnos que atendió',     // Empleados
-      'Compras del período',    // Gastos
+      'Servicio más vendido',    // Ingresos
+      'Todos los empleados',     // Empleados
+      'Todos los proveedores',   // Gastos
     ];
 
     for (let i = 0; i < botones.length; i++) {
@@ -2286,20 +2290,67 @@ describe('Caja - los popups y la coherencia entre las dos pestanas', () => {
   };
 
 
-  it('los dos primeros acordeones arrancan ABIEERTOS en las DOS pestañas', () => {
-    // Coherencia entre Empleados y Gastos. Antes Gastos abría los tres cerrados
-    // y Empleados los dos primeros abiertos: dos pantallas que se leen igual
-    // arrancaban distinto, y hadia que abrir a mano lo mismo en una de las dos.
+
+  it('los tres acordeones arrancan CERRADOS en las DOS pestañas', () => {
+    // Coherencia entre Empleados y Gastos, y todo cerrado.
+    //
+    // Antes Empleados abría los dos primeros y Gastos no abría ninguno: dos
+    // pantallas que se leen igual arrancaban distinto. Ahora las dos abren igual,
+    // y las dos cierran.
     const { cmp } = montar();
     cmp.cambiarTab('empleados');
-    expect(cmp.acordeonDetalle).toBe(true);
-    expect(cmp.acordeonPagos).toBe(true);
+    expect(cmp.acordeonDetalle).toBe(false);
+    expect(cmp.acordeonPagos).toBe(false);
     expect(cmp.acordeonTotales).toBe(false);
 
     cmp.cambiarTab('gastos');
-    expect(cmp.acordeonPagosProv).toBe(true);
-    expect(cmp.acordeonCompras).toBe(true);
+    expect(cmp.acordeonPagosProv).toBe(false);
+    expect(cmp.acordeonCompras).toBe(false);
     expect(cmp.acordeonSaldo).toBe(false);
+  });
+
+  it('cerrado de verdad en el DOM: el body no tiene la clase visible', async () => {
+    // Que el flag sea `false` no alcanza: el template tiene que poner la clase y
+    // el CSS tiene que ocultarlo. Este test cierra el circuito entero.
+    const { cmp, fixture } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'A', 25000, 3)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+
+    for (const tab of ['empleados', 'gastos']) {
+      cmp.cambiarTab(tab);
+      fixture.detectChanges();
+      const bodies = fixture.nativeElement.querySelectorAll('.tab-body .acordeon-body');
+      expect(bodies.length).toBe(3);
+      for (const b of Array.from(bodies) as HTMLElement[]) {
+        expect(b.classList.contains('visible')).toBe(false);
+      }
+    }
+  });
+
+  it('los acordeones siguen abriendose al hacer click', async () => {
+    // Que arranquen cerrados no significa que estén rotos: el toggle tiene que
+    // seguir andando. Sin esto, un `false` mal puesto parece funcionar.
+    const { cmp, fixture } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'A', 25000, 3)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+    cmp.cambiarTab('empleados');
+    fixture.detectChanges();
+
+    const headers = fixture.nativeElement.querySelectorAll('.tab-body .acordeon-header');
+    (headers[0] as HTMLElement).click();
+    fixture.detectChanges();
+    expect(cmp.acordeonDetalle).toBe(true);
+    expect(
+      (fixture.nativeElement.querySelectorAll('.tab-body .acordeon-body')[0] as HTMLElement)
+        .classList.contains('visible')
+    ).toBe(true);
+
+    // Y se vuelven a cerrar con el segundo click.
+    (headers[0] as HTMLElement).click();
+    fixture.detectChanges();
+    expect(cmp.acordeonDetalle).toBe(false);
   });
 
   it('el popup de pago a empleado abre con el del selector, no vacío', async () => {
@@ -2414,6 +2465,24 @@ describe('Caja - los popups y la coherencia entre las dos pestanas', () => {
     expect(cmp.proveedorSeleccionado.nombre).toBe('Otro');
   });
 
+  it('un id de empleado que no es un número cae al primero, no a NaN', async () => {
+    // `NaN !== null`, así que una comparación suelta lo deja pasar y los tres
+    // montos dan 0 sin que nada en pantalla explique por qué. Es un caso que no
+    // se llega a tocar desde el dropdown, pero deja la pantalla en un estado
+    // imposible de explicar, así que el getter lo cubre.
+    const { cmp } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'A', 25000, 3)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+
+    cmp.elegirEmpleadoDelCombo('no-es-un-numero');
+    expect(cmp.empleadoActual).not.toBeNaN();
+    expect(Number.isFinite(cmp.empleadoActual as number)).toBe(true);
+
+    // Y los montos no quedan todos en cero sin motivo.
+    expect(cmp.deboEmpleado).toBeGreaterThan(0);
+  });
+
   it('los popups abren con la fecha de HOY, no con la del período', async () => {
     // Un pago es un movimiento de hoy. Si el popup abriera con la fecha de un mes
     // viejo, el pago caería en el mes viejo y la tarjeta del período que estás
@@ -2434,35 +2503,80 @@ describe('Caja - los popups y la coherencia entre las dos pestanas', () => {
     expect(cmp.nuevoPagoProveedor.fecha).toBe(hoy);
   });
 
-  it('las fechas de las tablas van SIN año, igual que en Dashboard', () => {
-    // El Dashboard muestra "07/10" con su `formatearFechaSinAnio`. Caja
-    // mostraba "07/10/2026" y quedaban dos formatos para la misma columna en dos
-    // pantallas de la misma app. El año ya está arriba: dice "Octubre 2026".
-    const { cmp } = montar();
-    expect(cmp.formatearFechaCorta('2026-10-07')).toBe('07/10');
-    expect(cmp.formatearFechaCorta('2026-01-01')).toBe('01/01');
-    expect(cmp.formatearFechaCorta('2025-12-31')).toBe('31/12');
+  // ── EL CALENDARIO DE LA BARRA DE CONTROL ──────────────────────────
+
+  it('ir a una fecha del calendario mueve el período Y el título', async () => {
+    // Lo que prueba es que con mover `fechaActual` se reacomodan las tres cosas
+    // juntas: el título, el rango que se consulta y el contenido. Si el método
+    // solo moviera la fecha sin recargar, el título cambiaría y los datos no.
+    const { cmp } = await listo();
+
+    // En la vista Día el rango es un solo día, así que se puede ver si la fecha
+    // que eligió el usuario es la que se consulta. En la vista Mes el rango es
+    // el mes entero y no se distinguiría.
+    cmp.vista = 'dia';
+    cmp.irAFecha('2026-03-15');
+    expect(cmp.fechaActual.getFullYear()).toBe(2026);
+    expect(cmp.fechaActual.getMonth()).toBe(2);
+    expect(cmp.fechaActual.getDate()).toBe(15);
+    // En Día el título es "Domingo 15/03", no el nombre del mes: el nombre del
+    // mes es lo de la vista Mes. El 15/03/2026 fue domingo.
+    expect(cmp.tituloFecha).toBe('Domingo 15/03');
+
+    const r = cmp.getRango();
+    expect(r.desde).toBe('2026-03-15');
+    expect(r.hasta).toBe('2026-03-15');
   });
 
-  it('un formato que no es fecha se devuelve tal cual, sin romper la tabla', () => {
-    // Si la base devolviera otra cosa, la celda tiene que mostrar lo que vino en
-    // vez de "undefined/undefined": un texto feo es menos grave que una celda
-    // que muestra NaN.
-    const { cmp } = montar();
-    expect(cmp.formatearFechaCorta('')).toBe('');
-    expect(cmp.formatearFechaCorta('no-es-fecha')).toBe('no-es-fecha');
-    expect(cmp.formatearFechaCorta('2026-10')).toBe('2026-10');
-    // El caso que motiva el regex: con `split('-')` un texto con guiones se
-    // desarmaba en tres partes y la celda llegaba a mostrar `fecha/es`.
-    expect(cmp.formatearFechaCorta('2026-10-07T08:00')).toBe('07/10');
+  it('ir a una fecha en la vista Mes muestra ese mes, no el día', async () => {
+    // En la vista Mes la fecha da igual dentro del mismo mes (solo se mira el
+    // año y el mes), así que elegir el 28/03 tiene que mostrar Marzo.
+    const { cmp } = await listo();
+    cmp.vista = 'mes';
+    cmp.irAFecha('2026-03-28');
+    expect(cmp.tituloFecha).toBe('Marzo 2026');
   });
 
-  it('las 12 tarjetas de Caja miden el mismo alto', async () => {
+  it('el día NO se corre por la zona horaria', async () => {
+    // El bug clásico: `new Date('2026-08-15')` parsea a MEDIANOCHE UTC, que en
+    // Argentina (UTC-3) cae el 14 a las 21:00. El día corrido no tira error,
+    // solo muestra mal, y es el peor tipo de bug.
+    //
+    // Se verifica en la vista Día, que es donde el día se ve.
+    const { cmp } = await listo();
+    cmp.vista = 'dia';
+    cmp.irAFecha('2026-08-15');
+    expect(cmp.fechaActual.getDate()).toBe(15);
+    expect(cmp.getRango().desde).toBe('2026-08-15');
+  });
+
+  it('una fecha vacía o basura NO mueve nada', async () => {
+    // Si el usuario borra el input a mano, `change` dispara con "". Antes de
+    // tocar la fecha: un `new Date('')` es Invalid Date y deja la pantalla en
+    // blanco sin error.
+    const { cmp } = await listo();
+    cmp.irAFecha('2026-05-10');
+    const antes = cmp.fechaActual.getTime();
+
+    cmp.irAFecha('');
+    expect(cmp.fechaActual.getTime()).toBe(antes);
+
+    cmp.irAFecha('no-es-fecha');
+    expect(cmp.fechaActual.getTime()).toBe(antes);
+
+    // Tampoco una fecha que no existe, como el 31 de febrero.
+    cmp.irAFecha('2026-02-31');
+    expect(cmp.fechaActual.getTime()).toBe(antes);
+  });
+
+  // ── EL ALTO DE LAS TARJETAS ────────────────────────────────────────
+
+  it('las 12 tarjetas de Caja tienen las tres líneas, todas iguales de alto', async () => {
     // El pedido: que las de Empleados y Gastos se vean como las de Ingresos.
     //
     // NO se resolvió achicando las de abajo, porque en esa línea de abajo está el
     // "Debo" / "A favor" del tercer cuadro: sin ella el número vuelve a ser un
-    // número suelto con un título que no dice de qué lado está. Se resolvió
+    // número suelto bajo un título que no dice de qué lado está. Se resolvió
     // reservando la línea en las que no la tienen.
     //
     // Por eso el test mira que TODAS tengan tres hijos en `.stat-info`: si a una
