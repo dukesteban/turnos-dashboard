@@ -1,5 +1,26 @@
 <div class="caja-page">
 
+<!--
+    SOLO LECTURA PARA EL SECRETARIO
+
+    El secretario entra a Caja y ve los tres cuadros y todas las tablas, pero no
+    registra pagos, ni deudas, ni borra nada. Los botones desaparecen con `*ngIf` y no
+    con `disabled`: un boton apagado dice "esto se puede hacer pero no ahora", y el
+    secretario no lo puede hacer nunca desde esta pantalla. Encima, un boton apagado
+    sigue siendo un boton al que se le puede hacer click con el teclado.
+
+    El filtro va sobre el boton, no sobre la fila entera: la columna de acciones se
+    queda vacia y la tabla no cambia de ancho entre un rol y el otro, que es lo que
+    pasaria con un `*ngIf` en el `<td>`.
+
+    Y el por que NO se controla aca la escritura de verdad: los metodos `guardarPago`,
+    `eliminarCompra` y los demas no Miran el rol. Si alguien los llama desde la consola
+    con un click, la escritura pasa. Ver `puedeEscribirCaja` en auth.ts.
+
+    Las 16 politicas de RLS de la base siguen abiertas a quien tenga la key. Esta es
+    orden de pantalla, no seguridad.
+  -->
+
   <!-- Controles -->
   <div class="controles">
     <div class="vistas">
@@ -413,7 +434,7 @@
 
       <div class="seccion-header seccion-sin-borde">
         <span></span>
-        <button class="btn-primary" (click)="abrirFormPago()">
+        <button *ngIf="puedeEscribir" class="btn-primary" (click)="abrirFormPago()">
           {{ mostrarFormPago ? 'Cancelar' : '➕ Registrar pago' }}
         </button>
       </div>
@@ -442,7 +463,7 @@
               <td>{{ p.metodo }}</td>
               <td class="celda-tenue">{{ p.notas || '—' }}</td>
               <td class="celda-acciones">
-                <button class="btn-icon" (click)="eliminarPago(p)" title="Borrar">🗑️</button>
+                <button *ngIf="puedeEscribir" class="btn-icon" (click)="eliminarPago(p)" title="Borrar">🗑️</button>
               </td>
             </tr>
           </tbody>
@@ -865,7 +886,7 @@
 
       <div class="seccion-header seccion-sin-borde">
         <span></span>
-        <button class="btn-primary" (click)="abrirFormPagoProveedor()">
+        <button *ngIf="puedeEscribir" class="btn-primary" (click)="abrirFormPagoProveedor()">
           ➕ Registrar pago
         </button>
       </div>
@@ -894,7 +915,7 @@
               <td>{{ p.metodo }}</td>
               <td class="celda-tenue">{{ p.notas || '—' }}</td>
               <td class="celda-acciones">
-                <button class="btn-icon" (click)="eliminarPagoProveedor(p)" title="Borrar">🗑️</button>
+                <button *ngIf="puedeEscribir" class="btn-icon" (click)="eliminarPagoProveedor(p)" title="Borrar">🗑️</button>
               </td>
             </tr>
           </tbody>
@@ -926,7 +947,7 @@
 
       <div class="seccion-header seccion-sin-borde">
         <span></span>
-        <button class="btn-primary" (click)="abrirFormCompra()">
+        <button *ngIf="puedeEscribir" class="btn-primary" (click)="abrirFormCompra()">
           ➕ Nueva deuda
         </button>
       </div>
@@ -955,8 +976,8 @@
               <td>{{ c.cantidad }}</td>
               <td>${{ c.monto | number }}</td>
               <td class="celda-acciones">
-                <button class="btn-icon" (click)="abrirFormCompra(c)" title="Editar">✏️</button>
-                <button class="btn-icon" (click)="eliminarCompra(c)" title="Borrar">🗑️</button>
+                <button *ngIf="puedeEscribir" class="btn-icon" (click)="abrirFormCompra(c)" title="Editar">✏️</button>
+                <button *ngIf="puedeEscribir" class="btn-icon" (click)="eliminarCompra(c)" title="Borrar">🗑️</button>
               </td>
             </tr>
           </tbody>

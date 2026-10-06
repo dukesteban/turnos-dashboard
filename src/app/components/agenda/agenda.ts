@@ -1,8 +1,10 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { AuthService } from '../../services/auth';
 import { SupabaseService } from '../../services/supabase';
 import { jornadaCubre, turnoTocadoPorAusencia, textoAusencia, normalizarJornada, debeMostrarColumna, fechaDesdeISO } from '../../utils/fechas';
+import { soloLosTurnosDe, soloLasColumnasDe } from '../../utils/turnos';
 
 const PX_POR_MINUTO = 1.2;
 /** Alto del header de columnas (vista dia). Los turnos se corren esta cantidad. */
@@ -147,7 +149,11 @@ export class AgendaComponent implements OnInit, OnDestroy {
   _nuevoServicioPostergacion = '';
   atendidoEmpleadoId: number | null = null;
 
-  constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
+  constructor(
+    private supabase: SupabaseService,
+    private cdr: ChangeDetectorRef,
+    private auth: AuthService
+  ) {}
 
   async ngOnInit() {
     window.addEventListener('resize', this.alRedimensionar);
@@ -277,7 +283,11 @@ export class AgendaComponent implements OnInit, OnDestroy {
   }
 
   async cargarTurnos() {
-    this.turnos = await this.supabase.getTurnos();
+    // El rol empleado ve solo los turnos de su columna, y solo su columna. Las dos
+    // cosas se filtran: con los turnos filtrados pero las columnas completas, la grilla
+    // muestra los turnos de otra persona en la columna de al lado; al reves, la columna
+    // propia aparece vacía.
+    this.turnos = soloLosTurnosDe(await this.supabase.getTurnos(), this.auth.empleadoParaFiltrarTurnos());
     this.limpiarCacheColumnas();
     this.ajustarLimitesConTurnos();
     this.cdr.detectChanges();
@@ -404,6 +414,11 @@ export class AgendaComponent implements OnInit, OnDestroy {
           ausente: estado.tieneAusencia,
         };
       })
+      // El filtro de columna del rol empleado va ANTES de `debeMostrarColumna`, y no
+      // despues: si fuera despues, el empleado veria las columnas de los demas que
+      // estan inactivos o de dia libre en su turno vacias, que es informacion que no
+      // le corresponde y ademas lo confunde ("por que aparece Juan si hoy no labra").
+      .filter((c: any) => soloLasColumnasDe([c], this.auth.empleadoParaFiltrarTurnos()).length > 0)
       .filter((c: any) => debeMostrarColumna(c));
 
     this.cacheColumnas[fecha] = cols;

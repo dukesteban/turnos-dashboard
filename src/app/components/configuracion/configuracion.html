@@ -375,4 +375,172 @@
     </div>
   </div>
 
+<!-- ═══ USUARIOS ═══ -->
+  <!--
+    SOLO EL ADMIN LO VE. Acá se cambia el rol de una persona y se le define su
+    contraseña, así que si el secretario pudiera entrar, podría pasarse a admin a sí
+    mismo: dejaría de ser un permiso y pasaría a ser una puerta.
+
+    El filtro `*ngIf` va por las dos razones de siempre: `authGuard` ya impide que un
+    no-logueado entre a Configuración, y este `*ngIf` impide que el secretario vea la
+    lista aunque llegue por una URL guardada. Es la misma defensa en dos capas.
+
+    EL VÍNCULO CON EL EMPLEADO
+    El campo "Empleado" es lo que hace que el rol empleado vea sus propios turnos: el
+    usuario escribe "juan" y el turno tiene un `empleado_id`. Un usuario con rol
+    empleado y sin vincular ve TODOS los turnos, que es lo que hace
+    `empleadoParaFiltrarTurnos`. Por eso la celda avisa en rojo en vez de dejar un
+    select vacío sin explicación.
+  -->
+  <div class="acordeon" *ngIf="puedeAdministrarUsuarios">
+    <div class="acordeon-header" (click)="acordeonUsuarios = !acordeonUsuarios">
+      <span>👥 Usuarios</span>
+      <span class="chevron" [class.abierto]="acordeonUsuarios">›</span>
+    </div>
+    <div class="acordeon-body" [class.visible]="acordeonUsuarios">
+
+      <p class="nota-ayuda">
+        Cada persona entra con su usuario y su contraseña. El rol define qué ve:
+        el <strong>administrador</strong> ve y modifica todo, el
+        <strong>secretario</strong> ve todo pero no escribe en Caja, y el
+        <strong>empleado</strong> solo ve Turnos y Agenda, con sus propios turnos.
+      </p>
+
+      <div class="seccion-header">
+        <button class="btn-primary" (click)="abrirFormUsuario()">
+          {{ mostrarFormUsuario ? '✖ Cancelar' : '➕ Nuevo usuario' }}
+        </button>
+      </div>
+
+      <div *ngIf="mostrarFormUsuario" class="form-nuevo-horario">
+        <div class="fila">
+          <div class="campo">
+            <label>Usuario</label>
+            <input type="text" [(ngModel)]="nuevoUsuario.usuario" placeholder="Ej: pamela"
+                   autocomplete="off" (ngModelChange)="mensajeErrorUsuarios = ''" />
+          </div>
+          <div class="campo">
+            <label>Contraseña</label>
+            <input type="password" [(ngModel)]="nuevoUsuario.password" placeholder="Mínimo 6 caracteres"
+                   autocomplete="new-password" (ngModelChange)="mensajeErrorUsuarios = ''" />
+          </div>
+        </div>
+        <div class="fila">
+          <div class="campo">
+            <label>Rol</label>
+            <select [(ngModel)]="nuevoUsuario.rol" (ngModelChange)="mensajeErrorUsuarios = ''">
+              <option *ngFor="let r of rolesDisponibles" [value]="r.clave">{{ r.nombre }}</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Empleado vinculado</label>
+            <select [(ngModel)]="nuevoUsuario.empleado_id">
+              <option [ngValue]="null">— Ninguno —</option>
+              <option *ngFor="let e of empleadosDisponibles" [ngValue]="e.id">{{ e.nombre }}</option>
+            </select>
+          </div>
+          <button class="btn-primary" (click)="guardarUsuario()">💾 Agregar</button>
+        </div>
+        <p *ngIf="nuevoUsuario.empleado_id" class="nota-ayuda nota-ayuda-chica">
+          {{ descripcionDeRol(nuevoUsuario.rol) }}
+        </p>
+      </div>
+
+      <div class="tabla-wrapper">
+        <table class="tabla-horarios">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Rol</th>
+              <th>Empleado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let u of usuarios">
+              <td>
+                <input type="text" [(ngModel)]="u.usuario" class="input-inline input-nombre"
+                       [readonly]="!u.editando" (ngModelChange)="mensajeErrorUsuarios = ''" />
+              </td>
+              <td>
+                <select [(ngModel)]="u.rol" class="input-inline" [disabled]="!u.editando">
+                  <option *ngFor="let r of rolesDisponibles" [value]="r.clave">{{ r.nombre }}</option>
+                </select>
+              </td>
+              <td>
+                <select [(ngModel)]="u.empleado_id" class="input-inline" [disabled]="!u.editando">
+                  <option [ngValue]="null">— Ninguno —</option>
+                  <option *ngFor="let e of empleadosDisponibles" [ngValue]="e.id">{{ e.nombre }}</option>
+                </select>
+                <!--
+                  El aviso del vinculo roto. Un usuario con rol empleado y sin empleado
+                  asignado ve los turnos de TODOS, no una agenda vacia. Es el caso que
+                  mas confunde, asi que se dice en pantalla en vez de dejarlo para que
+                  lo descubra.
+                -->
+                <div class="vinculo-roto" *ngIf="u.rol === 'empleado' && !u.empleado_id">
+                  ⚠ Sin vincular: ve los turnos de todos
+                </div>
+              </td>
+              <td class="acciones">
+                <button *ngIf="!u.editando && !u.guardando" class="btn-icon"
+                        (click)="editarUsuario(u)" title="Editar">✏️</button>
+                <button *ngIf="u.editando && !u.guardando" class="btn-icon"
+                        (click)="guardarEdicionUsuario(u)" title="Guardar">💾</button>
+                <button *ngIf="u.editando && !u.guardando" class="btn-icon"
+                        (click)="cancelarEdicionUsuario(u)" title="Cancelar">↩️</button>
+                <span *ngIf="u.guardando" class="guardando-celda">⏳ Guardando...</span>
+                <button *ngIf="!u.guardando" class="btn-icon"
+                        (click)="pedirNuevaPassword(u)" title="Cambiar contraseña">🔑</button>
+                <button *ngIf="!u.guardando && u.usuario !== miUsuario" class="btn-icon"
+                        (click)="eliminarUsuario(u)" title="Eliminar">🗑️</button>
+              </td>
+            </tr>
+            <tr *ngIf="usuarios.length === 0">
+              <td colspan="4" class="vacio">No hay usuarios cargados</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div *ngIf="mensajeUsuarios" class="alerta exito">{{ mensajeUsuarios }}</div>
+        <div *ngIf="mensajeErrorUsuarios" class="alerta error">{{ mensajeErrorUsuarios }}</div>
+    </div>
+  </div>
+
+  <!-- ═══ CAMBIAR LA CONTRASEÑA DE UN USUARIO ═══ -->
+  <!--
+    Un popup y no una fila más con dos campos: es una acción que no se hace todos los
+    días y mezclarla en la tabla haría que se vea como editar el nombre.
+  -->
+  <div *ngIf="usuarioEditandoPassword" class="popup-overlay" (click)="cerrarPassword()">
+    <div class="popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <h3>🔑 Contraseña de {{ usuarioEditandoPassword.usuario }}</h3>
+        <button class="btn-cerrar" (click)="cerrarPassword()">✕</button>
+      </div>
+      <div class="popup-body">
+        <div *ngIf="mensajeErrorUsuarios" class="error-msg">{{ mensajeErrorUsuarios }}</div>
+        <div class="form-caja">
+          <div class="campo">
+            <label>Nueva contraseña</label>
+            <input type="password" [(ngModel)]="passwordDeOtroNueva"
+                   placeholder="Mínimo 6 caracteres" autocomplete="new-password"
+                   (ngModelChange)="mensajeErrorUsuarios = ''" />
+          </div>
+          <div class="campo">
+            <label>Repetila</label>
+            <input type="password" [(ngModel)]="passwordDeOtroRepetir"
+                   placeholder="Para confirmar" autocomplete="new-password"
+                   (ngModelChange)="mensajeErrorUsuarios = ''" />
+          </div>
+        </div>
+      </div>
+      <div class="popup-acciones">
+        <button class="btn-atendido" (click)="guardarPassword()">💾 Guardar contraseña</button>
+        <button class="btn-cancelado" (click)="cerrarPassword()">↩️ Cancelar</button>
+      </div>
+    </div>
+  </div>
+
 </div>

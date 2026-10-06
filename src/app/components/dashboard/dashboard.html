@@ -21,7 +21,13 @@
     pantallas sería tener la misma regla de guardado en dos lugares, y en el camino
     una versión se actualiza y la otra no.
   -->
-  <div class="acciones-rapidas">
+  <!--
+    Solo de quien puede escribir en Caja: admin y secretario. El empleado no tiene que
+    verlos, porque no puede hacer nada con ellos. La guard de `/ganancias` ya lo saca de
+    esa pantalla, pero estos botones están acá, en Turnos, y este `*ngIf` es lo que los
+    esconde.
+  -->
+  <div class="acciones-rapidas" *ngIf="puedeEscribirCaja">
     <button type="button" class="accion-rapida accion-naranja"
             (click)="irACaja('pago-empleado')"
             aria-label="Nuevo pago a empleados">

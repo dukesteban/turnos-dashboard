@@ -2,8 +2,10 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { AuthService } from '../../services/auth';
 import { SupabaseService } from '../../services/supabase';
 import { nombreMes, fechaDesdeISO } from '../../utils/fechas';
+import { soloLosTurnosDe } from '../../utils/turnos';
 import { contiene } from '../../utils/texto';
 
 @Component({
@@ -115,8 +117,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
   constructor(
     private supabase: SupabaseService,
     private cdr: ChangeDetectorRef,
-    private router: Router
+    private router: Router,
+    private auth: AuthService
   ) {}
+
+  /**
+   * ¿Aparecen los tres botones flotantes de Caja?
+   *
+   * Misma condición que la que usa Caja para sus botones de guardar: si no puede
+   * escribir en Caja, no tiene para qué verlos. El `*ngIf` del template los saca de la
+   * pantalla de Turnos, que es la primera que ve al abrir la app.
+   *
+   * Getter y no property por lo mismo que en los navbar: el rol cambia al cerrar
+   * sesión y entrar como otro, y un valor guardado quedaría del usuario anterior.
+   */
+  get puedeEscribirCaja(): boolean {
+    return this.auth.puedeEscribirCaja();
+  }
 
   /**
    * Los tres botones flotantes de arriba a la derecha.
@@ -156,8 +173,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   async cargarTurnos() {
-    this.turnosHoy = await this.supabase.getTurnosHoy();
-    this.todosTurnos = await this.supabase.getTurnos();
+    // Se filtran las DOS listas acá, al cargar, y no en cada getter que las usa
+    // (`turnosHoy`, `turnosFiltrados`, los tres cuadros de arriba). Filtrando en un
+    // solo punto, los cuadros de "Ingresos hoy", "Atendidos hoy" y "Turnos pendientes"
+    // cuentan lo mismo que la tabla de abajo: si el empleado ve tres turnos, ve "3
+    // atendidos" y no "9 atendidos de toda la gente".
+    const miId = this.auth.empleadoParaFiltrarTurnos();
+    this.turnosHoy = soloLosTurnosDe(await this.supabase.getTurnosHoy(), miId);
+    this.todosTurnos = soloLosTurnosDe(await this.supabase.getTurnos(), miId);
 
     this.totalIngresos = this.turnosHoy
       .filter((t: any) => t.estado === 'atendido')

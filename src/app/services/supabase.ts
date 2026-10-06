@@ -37,15 +37,70 @@ export class SupabaseService {
   }
   
   // USUARIOS
-  async verificarUsuario(usuario: string, passwordHash: string): Promise<boolean> {
+  /**
+   * Busca el usuario por nombre y contraseña, y devuelve el REGISTRO entero.
+   *
+   * Antes devolvía un booleano y el login guardaba solo el nombre. Con los roles eso no
+   * alcanza: hay que traer el `rol` y el `empleado_id` para armar la sesión, y no
+   * alcanza con traerlos después porque el login ya decidió que el usuario existe.
+   *
+   * `null` si no existe o si la contraseña no coincide. Es el mismo valor para los dos
+   * casos a propósito: el login muestra "usuario o contraseña incorrectos" y no dice
+   * cuál de las dos falló, porque decir cuál convierte el login en una forma de
+   * enumerar qué usuarios existen.
+   */
+  async verificarUsuario(usuario: string, passwordHash: string): Promise<any | null> {
     const { data, error } = await this.supabase
       .from('usuarios')
-      .select('id')
+      .select('id, usuario, rol, empleado_id')
       .eq('usuario', usuario)
       .eq('password_hash', passwordHash)
       .maybeSingle();
-    if (error) return false;
-    return !!data;
+    if (error) return null;
+    return data || null;
+  }
+
+  /** Los usuarios, para la pantalla de administracion. */
+  async getUsuarios(): Promise<any[]> {
+    const { data, error } = await this.supabase
+      .from('usuarios')
+      .select('*')
+      .order('usuario', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  }
+
+  async crearUsuario(datos: any) {
+    const { data, error } = await this.supabase
+      .from('usuarios')
+      .insert(datos)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async actualizarUsuario(id: number, datos: any) {
+    const { data, error } = await this.supabase
+      .from('usuarios')
+      .update(datos)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  /** Borra un usuario. El que esta logged in no puede borrarse a si mismo. */
+  async eliminarUsuario(id: number) {
+    const { error } = await this.supabase.from('usuarios').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  /** El hash SHA-256 de una contrasena en texto plano. Para dar de alta y para resetear. */
+  async hashDe(password: string): Promise<string> {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
   async cambiarPassword(usuario: string, nuevoHash: string): Promise<void> {

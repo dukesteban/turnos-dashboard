@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
-import { AuthService } from '../../services/auth';
+import { AuthService, ROLES, Rol } from '../../services/auth';
 import { paraComparar } from '../../utils/texto';
 
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -163,6 +163,10 @@ export class ConfiguracionComponent implements OnInit {
 
   async ngOnInit() {
     await this.cargarDatos();
+    // La lista de usuarios se pide solo si esta pantalla la va a mostrar. El `*ngIf`
+    // del template ya la esconde al secretario, pero `cargarDatos` corre siempre, y
+    // pedirla igual seria una consulta que no se usa.
+    if (this.puedeAdministrarUsuarios) await this.cargarUsuarios();
     this.cdr.detectChanges();
   }
 
@@ -882,5 +886,204 @@ export class ConfiguracionComponent implements OnInit {
       else this.mensajeMetodosPago = '';
       this.cdr.detectChanges();
     }, 3000);
+  }
+
+// ═══════════════════════════════════════════════════════════════════════════
+  // USUARIOS
+  //
+  // Lo unico de toda la pantalla que NO es del secretario. Aca se cambia el rol de
+  // una persona, asi que si el secretario pudiera entrar, se pasaria a admin a si
+  // mismo: dejaria de ser un permiso y pasaria a ser una puerta.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  acordeonUsuarios = false;
+  usuarios: any[] = [];
+  rolesDisponibles = ROLES;
+  empleadosDisponibles: any[] = [];
+
+  mostrarFormUsuario = false;
+  nuevoUsuario = { usuario: '', password: '', rol: 'secretario' as Rol, empleado_id: null as number | null };
+  mensajeUsuarios = '';
+  mensajeErrorUsuarios = '';
+
+  // El popup de contraseña.
+  usuarioEditandoPassword: any = null;
+  passwordDeOtroNueva = '';
+  passwordDeOtroRepetir = '';
+
+  /** El usuario con el que se entro. Para no dejar que se borre a si mismo. */
+  get miUsuario(): string {
+    return this.auth.getUsuario();
+  }
+
+  get puedeAdministrarUsuarios(): boolean {
+    return this.auth.puedeAdministrarUsuarios();
+  }
+
+  /** Que puede hacer el rol, en una linea, para el formulario de alta. */
+  descripcionDeRol(rol: string): string {
+    return ROLES.find((r) => r.clave === rol)?.quePuede || '';
+  }
+
+  async cargarUsuarios() {
+    // Los empleados se piden acá y no una vez sola en `ngOnInit`: la pantalla de
+    // empleados puede cambiar de una sesion a otra (el admin da de alta a alguien y
+    // recarga), y la lista de "empleado vinculado" quedaria con un nombre viejo.
+    this.empleadosDisponibles = await this.supabase.getEmpleados();
+    this.usuarios = await this.supabase.getUsuarios();
+  }
+
+  abrirFormUsuario() {
+    this.mostrarFormUsuario = !this.mostrarFormUsuario;
+    this.mensajeUsuarios = '';
+    this.mensajeErrorUsuarios = '';
+    if (this.mostrarFormUsuario) {
+      this.nuevoUsuario = { usuario: '', password: '', rol: 'secretario', empleado_id: null };
+    }
+  }
+
+  async guardarUsuario() {
+    this.mensajeUsuarios = '';
+    this.mensajeErrorUsuarios = '';
+
+    const nombre = (this.nuevoUsuario.usuario || '').trim();
+    const clave = this.nuevoUsuario.password || '';
+
+    if (!nombre) { this.mensajeErrorUsuarios = '❌ Escribí el nombre de usuario.'; return; }
+    if (nombre.length < 3) {
+      this.mensajeErrorUsuarios = '❌ El usuario necesita al menos 3 caracteres.';
+      return;
+    }
+    if (clave.length < 6) { this.mensajeErrorUsuarios = '❌ La contraseña necesita al menos 6 caracteres.'; return; }
+
+    // El nombre se compara sin mayusculas y sin espacios, igual que el indice unico de
+    // otras tablas. Si no, "Pamela" y "pamela" se guardan como dos cuentas y la que
+    // entra primero es la que gana.
+    if (this.usuarios.some((u: any) => paraComparar(u.usuario) === paraComparar(nombre))) {
+      this.mensajeErrorUsuarios = '❌ Ya existe un usuario con ese nombre.';
+      return;
+    }
+
+    // El vinculo con un empleado es de uno a uno. El indice unico de la base lo
+    // rechaza igual, pero avisar aca es mejor que un error de Postgres.
+    const empId = this.nuevoUsuario.empleado_id;
+    if (empId !== null && this.usuarios.some((u: any) => u.empleado_id !== null && Number(u.empleado_id) === Number(empId))) {
+      this.mensajeErrorUsuarios = '❌ Ese empleado ya está vinculado a otro usuario.';
+      return;
+    }
+
+    try {
+      await this.supabase.crearUsuario({
+        usuario: nombre,
+        password_hash: await this.auth.sha256(clave),
+        rol: this.nuevoUsuario.rol,
+        empleado_id: empId,
+      });
+      await this.cargarUsuarios();
+      this.mostrarFormUsuario = false;
+      this.mensajeUsuarios = `✅ Usuario "${nombre}" creado.`;
+    } catch (e: any) {
+      this.mensajeErrorUsuarios = '❌ ' + (e?.message || 'No se pudo crear el usuario.');
+    }
+    this.cdr.detectChanges();
+  }
+
+  editarUsuario(u: any) {
+    this.mensajeUsuarios = '';
+    this.mensajeErrorUsuarios = '';
+    u._orig = { usuario: u.usuario, rol: u.rol, empleado_id: u.empleado_id };
+    u.editando = true;
+  }
+
+  cancelarEdicionUsuario(u: any) {
+    if (u._orig) Object.assign(u, u._orig);
+    u.editando = false;
+    this.mensajeErrorUsuarios = '';
+  }
+
+  async guardarEdicionUsuario(u: any) {
+    this.mensajeUsuarios = '';
+    this.mensajeErrorUsuarios = '';
+
+    const nombre = (u.usuario || '').trim();
+    if (!nombre) { this.mensajeErrorUsuarios = '❌ El nombre de usuario no puede quedar vacío.'; return; }
+    if (nombre.length < 3) { this.mensajeErrorUsuarios = '❌ El usuario necesita al menos 3 caracteres.'; return; }
+
+    if (this.usuarios.some((x: any) => x.id !== u.id && paraComparar(x.usuario) === paraComparar(nombre))) {
+      this.mensajeErrorUsuarios = '❌ Ya existe otro usuario con ese nombre.';
+      return;
+    }
+
+    if (u.empleado_id !== null && this.usuarios.some((x: any) => x.id !== u.id && x.empleado_id !== null && Number(x.empleado_id) === Number(u.empleado_id))) {
+      this.mensajeErrorUsuarios = '❌ Ese empleado ya está vinculado a otro usuario.';
+      return;
+    }
+
+    u.guardando = true;
+    try {
+      await this.supabase.actualizarUsuario(u.id, {
+        usuario: nombre,
+        rol: u.rol,
+        empleado_id: u.empleado_id,
+      });
+      await this.cargarUsuarios();
+      this.mensajeUsuarios = `✅ Usuario "${nombre}" actualizado.`;
+    } catch (e: any) {
+      this.mensajeErrorUsuarios = '❌ ' + (e?.message || 'No se pudo guardar.');
+      u.guardando = false;
+    }
+    this.cdr.detectChanges();
+  }
+
+  pedirNuevaPassword(u: any) {
+    this.usuarioEditandoPassword = u;
+    this.passwordDeOtroNueva = '';
+    this.passwordDeOtroRepetir = '';
+    this.mensajeErrorUsuarios = '';
+  }
+
+  cerrarPassword() {
+    this.usuarioEditandoPassword = null;
+    this.passwordDeOtroNueva = '';
+    this.passwordDeOtroRepetir = '';
+    this.mensajeErrorUsuarios = '';
+  }
+
+  async guardarPassword() {
+    this.mensajeErrorUsuarios = '';
+    if (this.passwordDeOtroNueva.length < 6) {
+      this.mensajeErrorUsuarios = '❌ La contraseña necesita al menos 6 caracteres.';
+      return;
+    }
+    if (this.passwordDeOtroNueva !== this.passwordDeOtroRepetir) {
+      this.mensajeErrorUsuarios = '❌ Las dos contraseñas no coinciden.';
+      return;
+    }
+    const u = this.usuarioEditandoPassword;
+    if (!u) return;
+    try {
+      await this.supabase.actualizarUsuario(u.id, { password_hash: await this.auth.sha256(this.passwordDeOtroNueva) });
+      const nombre = u.usuario;
+      this.cerrarPassword();
+      this.mensajeUsuarios = `✅ Contraseña de "${nombre}" cambiada. Avisale a la persona.`;
+    } catch (e: any) {
+      this.mensajeErrorUsuarios = '❌ ' + (e?.message || 'No se pudo cambiar la contraseña.');
+    }
+    this.cdr.detectChanges();
+  }
+
+  async eliminarUsuario(u: any) {
+    // `confirm()` nativo, como el resto de la app.
+    if (!confirm(`¿Borrar el usuario "${u.usuario}"? La persona no va a poder entrar más.`)) return;
+    this.mensajeUsuarios = '';
+    this.mensajeErrorUsuarios = '';
+    try {
+      await this.supabase.eliminarUsuario(u.id);
+      await this.cargarUsuarios();
+      this.mensajeUsuarios = `✅ Usuario "${u.usuario}" borrado.`;
+    } catch (e: any) {
+      this.mensajeErrorUsuarios = '❌ ' + (e?.message || 'No se pudo borrar.');
+    }
+    this.cdr.detectChanges();
   }
 }
