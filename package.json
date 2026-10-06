@@ -8,6 +8,8 @@
     "build": "ng build",
     "build:ryf": "ng build --configuration ryf",
     "watch": "ng build --watch --configuration development",
+    "deploy:test": "vercel --prod --yes",
+    "deploy:ryf": "vercel link --yes --project turnos-ryf && vercel --prod --yes ; vercel link --yes --project turnos-dashboard",
     "test": "ng test",
     "test:ci": "ng test --watch=false",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
