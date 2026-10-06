@@ -100,6 +100,25 @@
   gap: 16px;
   margin-bottom: 20px;
 
+  // TODAS LAS FILAS MIDEN LO MISMO, no solo las tarjetas de una misma fila.
+  //
+  // `align-items` (que es `stretch`) iguala las tarjetas DENTRO de una fila, pero
+  // una fila con una sola tarjeta no tiene con qué estirarse y queda con su alto
+  // natural. Passa de verdad: entre 700 y 900px `.stats-ingresos` pasa a dos
+  // columnas, la tercera tarjeta baja sola a la segunda fila y medía 92px al lado
+  // de dos de 99px. Y en móvil, con una columna, CADA tarjeta queda sola en su
+  // fila y todas se miden por separado.
+  //
+  // `grid-auto-rows: 1fr` le dice a la grilla que reparta el alto disponible en
+  // partes iguales entre las filas, así que todas salen con el alto de la más
+  // alta. Es lo que falta para que el set de tarjetas se vea como un set y no
+  // como tres recuadros sueltos.
+  //
+  // OJO: esto NO se puede verificar en los tests. jsdom no calcula layout, así que
+  // `getBoundingClientRect()` devuelve ceros y el SCSS ni se lee. Hay que abrirlo
+  // en el navegador y medir.
+  grid-auto-rows: 1fr;
+
   @media (max-width: 800px) { grid-template-columns: repeat(2, 1fr); }
   @media (max-width: 480px) { grid-template-columns: 1fr; }
 }
