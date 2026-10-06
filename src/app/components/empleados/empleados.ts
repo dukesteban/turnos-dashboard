@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
 import { problemaTelefono } from '../../utils/telefono';
 import {
-  normalizarJornada, DIAS, SlotJornada,
+  normalizarJornada, DIAS, SlotJornada, fechaConAnio,
   turnoTocadoPorAusencia, textoAusencia, jornadaCubre,
 } from '../../utils/fechas';
 
@@ -645,7 +645,7 @@ export class EmpleadosComponent implements OnInit {
   }
 
   async eliminarAusencia(a: any) {
-    if (!confirm(`¿Eliminar la ausencia del ${a.desde}?`)) return;
+    if (!confirm(`¿Eliminar la ausencia del ${fechaConAnio(a.desde)}?`)) return;
     try {
       await this.supabase.eliminarAusencia(a.id);
       await this.cargarAusencias();

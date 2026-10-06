@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SupabaseService } from '../../services/supabase';
-import { nombreMes, fechaDesdeISO } from '../../utils/fechas';
+import { nombreMes, fechaDesdeISO, fechaConAnio } from '../../utils/fechas';
 import { paraComparar, contiene } from '../../utils/texto';
 
 @Component({
@@ -1434,7 +1434,7 @@ export class CajaComponent implements OnInit {
   }
 
   async eliminarPago(pago: any) {
-    if (!confirm(`¿Borrar el pago de $${Number(pago.monto).toLocaleString('es-AR')} del ${pago.fecha}?`)) return;
+    if (!confirm(`¿Borrar el pago de $${Number(pago.monto).toLocaleString('es-AR')} del ${fechaConAnio(pago.fecha)}?`)) return;
     try {
       await this.supabase.eliminarPagoEmpleado(pago.id);
       await this.cargarDatos();

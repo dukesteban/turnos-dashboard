@@ -14,6 +14,39 @@ export function nombreMes(indice: number, anio?: number): string {
   return anio != null ? `${nombre} ${anio}` : nombre;
 }
 
+// ─── FECHAS QUE SE MUESTRAN COMO TEXTO ────────────────────────────────────
+//
+// HAY CUATRO COPIAS DE ESTO REGADAS POR LOS COMPONENTES (`formatearFecha` en
+// dashboard, agenda y clientes; `formatearFechaTurno` y `formatearFechaStr` en agenda;
+// mas la de las tablas de Caja, que va sin año). Este es el unico lugar del que
+// salen las dos versiones.
+//
+// LA QUE TRAE EL AÑO, PARA DONDE EL TEXTO ES SUFICIENTE PARA IDENTIFICAR LA FECHA:
+//
+//   "2026-10-06" -> "06/10/2026"
+//
+// Se usa en los mensajes de confirmación, que son donde más importa: el texto dice
+// QUÉ se va a borrar, y si dice "Borrar el pago del 2026-10-06" se ve el dato crudo de
+// la base, que nadie escribe ni lee. Lo que decide es irreversible.
+//
+// Y POR QUÉ REGEX Y NO `split('-')` COMO EN LOS OTROS
+//
+// Porque `split` con un texto que tenga guiones pero no sea una fecha lo desarma en
+// tres partes y devuelve algo inventado: "no-es-fecha" se convierte en "fecha/es".
+// Con regex, lo que no matchea `AAAA-MM-DD` se devuelve tal cual y el mensaje queda
+// como vino. En un mensaje de borrado, inventar parte de la fecha es peor que no
+// formatearla.
+//
+// El pipe `date` de Angular NO se puede usar: aplica la zona horaria del navegador, y
+// con un string "2026-10-01" en un timezone negativo devuelve 30/09. Un día corrido es
+// el peor tipo de bug: no tira error, solo muestra mal.
+export function fechaConAnio(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso).trim());
+  if (!m) return String(iso);
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
 // ── DISPONIBILIDAD DEL EMPLEADO ────────────────────────────────────────
 // Dos capas, igual que el negocio (horarios + dias_cerrados):
 //   1) jornada:  que dias/sostrabaja normalmente  (patron recurrente)
