@@ -4,7 +4,9 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "start:ryf": "ng serve --configuration ryf",
     "build": "ng build",
+    "build:ryf": "ng build --configuration ryf",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:ci": "ng test --watch=false",
