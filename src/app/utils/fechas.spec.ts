@@ -5,6 +5,7 @@ import {
   textoAusencia,
   debeMostrarColumna,
   fechaDesdeISO,
+  fechaConAnio,
 } from './fechas';
 
 /** Esteban: L,M,J,V (no miércoles, no sábado) — dato real de la base. */
@@ -314,5 +315,67 @@ describe('fechaDesdeISO', () => {
     expect(fechaDesdeISO('2024-02-29')!.getDate()).toBe(29);   // bisiesto
     expect(fechaDesdeISO('2026-02-28')!.getDate()).toBe(28);   // no bisiesto
     expect(fechaDesdeISO('2026-12-31')).not.toBeNull();        // ultimo dia del año
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// `fechaConAnio`: LA FECHA EN LOS MENSAJES DE BORRADO
+//
+// Lo que se vio: el cartel de confirmación decía "Borrar el pago del 2026-10-06",
+// con el dato crudo de la base, mientras la tabla de al lado mostraba "06/10". Son
+// dos formatos de la misma fecha en la misma pantalla.
+//
+// Esto importa mas de lo que parece: el texto de un `confirm` dice QUE se va a
+// borrar y la acción es irreversible. Que muestre la fecha en el formato que nadie
+// escribe ni lee hace que haya que traducirla mentalmente para decidir si es la
+// correcta.
+// ═════════════════════════════════════════════════════════════════════
+
+describe('fechaConAnio', () => {
+  it('da dia/mes/anio, que es como las escribe y lee las personas', () => {
+    expect(fechaConAnio('2026-10-06')).toBe('06/10/2026');
+    expect(fechaConAnio('2026-01-01')).toBe('01/01/2026');
+    expect(fechaConAnio('2026-12-31')).toBe('31/12/2026');
+  });
+
+  it('no le da vuelta los numeros', () => {
+    // El fallo a vigilar: confundir mes y dia, que solo se nota cuando difieren.
+    expect(fechaConAnio('2026-10-06')).not.toBe('10/06/2026');
+    // 03 de marzo: el dia 3 en un mes de dos digitos, y al reves 30 de marzo.
+    expect(fechaConAnio('2026-03-03')).toBe('03/03/2026');
+    expect(fechaConAnio('2026-03-30')).toBe('30/03/2026');
+  });
+
+  it('acepta que le llegue con hora, como pasa con los timestamps', () => {
+    // Un `select *` puede traer "2026-10-06T00:00:00+00:00" si la columna fuera
+    // timestamptz. Con el regex, que ancla al principio, matchea la parte de la
+    // fecha y descarta la hora.
+    expect(fechaConAnio('2026-10-06T00:00:00')).toBe('06/10/2026');
+    expect(fechaConAnio('2026-10-06 12:30:00')).toBe('06/10/2026');
+  });
+
+  it('no inventa nada con un texto que no es una fecha', () => {
+    // El caso de `split('-')`: "no-es-fecha" se desarma en tres partes y sale
+    // "fecha/es" o algo pior, un mensaje de borrado mostrando una fecha que nadie
+    // eligio. Con regex, lo que no matchea se devuelve tal cual.
+    expect(fechaConAnio('no-es-fecha')).toBe('no-es-fecha');
+    expect(fechaConAnio('06/10/2026')).toBe('06/10/2026');
+    expect(fechaConAnio('20261006')).toBe('20261006');
+    expect(fechaConAnio('')).toBe('');
+  });
+
+  it('vacio y null devuelven cadena vacia, no "null"', () => {
+    // "Borrar el pago del null" es lo que sale si se imprime el valor crudo.
+    expect(fechaConAnio(null)).toBe('');
+    expect(fechaConAnio(undefined)).toBe('');
+    expect(fechaConAnio('')).toBe('');
+  });
+
+  it('no corre un dia por la zona horaria', () => {
+    // El pipe `date` de Angular aplica la zona del navegador, y con "2026-10-01" en
+    // un timezone negativo devuelve 30/09. Este es el fallo que no tira error: solo
+    // muestra una fecha que nadie eligio. Se comprueba que NO usa `new Date`.
+    expect(fechaConAnio('2026-10-01')).toBe('01/10/2026');
+    expect(fechaConAnio('2026-01-01')).toBe('01/01/2026'); // el corrimiento aqui es de un dia entero
   });
 });
