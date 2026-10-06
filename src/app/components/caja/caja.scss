@@ -730,3 +730,30 @@
   .stats-ingresos,
   .stats-trio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+
+// ============================================================
+// TODAS LAS TARJETAS MIDEN LO MISMO
+// ============================================================
+//
+// Medido: los cuadros de Ingresos y del resumen dan 81px, y los de Empleados y
+// Gastos dan 99px. La diferencia son los 18px de la línea de la nota.
+//
+// La tentación es achicar los de abajo para igualarlos, pero no se puede: en esa
+// línea está el "Debo" / "A favor" del tercer cuadro, que es justamente lo que
+// hace legible el número sin tener que interpretar el color. Si la nota se va,
+// el tercer cuadro vuelve a ser un número suelto con un título que no dice de qué
+// lado está.
+//
+// Así que se iguala por el otro lado: los cuadros SIN nota reservan la línea
+// vacía y miden 99px también. Todas las tarjetas de Caja quedan del mismo alto,
+// que es lo que se ve al pasar de una pestaña a otra.
+//
+// `visibility: hidden` y no `display: none`: es lo que reserva el espacio sin
+// mostrar nada. Un `display: none` no ocuparía nada y el alto volvería a 81px.
+// Y `&nbsp;` en vez de dejar el `<span>` vacío, para que el alto sea el mismo que
+// el de una nota con texto y no uno inventado por el navegador.
+
+.stat-nota-vacia {
+  visibility: hidden;
+}

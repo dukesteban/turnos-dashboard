@@ -2456,4 +2456,54 @@ describe('Caja - los popups y la coherencia entre las dos pestanas', () => {
     // desarmaba en tres partes y la celda llegaba a mostrar `fecha/es`.
     expect(cmp.formatearFechaCorta('2026-10-07T08:00')).toBe('07/10');
   });
+
+  it('las 12 tarjetas de Caja miden el mismo alto', async () => {
+    // El pedido: que las de Empleados y Gastos se vean como las de Ingresos.
+    //
+    // NO se resolvió achicando las de abajo, porque en esa línea de abajo está el
+    // "Debo" / "A favor" del tercer cuadro: sin ella el número vuelve a ser un
+    // número suelto con un título que no dice de qué lado está. Se resolvió
+    // reservando la línea en las que no la tienen.
+    //
+    // Por eso el test mira que TODAS tengan tres hijos en `.stat-info`: si a una
+    // tarjeta sin nota se le saca el `<span>` reservado, vuelve a medir menos y
+    // este test falla.
+    const { cmp, fixture } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'A', 25000, 3)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+      getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Quimicas del Sur', activo: true }]),
+      getCompras: () => Promise.resolve([COMPRA(1, 1, 'Quimicas del Sur', 12000)]),
+    });
+
+    for (const tab of ['ingresos', 'empleados', 'gastos']) {
+      cmp.cambiarTab(tab);
+      fixture.detectChanges();
+      const tarjetas = fixture.nativeElement.querySelectorAll('.stat-card');
+      expect(tarjetas.length).toBeGreaterThan(0);
+      for (const t of Array.from(tarjetas) as HTMLElement[]) {
+        const info = t.querySelector('.stat-info') as HTMLElement;
+        expect(info.children.length).toBe(3);
+      }
+    }
+  });
+
+  it('la línea reservada está oculta: ocupa alto pero no muestra nada', async () => {
+    // `visibility: hidden` y no `display: none`: es lo que reserva el espacio. Un
+    // `display: none` dejaría la tarjeta con dos líneas y el alto volvería a
+    // desincronizarse.
+    const { cmp, fixture } = await listo({
+      getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'A', 25000, 3)]),
+      getPagosEmpleado: () => Promise.resolve([PAGO_JUAN(10000)]),
+    });
+    cmp.cambiarTab('ingresos');
+    fixture.detectChanges();
+
+    const reservas = fixture.nativeElement.querySelectorAll('.stat-nota-vacia') as NodeListOf<HTMLElement>;
+    expect(reservas.length).toBeGreaterThan(0);
+    for (const r of Array.from(reservas)) {
+      // La clase sola no basta: si alguien la saca del template y deja el span sin
+      // la clase, el alto se rompe. Se verifica el texto vacío también.
+      expect(r.textContent).toBe('\u00a0');
+    }
+  });
 });
