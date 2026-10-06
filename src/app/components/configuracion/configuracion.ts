@@ -20,8 +20,8 @@ export class ConfiguracionComponent implements OnInit {
   // (acordeonPuestos se fue con la tabla `puestos`, migracion 011)
   acordeonDatos = true;
   acordeonHorarios = false;
-  acordeonServicios = false;
-  acordeonPassword = false;
+  // (acordeonPassword se fue con la seccion: la contrasena propia se cambia desde el
+  //  candado del navbar, que lo ven los tres roles. Configuracion es solo del admin.)
 
   // ── PUESTOS DE TRABAJO: RETIRADO ────────────────────────────
   //
@@ -139,6 +139,10 @@ export class ConfiguracionComponent implements OnInit {
   mensajeServicios = '';
   mensajeErrorServicios = '';
 
+  // Servicios
+  // (el flag se habia ido con el splice de la seccion de contrasena)
+  acordeonServicios = false;
+
   // Métodos de pago
   acordeonMetodosPago = false;
   metodosPago: any[] = [];
@@ -146,14 +150,6 @@ export class ConfiguracionComponent implements OnInit {
   nuevoMetodoPago = { nombre: '', emoji: '' };
   mensajeMetodosPago = '';
   mensajeErrorMetodosPago = '';
-
-  // Contraseña
-  passwordActual = '';
-  passwordNueva = '';
-  passwordRepetir = '';
-  guardandoPassword = false;
-  mensajePassword = '';
-  mensajeErrorPassword = '';
 
   constructor(
     private supabase: SupabaseService,
@@ -794,76 +790,6 @@ export class ConfiguracionComponent implements OnInit {
       this.mensajeErrorMetodosPago = '❌ Error al eliminar.';
       this.cdr.detectChanges();
     }
-  }
-
-  // ── CONTRASEÑA ─────────────────────────────────────────────
-
-  get cambiosHoy(): number {
-    const hoy = new Date().toLocaleDateString('en-CA');
-    const stored = localStorage.getItem('pwd_cambios');
-    if (!stored) return 0;
-    const parsed = JSON.parse(stored);
-    return parsed.fecha === hoy ? parsed.count : 0;
-  }
-
-  registrarCambioPassword() {
-    const hoy = new Date().toLocaleDateString('en-CA');
-    const count = this.cambiosHoy + 1;
-    localStorage.setItem('pwd_cambios', JSON.stringify({ fecha: hoy, count }));
-  }
-
-  async cambiarPassword() {
-    this.mensajePassword = '';
-    this.mensajeErrorPassword = '';
-
-    if (this.cambiosHoy >= 2) {
-      this.mensajeErrorPassword = '❌ Ya cambiaste la contraseña 2 veces hoy. Intentá mañana.';
-      this.cdr.detectChanges();
-      return;
-    }
-    if (!this.passwordActual || !this.passwordNueva || !this.passwordRepetir) {
-      this.mensajeErrorPassword = '❌ Completá todos los campos.';
-      this.cdr.detectChanges();
-      return;
-    }
-    if (this.passwordNueva !== this.passwordRepetir) {
-      this.mensajeErrorPassword = '❌ La nueva contraseña no coincide.';
-      this.cdr.detectChanges();
-      return;
-    }
-    if (this.passwordNueva.length < 6) {
-      this.mensajeErrorPassword = '❌ La contraseña debe tener al menos 6 caracteres.';
-      this.cdr.detectChanges();
-      return;
-    }
-
-    this.guardandoPassword = true;
-    try {
-      const hashActual = await this.auth.sha256(this.passwordActual);
-      const usuario = this.auth.getUsuario();
-      const ok = await this.supabase.verificarUsuario(usuario, hashActual);
-      if (!ok) {
-        this.mensajeErrorPassword = '❌ La contraseña actual es incorrecta.';
-        this.guardandoPassword = false;
-        this.cdr.detectChanges();
-        return;
-      }
-      const hashNueva = await this.auth.sha256(this.passwordNueva);
-      await this.supabase.cambiarPassword(usuario, hashNueva);
-      this.registrarCambioPassword();
-      this.passwordActual = '';
-      this.passwordNueva = '';
-      this.passwordRepetir = '';
-      // Siempre queda 1: esta linea solo se alcanza cuando `cambiosHoy` es 0 o
-      // 1 (con 2 ya se bloquea arriba). El mensaje era "Te quedan 1 cambio(s)",
-      // a medio hacer. No hay rama plural porque no hay caso que la alcance.
-      this.mensajePassword = '✅ Contraseña cambiada. Te queda 1 cambio hoy.';
-      setTimeout(() => { this.mensajePassword = ''; this.cdr.detectChanges(); }, 3000);
-    } catch (e) {
-      this.mensajeErrorPassword = '❌ Error al cambiar la contraseña.';
-    }
-    this.guardandoPassword = false;
-    this.cdr.detectChanges();
   }
 
   // ── UTILS ──────────────────────────────────────────────────

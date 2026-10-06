@@ -1,3 +1,23 @@
+// El popup de cambiar la contrasena propia (el candado del navbar).
+//
+// Va con @use y no con reglas copiadas: el cascaron (.popup-overlay, .popup,
+// .form-caja y sus .campo), el pie (.btn-atendido, .btn-cancelado),
+// .error-msg y .alerta viven en los partials compartidos. Si se copiaran aca, el
+// popup del navbar y el de "cargar un pago" divergirian la primera vez que se toque
+// uno de los dos. .cambios-restantes va aparte porque solo lo usa este popup.
+@use '../styles/popup';
+@use '../styles/tabla';
+
+// El aviso de "2 cambios de contrasena por dia", unico de este archivo.
+.cambios-restantes {
+  font-size: 0.85rem;
+  color: #92400e;
+  background: #fef3c7;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
 // ============================================================
 // AVISO DE "HAY UNA VERSIÓN NUEVA"
 // ------------------------------------------------------------

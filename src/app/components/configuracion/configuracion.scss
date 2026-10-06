@@ -359,15 +359,10 @@
 // ── ACORDEONES ──────────────────────────────────────────────
 // Las reglas vienen del partial compartido (ver el `@use` arriba de este
 // archivo): .acordeon, .acordeon-header, .chevron y .acordeon-body.
-
-.cambios-restantes {
-  font-size: 0.85rem;
-  color: #92400e;
-  background: #fef3c7;
-  padding: 8px 12px;
-  border-radius: 8px;
-  margin-bottom: 12px;
-}
+//
+// `.cambios-restantes` NO esta aca: era el aviso de "2 cambios por dia" de la seccion
+// de contrasena, que ahora vive en el popup del navbar. La regla esta en el `<style>`
+// de app.html, al lado de `.aviso-actualizacion` que ya vive ahi.
 
 /* ── Tabla de Puestos: RETIRADA (migracion 011) ──
    Se fueron .tabla-puestos, .input-empleado-puesto, .puesto-dup y

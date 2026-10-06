@@ -15,9 +15,10 @@ import { crearSupabaseMock, crearAuthMock } from '../../testing/supabase-mock';
  *   · Los `toggle*` actualizan la fila ANTES de la respuesta y la revierten si
  *     falla. Si se olvida la reversión, la pantalla miente: dice activo lo que
  *     la base no tiene.
- *   · `cambiarPassword`: el límite de 2 cambios por día vive en localStorage, o
- *     sea que es del lado del cliente y se puede saltar. Los tests fijan el
- *     comportamiento, no lo hacen seguro.
+ *
+ * La parte de contrasenas NO esta aca: se mudo de Configuracion al popup del candado
+ * del navbar, porque Configuracion quedo solo para el admin y el secretario se
+ * quedaba sin forma de cambiar su propia clave. Los tests viven en app.spec.ts.
  */
 
 function montar(over: Record<string, any> = {}, authOver: Record<string, any> = {}) {
@@ -378,118 +379,6 @@ describe('Configuración — dias cerrados', () => {
     expect(dia.fecha).toBe('2026-12-01');
     expect(dia.motivo).toBe('feriado');
     expect(dia.editando).toBe(false);
-  });
-});
-
-describe('Configuración — contraseña', () => {
-  const hoy = () => new Date().toLocaleDateString('en-CA');
-  const conCambios = (n: number) => localStorage.setItem('pwd_cambios', JSON.stringify({ fecha: hoy(), count: n }));
-
-  beforeEach(() => localStorage.removeItem('pwd_cambios'));
-
-  it('sin cambios hoy, el contador arranca en 0', () => {
-    const { cmp } = montar();
-    expect(cmp.cambiosHoy).toBe(0);
-  });
-
-  it('los cambios de AYER no cuentan para hoy', () => {
-    localStorage.setItem('pwd_cambios', JSON.stringify({ fecha: '2020-01-01', count: 2 }));
-    const { cmp } = montar();
-    expect(cmp.cambiosHoy).toBe(0);
-  });
-
-  it('bloquea el TERCER cambio del dia', async () => {
-    conCambios(2);
-    const { cmp, mock } = montar();
-    cmp.passwordActual = 'vieja123';
-    cmp.passwordNueva = 'nueva123';
-    cmp.passwordRepetir = 'nueva123';
-    await cmp.cambiarPassword();
-    expect(cmp.mensajeErrorPassword).toMatch(/2 veces/i);
-    expect(mock.llamadas).not.toContain('cambiarPassword');
-  });
-
-  it('pide los tres campos', async () => {
-    const { cmp } = montar();
-    cmp.passwordActual = 'vieja';
-    cmp.passwordNueva = '';
-    cmp.passwordRepetir = 'x';
-    await cmp.cambiarPassword();
-    expect(cmp.mensajeErrorPassword).toMatch(/complet/i);
-  });
-
-  it('rechaza si la nueva no coincide con la repetida', async () => {
-    const { cmp } = montar();
-    cmp.passwordActual = 'vieja123';
-    cmp.passwordNueva = 'nueva123';
-    cmp.passwordRepetir = 'otra999';
-    await cmp.cambiarPassword();
-    expect(cmp.mensajeErrorPassword).toMatch(/coincide/i);
-  });
-
-  it('exige 6 caracteres como minimo', async () => {
-    const { cmp } = montar();
-    cmp.passwordActual = 'vieja123';
-    cmp.passwordNueva = '12345';
-    cmp.passwordRepetir = '12345';
-    await cmp.cambiarPassword();
-    expect(cmp.mensajeErrorPassword).toMatch(/6 caracteres/i);
-  });
-
-  it('verifica la contraseña ACTUAL antes de cambiar nada', async () => {
-    const { cmp, mock } = montar({ verificarUsuario: () => Promise.resolve(false) });
-    cmp.passwordActual = 'malaclave';
-    cmp.passwordNueva = 'nueva123';
-    cmp.passwordRepetir = 'nueva123';
-    await cmp.cambiarPassword();
-    expect(cmp.mensajeErrorPassword).toMatch(/actual es incorrecta/i);
-    expect(mock.llamadas).not.toContain('cambiarPassword');
-  });
-
-  it('el cambio exitoso limpia los campos y suma al contador', async () => {
-    const { cmp } = montar();
-    cmp.passwordActual = 'vieja123';
-    cmp.passwordNueva = 'nueva123';
-    cmp.passwordRepetir = 'nueva123';
-    await cmp.cambiarPassword();
-    expect(cmp.passwordActual).toBe('');
-    expect(cmp.passwordNueva).toBe('');
-    expect(cmp.passwordRepetir).toBe('');
-    expect(cmp.cambiosHoy).toBe(1);
-    expect(cmp.mensajePassword).toBe('✅ Contraseña cambiada. Te queda 1 cambio hoy.');
-  });
-
-  it('hashea antes de mandar: a la base viaja el hash, no la contraseña', async () => {
-    const enviados: string[] = [];
-    const { cmp } = montar({
-      verificarUsuario: (_u: string, h: string) => { enviados.push(h); return Promise.resolve(true); },
-      cambiarPassword: (_u: string, h: string) => { enviados.push(h); return Promise.resolve(); },
-    }, {
-      // El `sha256` va en el mock de AuthService, no en el de Supabase: son
-      // servicios distintos. Pasarlo por el primer objeto no hacia nada.
-      // Ademas devuelve un valor opaco: si devolviera el texto plano envuelto en
-      // algo, el `not.toContain('vieja123')` de abajo daria falso positivo.
-      sha256: (s: string) => Promise.resolve(s === 'vieja123' ? 'HASH_ACTUAL' : 'HASH_NUEVA'),
-    });
-    cmp.passwordActual = 'vieja123';
-    cmp.passwordNueva = 'nueva123';
-    cmp.passwordRepetir = 'nueva123';
-    await cmp.cambiarPassword();
-    expect(enviados).toEqual(['HASH_ACTUAL', 'HASH_NUEVA']);
-    expect(enviados).not.toContain('vieja123');
-    expect(enviados).not.toContain('nueva123');
-  });
-
-  it('el hash se calcula con el usuario logged-in, no con uno hardcodeado', async () => {
-    const usuarios: string[] = [];
-    const { cmp } = montar({
-      verificarUsuario: (u: string) => { usuarios.push(u); return Promise.resolve(true); },
-    }, { getUsuario: () => 'laura' });
-    cmp.passwordActual = 'vieja123';
-    cmp.passwordNueva = 'nueva123';
-    cmp.passwordRepetir = 'nueva123';
-    await cmp.cambiarPassword();
-    expect(usuarios).toEqual(['laura']);
   });
 });
 

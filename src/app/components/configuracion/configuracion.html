@@ -341,41 +341,7 @@
     </div>
   </div>
 
-  <!-- ── CONTRASEÑA ── -->
-  <div class="acordeon">
-    <div class="acordeon-header" (click)="acordeonPassword = !acordeonPassword">
-      <span>🔐 Cambiar contraseña</span>
-      <span class="chevron" [class.abierto]="acordeonPassword">›</span>
-    </div>
-    <div class="acordeon-body" [class.visible]="acordeonPassword">
-      <div *ngIf="mensajePassword" class="alerta exito">{{ mensajePassword }}</div>
-      <div *ngIf="mensajeErrorPassword" class="alerta error">{{ mensajeErrorPassword }}</div>
-
-      <div class="cambios-restantes" *ngIf="cambiosHoy > 0">
-        ⚠️ Cambios realizados hoy: {{ cambiosHoy }}/2
-      </div>
-
-      <div class="campo">
-        <label>Contraseña actual</label>
-        <input type="password" [(ngModel)]="passwordActual" placeholder="••••••••" />
-      </div>
-      <div class="campo">
-        <label>Nueva contraseña</label>
-        <input type="password" [(ngModel)]="passwordNueva" placeholder="••••••••" />
-      </div>
-      <div class="campo">
-        <label>Repetir nueva contraseña</label>
-        <input type="password" [(ngModel)]="passwordRepetir" placeholder="••••••••" />
-      </div>
-      <div class="botones-edicion">
-        <button class="btn-primary" (click)="cambiarPassword()" [disabled]="guardandoPassword || cambiosHoy >= 2">
-          {{ guardandoPassword ? 'Guardando...' : '🔐 Cambiar contraseña' }}
-        </button>
-      </div>
-    </div>
-  </div>
-
-<!-- ═══ USUARIOS ═══ -->
+  <!-- ═══ USUARIOS ═══ -->
   <!--
     SOLO EL ADMIN LO VE. Acá se cambia el rol de una persona y se le define su
     contraseña, así que si el secretario pudiera entrar, podría pasarse a admin a sí

@@ -38,9 +38,73 @@
     <a *ngIf="puedeVerConfig" routerLink="/configuracion" routerLinkActive="active">
       <span class="icono">⚙️</span><span class="texto"> Config</span>
     </a>
+    <!--
+      CAMBIAR LA CONTRASEÑA PROPIA, para los tres roles.
+
+      Estaba en Configuración, que ahora es solo del admin: el secretario se quedaba
+      sin forma de cambiar su propia contraseña. Va acá, en el candado al lado de la
+      puerta, que es donde uno la busca.
+
+      Es distinto del 🔑 de la pantalla de Usuarios: ese es el admin definiendo la
+      contraseña de OTRO (que no conoce la actual). Este verifica la actual, así que
+      no sirve para cambiarle la clave a nadie.
+
+      El candado cerrado y no la llave: la llave ya es el ícono del reset que hace el
+      admin en la pantalla de Usuarios. Con los dos iguales, quien administera
+      Usuarios y quien use esto no distinguen un botón del otro.
+    -->
+    <button class="btn-logout" (click)="abrirCambioPassword()" title="Cambiar mi contraseña">🔐</button>
     <button class="btn-logout" (click)="logout()" title="Cerrar sesión">🚪</button>
   </div>
 </nav>
+
+<!-- ═══ CAMBIAR MI CONTRASEÑA ═══ -->
+<div *ngIf="mostrarCambioPassword" class="popup-overlay" (click)="cerrarCambioPassword()">
+  <div class="popup" (click)="$event.stopPropagation()">
+    <div class="popup-header">
+      <h3>🔑 Cambiar mi contraseña</h3>
+      <button class="btn-cerrar" (click)="cerrarCambioPassword()">✕</button>
+    </div>
+    <div class="popup-body">
+      <div *ngIf="mensajePassword" class="alerta exito">{{ mensajePassword }}</div>
+      <div *ngIf="mensajeErrorPassword" class="error-msg">{{ mensajeErrorPassword }}</div>
+
+      <div class="cambios-restantes" *ngIf="cambiosHoy > 0">
+        ⚠️ Cambios realizados hoy: {{ cambiosHoy }}/2
+      </div>
+
+      <div class="form-caja">
+        <div class="campo">
+          <label>Contraseña actual</label>
+          <input type="password" [(ngModel)]="passwordActual" placeholder="••••••••"
+                 autocomplete="current-password" (ngModelChange)="mensajeErrorPassword = ''" />
+        </div>
+        <div class="campo">
+          <label>Nueva contraseña</label>
+          <input type="password" [(ngModel)]="passwordNueva" placeholder="Mínimo 6 caracteres"
+                 autocomplete="new-password" (ngModelChange)="mensajeErrorPassword = ''" />
+        </div>
+        <div class="campo">
+          <label>Repetir la nueva</label>
+          <input type="password" [(ngModel)]="passwordRepetir" placeholder="Para confirmar"
+                 autocomplete="new-password" (ngModelChange)="mensajeErrorPassword = ''" />
+        </div>
+      </div>
+    </div>
+    <div class="popup-acciones">
+      <!--
+        `mensajePassword` en el `[disabled]`: mientras siga el aviso verde, guardar
+        otra vez no tiene sentido (los campos ya están vacíos, y `cambiarPassword`
+        cortaría con "completá los tres campos"). Sin esto el botón parece roto.
+      -->
+      <button class="btn-atendido" (click)="cambiarPassword()"
+              [disabled]="guardandoPassword || cambiosHoy >= 2 || !!mensajePassword">
+        {{ guardandoPassword ? 'Guardando...' : (mensajePassword ? '✓ Listo' : '💾 Guardar') }}
+      </button>
+      <button class="btn-cancelado" (click)="cerrarCambioPassword()">↩️ Cerrar</button>
+    </div>
+  </div>
+</div>
 
 <main class="main-content">
   <router-outlet />
@@ -64,7 +128,7 @@
           aria-label="Ahora no">✕</button>
 </div>
 
-<footer class="version-footer">v1.0.20</footer>
+<footer class="version-footer">v1.0.21</footer>
 
 <style>
   /* OJO: los estilos globales (body, font-family, reset) van en src/styles.scss.

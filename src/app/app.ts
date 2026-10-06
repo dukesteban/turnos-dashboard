@@ -1,6 +1,7 @@
-import { Component, OnInit, HostListener, ApplicationRef } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
+import { Component, OnInit, HostListener, ApplicationRef, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { SwUpdate, VersionReadyEvent } from '@angular/service-worker';
 import { filter } from 'rxjs';
 import { SupabaseService } from './services/supabase';
@@ -9,7 +10,7 @@ import { AuthService } from './services/auth';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, FormsModule],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
@@ -46,7 +47,8 @@ export class App implements OnInit {
     private auth: AuthService,
     private router: Router,
     private swUpdate: SwUpdate,
-    private appRef: ApplicationRef
+    private appRef: ApplicationRef,
+    private cdr: ChangeDetectorRef
   ) {
     this.escucharVersionNueva();
   }
@@ -132,6 +134,122 @@ export class App implements OnInit {
     // cargado hasta que se abra la pantalla de nuevo, en el navegador del otro
     // usuario de esta misma PWA.
     this.router.navigate(['/login']);
+  }
+
+// ═══════════════════════════════════════════════════════════════════════════
+  // CAMBIAR MI CONTRASEÑA
+  //
+  // Vive acá, en el navbar, y no en Configuración. Antes estaba en un acordeón de esa
+  // pantalla, y Configuración quedó solo para el admin cuando llegaron los roles: el
+  // secretario se quedó sin forma de cambiar su propia contraseña.
+  //
+  // Es distinto del candado de la pantalla de Usuarios (que define la clave de OTRO sin
+  // pedir la actual): acá se verifica la actual, así que no sirve para cambiarle la
+  // clave a nadie más.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  mostrarCambioPassword = false;
+  passwordActual = '';
+  passwordNueva = '';
+  passwordRepetir = '';
+  guardandoPassword = false;
+  mensajePassword = '';
+  mensajeErrorPassword = '';
+
+  /**
+   * Cambios de contraseña que ya se hicieron HOY.
+   *
+   * Se guarda en `localStorage` y no en la base a propósito: es un freno para que
+   * alguien que se olvidó de la clave no la cambie veinte veces en un minuto. Si
+   * estuviera en la base, el mismo bloqueo andaría para cualquiera que entre desde
+   * otro navegador, que es justo lo que NO queremos: un bloqueo es de una persona, no
+   * de una contraseña.
+   */
+  get cambiosHoy(): number {
+    try {
+      const hoy = new Date().toLocaleDateString('en-CA');
+      const parsed = JSON.parse(localStorage.getItem('pwd_cambios') || 'null');
+      return parsed && parsed.fecha === hoy ? parsed.count : 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  private registrarCambioPassword() {
+    const hoy = new Date().toLocaleDateString('en-CA');
+    localStorage.setItem('pwd_cambios', JSON.stringify({ fecha: hoy, count: this.cambiosHoy + 1 }));
+  }
+
+  abrirCambioPassword() {
+    this.mostrarCambioPassword = true;
+    this.passwordActual = '';
+    this.passwordNueva = '';
+    this.passwordRepetir = '';
+    this.mensajePassword = '';
+    this.mensajeErrorPassword = '';
+  }
+
+  cerrarCambioPassword() {
+    this.mostrarCambioPassword = false;
+    this.passwordActual = '';
+    this.passwordNueva = '';
+    this.passwordRepetir = '';
+    this.mensajeErrorPassword = '';
+  }
+
+  async cambiarPassword() {
+    this.mensajePassword = '';
+    this.mensajeErrorPassword = '';
+
+    if (this.cambiosHoy >= 2) {
+      this.mensajeErrorPassword = 'Ya cambiaste la contraseña 2 veces hoy. Mañana.';
+      this.cdr.detectChanges();
+      return;
+    }
+    if (!this.passwordActual || !this.passwordNueva || !this.passwordRepetir) {
+      this.mensajeErrorPassword = 'Completá los tres campos.';
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.passwordNueva !== this.passwordRepetir) {
+      this.mensajeErrorPassword = 'La nueva contraseña no coincide.';
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.passwordNueva.length < 6) {
+      this.mensajeErrorPassword = 'La contraseña debe tener al menos 6 caracteres.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    this.guardandoPassword = true;
+    this.cdr.detectChanges();
+    try {
+      const usuario = this.auth.getUsuario();
+      const hashActual = await this.auth.sha256(this.passwordActual);
+      const registro = await this.supabase.verificarUsuario(usuario, hashActual);
+      if (!registro) {
+        this.mensajeErrorPassword = 'La contraseña actual es incorrecta.';
+        this.guardandoPassword = false;
+        this.cdr.detectChanges();
+        return;
+      }
+      const hashNueva = await this.auth.sha256(this.passwordNueva);
+      await this.supabase.cambiarPassword(usuario, hashNueva);
+      this.registrarCambioPassword();
+      // El popup NO se cierra: el "Contraseña cambiada" vive adentro y si se cerrara
+      // nadie lo leería nunca (quedaría un string en un componente invisible). Queda
+      // abierto con el aviso verde y los tres campos limpios, para que el cambio se vea
+      // y el que quedó con 2/2 de cambios ve por qué no puede volver a guardar.
+      this.passwordActual = '';
+      this.passwordNueva = '';
+      this.passwordRepetir = '';
+      this.mensajePassword = 'Contraseña cambiada.';
+    } catch (e) {
+      this.mensajeErrorPassword = 'No se pudo cambiar la contraseña.';
+    }
+    this.guardandoPassword = false;
+    this.cdr.detectChanges();
   }
 
   // DESPLAZAR LATERALMENTE
