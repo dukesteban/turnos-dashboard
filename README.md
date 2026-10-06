@@ -54,21 +54,41 @@ a dejarlo en el de test**. El `;` y no `&&` al final es a proposito: si el deplo
 falla, el link se restaura igual. Sin eso, un deploy caido deja el repo apuntando a
 ryf y el siguiente `deploy:test` publica la app de ryf en el dominio de test.
 
-## LO QUE HAY QUE HACER UNA VEZ EN VERCEL (pendiente)
+## LOS DEPLOYES SON AUTOMATICOS
 
-El proyecto `turnos-ryf` **no** esta conectado al repo de GitHub, a proposito: si lo
-estuviera con la rama de produccion en `main`, cada merge a `main` publicaria la app
-de test dentro del dominio de ryf. Por eso el deploy de ryf es el comando de arriba.
+Los dos proyectos estan conectados al repo y se despliegan solos al mergear:
 
-Para que ryf se despliegue solo al mergear:
+| proyecto | production branch | buildCommand |
+|---|---|---|
+| `turnos-dashboard` (test) | `main` | default de Angular |
+| `turnos-ryf` | `ryf` | `npm run build:ryf` |
 
-1. Vercel > proyecto `turnos-ryf` > Settings > Git
-2. Conectar el repo `dukesteban/turnos-dashboard`
-3. **Production Branch: `ryf`** (este paso es el importante, la API no lo deja cambiar)
+O sea: `git push origin main` publica en `carwash-dashboard-mu`, y `git push origin
+ryf` publica en `turnos-ryf`. No hay que hacer nada mas.
 
-Despues se puede borrar `deploy:ryf` y confiar en Vercel.
+`npm run deploy:ryf` queda igual por si hay que republicar sin mergear nada (por
+ejemplo si el build de Vercel falla y hay que reintentarlo).
 
-El proyecto `turnos-dashboard` (test) ya esta conectado con Production Branch `main`,
-y se despliega solo. Ademas tiene un deploy hook viejo llamado `RyF` que apunta a la
-rama `ryf` y despliega al proyecto de TEST; hoy es inocuo porque el build de esa rama
-da test, pero es redundante y conviene borrarlo.
+## LA PRODUCTION BRANCH NO SE CAMBIA DESDE EL DASHBOARD
+
+Vercel la guarda en un ajuste del proyecto que no esta en la pantalla de Settings > Git
+que se ve al conectar el repo: en esa pantalla solo aparece el repo conectado y los
+toggles de comentarios. La API tampoco la toma en `POST /v9/projects/{id}/link`
+(probado con tres nombres de parametro, siempre queda en `main`).
+
+El endpoint que SI la cambia es:
+
+```
+PATCH https://api.vercel.com/v9/projects/{projectId}/branch
+{ "branch": "ryf" }
+```
+
+Si alguna vez hay que cambiarla, es ese. Un `PATCH /v9/projects/{id}` con `{ "name":
+... }` renombra el proyecto, que es otra cosa y no hay que mezclar.
+
+## EL DEPLOY HOOK VIEJO
+
+`turnos-dashboard` (test) tiene un deploy hook llamado `RyF` que apunta a la rama `ryf`
+y publica en el proyecto de TEST. Se creo antes de que existiera `turnos-ryf` y hoy es
+redundante: la rama `ryf` ya publica en el proyecto correcto. Conviene borrarlo desde
+Settings > Git > Deploy Hooks del proyecto `turnos-dashboard`.
