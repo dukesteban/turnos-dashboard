@@ -13,9 +13,9 @@
       <button [class.activo]="vista === 'mes'" (click)="cambiarVista('mes')">📆 Mes</button>
     </div>
     <div class="navegacion">
-      <button class="btn-nav" (click)="navegar(-1)"><</button>
+      <button class="btn-nav" (click)="navegar(-1)">‹</button>
       <button class="btn-hoy" (click)="irHoy()">{{ vista === 'dia' ? 'Hoy' : 'Actual' }}</button>
-      <button class="btn-nav" (click)="navegar(1)">></button>
+      <button class="btn-nav" (click)="navegar(1)">›</button>
       <!--
         Ir a una fecha cualquiera. Mismo truco que Dashboard y Agenda: un
         `<input type="date">` TRANSPARENTE encima de un botón con el ícono, y que
