@@ -1,0 +1,38 @@
+<!--
+  PESTAÑAS DE PERSONAS
+
+  Los botones son `routerLink` a rutas hijas, no un `(click)` que cambie un
+  campo. Ver el doc de la clase: es lo que hace que /clientes y /empleados
+  puedan redirigir acá, que "atrás" funcione y que la URL se pueda compartir.
+-->
+<div class="personas-page">
+
+  <nav class="tabs tabs-personas">
+    <a routerLink="/personas/clientes" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">
+      👤 Clientes
+    </a>
+    <a routerLink="/personas/empleados" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">
+      🧑‍🔧 Empleados
+    </a>
+    <a routerLink="/personas/proveedores" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">
+      📦 Proveedores
+    </a>
+  </nav>
+
+  <!--
+    `*ngIf` y no un `<router-outlet>`: cada pantalla carga en su `ngOnInit` y
+    ninguna usa el Router, así que no hay estado que conservar entre-tabs.
+    Montar la pestaña es lo que recarga sus datos.
+  -->
+  <div class="tab-panel" [hidden]="!esClientes">
+    <app-clientes *ngIf="esClientes" />
+  </div>
+
+  <div class="tab-panel" [hidden]="!esEmpleados">
+    <app-empleados *ngIf="esEmpleados" />
+  </div>
+
+  <div class="tab-panel" [hidden]="!esProveedores">
+    <app-proveedores *ngIf="esProveedores" />
+  </div>
+</div>

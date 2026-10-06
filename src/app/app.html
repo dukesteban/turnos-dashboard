@@ -10,11 +10,20 @@
     <a routerLink="/agenda" routerLinkActive="active">
       <span class="icono">📅</span><span class="texto"> Agenda</span>
     </a>
+    <!-- El link sigue apuntando a /ganancias para no romper URLs guardadas,
+         pero el texto es "Caja": la pantalla ya muestra ingresos, pagos y
+         compras, no solo lo que se ganó. -->
     <a routerLink="/ganancias" routerLinkActive="active">
-      <span class="icono">💰</span><span class="texto"> Ganancias</span>
+      <span class="icono">💰</span><span class="texto"> Caja</span>
     </a>
-    <a routerLink="/clientes" routerLinkActive="active">
-      <span class="icono">👥</span><span class="texto"> Clientes</span>
+    <!--
+      PERSONAS agrupa las tres fichas de gente: clientes, empleados y
+      proveedores. `routerLinkActive` sin `exact` para que `/personas` quede
+      marcado también en las tres pestañas: si no, solo se resalta en Clientes y
+      uno no ve dónde está parado.
+    -->
+    <a routerLink="/personas" routerLinkActive="active">
+      <span class="icono">👥</span><span class="texto"> Personas</span>
     </a>
     <a routerLink="/configuracion" routerLinkActive="active">
       <span class="icono">⚙️</span><span class="texto"> Config</span>
@@ -27,11 +36,30 @@
   <router-outlet />
 </main>
 
-<footer class="version-footer">v1.0.0</footer>
+<!--
+  AVISO DE VERSIÓN NUEVA
+
+  Aparece SOLO cuando el service worker ya descargó una versión nueva y la está
+  esperando. Sirve para que no haya que adivinar que hay que cerrar la app del
+  todo para que se actualice.
+
+  Va antes del `<footer>` y NO dentro de `<main>`: tiene que estar sobre el
+  contenido, no ocupar lugar en el flujo, porque el usuario va a seguir usando
+  la pantalla de abajo mientras lo decide.
+-->
+<div class="aviso-actualizacion" *ngIf="hayVersionNueva" role="status" aria-live="polite">
+  <span class="aviso-texto">Hay una versión nueva disponible</span>
+  <button class="btn-actualizar" (click)="actualizarAhora()">Actualizar</button>
+  <button class="btn-cerrar-aviso" (click)="despuesActualizar()" title="Ahora no"
+          aria-label="Ahora no">✕</button>
+</div>
+
+<footer class="version-footer">v1.0.17</footer>
 
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', sans-serif; background: #f1f5f9; }
+  /* OJO: los estilos globales (body, font-family, reset) van en src/styles.scss.
+     Acá NO funcionan: Angular le agrega [_ngcontent-xxx] a estos selectores, así
+     que `body` y `*` nunca matchean nada. */
 
   .navbar-brand {
     display: flex;
@@ -104,7 +132,17 @@
   }
   .btn-logout:hover { color: white; background: #334155; }
 
-  .main-content { min-height: calc(100vh - 56px); }
+  /* `var(--chrome-app)` y no `56px`: hay que descontar del alto de la ventana todo
+     lo que NO es contenido, no solo el navbar. Con `100vh - 56` el main crecia
+     hasta el pie de la ventana y el `<footer>` de mas abajo quedaba SIEMPRE
+     fuera: la pagina scrolleaba 40px en todas las pantallas. En Agenda eso
+     terminaba en dos scrollbars (el de la grilla y el de la pagina) y no se
+     sabia con cual se estaba scrolleando.
+
+     El detalle de por qué la variable vale 96 y no 56 está en styles.scss, junto a
+     la definición: es el navbar (56) más el footer (40). Antes sumaban 112, que
+     incluía los 16px del margen del body que ya no existe. */
+  .main-content { min-height: calc(100vh - var(--chrome-app)); }
 
   @media (max-width: 640px) {
     .navbar { padding: 0 12px; }

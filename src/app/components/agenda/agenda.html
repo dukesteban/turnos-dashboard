@@ -10,6 +10,22 @@
       <button class="btn-nav" (click)="vista === 'dia' ? navegarDia(-1) : navegarSemana(-1)">‹</button>
       <button class="btn-hoy" (click)="irHoy()">{{ vista === 'dia' ? 'Hoy' : 'Actual' }}</button>
       <button class="btn-nav" (click)="vista === 'dia' ? navegarDia(1) : navegarSemana(1)">›</button>
+    <!--
+        Ir a una fecha. Es un `<input type="date">` TRANSPARENTE puesto encima
+        de un boton con el icono: el navegador abre su calendario solo, en celu
+        y en escritorio, sin `showPicker()` ni JavaScript.
+
+        El input tiene siempre el valor de `fechaActualISO`, asi que al abrirlo
+        de nuevo muestra la fecha en la que se esta, no la ultima elegida.
+      -->
+      <span class="ir-a-fecha">
+        <span class="btn-nav btn-calendario" aria-hidden="true">📅</span>
+        <input type="date"
+               class="input-calendario"
+               [value]="fechaActualISO"
+               (change)="irAFecha($any($event.target).value)"
+               aria-label="Ir a una fecha" />
+      </span>
     </div>
     <div class="fecha-titulo">
       <span *ngIf="vista === 'dia'">{{ formatearFecha(fechaActual) }}</span>
@@ -22,25 +38,59 @@
   <!-- VISTA DÍA -->
   <div *ngIf="vista === 'dia'" class="grilla-contenedor">
     <div *ngIf="esDiaCerrado(fechaActual)" class="aviso-cerrado">
-      🚫 Hoy cerrado
+      🚫 Hoy cerrado<span *ngIf="motivoDiaCerrado(fechaActual)"> ({{ motivoDiaCerrado(fechaActual) }})</span>
     </div>
     <div class="grilla-dia">
       <div class="spacer-top"></div>
       <!-- Columna de horas -->
-      <div class="col-horas-abs" [style.height.px]="alturaTotal + 24">
+      <div class="col-horas-abs" [style.height.px]="alturaTotal + offsetHeader + 24">
         <div *ngFor="let hora of horasEtiquetas"
           class="etiqueta-hora-abs"
-          [style.top.px]="topParaHora(hora)">
+          [style.top.px]="topParaHoraConHeader(hora)">
           {{ hora }}:00
         </div>
       </div>
 
-      <!-- Columna de turnos -->
-      <div class="col-turnos" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal + 24" [class.dia-cerrado]="esDiaCerrado(fechaActual)">
+      <!-- Columna de turnos: UNA sola, con el header de puestos adentro -->
+      <div class="col-turnos" [style.min-width]="anchoColumnas" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(fechaActual)">
+        <!--
+          FONDO de columnas, alternado.
+
+          El cuerpo de la grilla no tiene columnas: solo hay líneas de hora
+          horizontales y los `.bloque-turno`, que son absolutos. Así que al
+          scrollear hacia abajo se pierde de quién es cada columna y no hay
+          forma de saber a qué empleado pertenece un turno sin subir el mouse.
+
+          Esta capa reproduce la misma grilla que el header (`flex: 1 1 0` +
+          `margin: 0 3px`, sin padding) para que las bandas calcen exacto con
+          los bloques. Va con `z-index: 0` y `pointer-events: none`: los turnos
+          van con `z-index: 1` y tienen que seguir siendo clickeables.
+        -->
+        <div class="columnas-fondo" [style.top.px]="offsetHeader + 8" [style.bottom.px]="0">
+          <div *ngFor="let col of columnasAgenda"
+               class="columna-fondo-celda"
+               [class.ausente]="col.ausente || !col.trabaja"></div>
+        </div>
+
+        <!-- Header: una columna por EMPLEADO -->
+        <div class="columnas-header">
+          <div *ngFor="let col of columnasAgenda"
+               class="columna-header"
+               [class.ausente]="col.ausente || !col.trabaja"
+               [class.en-riesgo]="col.enRiesgo && !col.ausente"
+               [title]="motivoColumnaAusente(col.empleado.id, fechaActualISO) || ''">
+            <span class="ph-nombre">{{ col.empleado.nombre }}</span>
+            <span class="ph-marcas">
+              <span class="ph-lock" *ngIf="motivoColumnaAusente(col.empleado.id, fechaActualISO)">✕</span>
+              <span class="ph-riesgo" *ngIf="col.enRiesgo && !col.ausente" title="Tiene turnos que la jornada o una ausencia dejó sin cubrir">⚠</span>
+            </span>
+          </div>
+        </div>
+
         <!-- Líneas de hora -->
         <div *ngFor="let hora of horasEtiquetas"
           class="linea-hora"
-          [style.top.px]="topParaHora(hora)">
+          [style.top.px]="topParaHoraConHeader(hora)">
         </div>
 
         <!-- Turnos -->
@@ -58,38 +108,82 @@
 
   <!-- VISTA SEMANA -->
   <div *ngIf="vista === 'semana'" class="grilla-contenedor">
-    <div class="grilla-semana">
+    <div class="grilla-semana" [style.min-width]="anchoGrillaSemana">
 
       <!-- Header -->
       <div class="header-semana">
         <div class="col-horas-header"></div>
         <div *ngFor="let dia of diasDeSemana"
           class="col-dia-header"
-          [style.min-width]="anchoPuestos"
+          [style.width]="anchoDeDia(dia)"
           [class.hoy]="esHoy(dia)"
           [class.dia-cerrado]="esDiaCerrado(dia)">
           <div class="dia-nombre">{{ diasSemana[dia.getDay()] }}</div>
           <div class="dia-fecha" [class.dia-fecha-hoy]="esHoy(dia)">{{ formatearFechaCorta(dia) }}</div>
+          <!-- Por qué está cerrado. Solo si el cierre trae motivo: hay cierres
+               sin motivo y ahí sale el rayado pelado, sin inventar un texto. -->
+          <div class="dia-cierre" *ngIf="motivoDiaCerrado(dia)">{{ motivoDiaCerrado(dia) }}</div>
         </div>
       </div>
 
       <!-- Cuerpo -->
       <div class="semana-cuerpo">
         <!-- Columna horas -->
-        <div class="col-horas-abs" [style.height.px]="alturaTotal + 24">
+        <div class="col-horas-abs" [style.height.px]="alturaTotal + offsetHeader + 24">
           <div *ngFor="let hora of horasEtiquetas"
             class="etiqueta-hora-abs"
-            [style.top.px]="topParaHora(hora)">
+            [style.top.px]="topParaHoraConHeader(hora)">
             {{ hora }}:00
           </div>
         </div>
 
-        <!-- Columnas por día -->
-        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.min-width]="anchoPuestos" [style.height.px]="alturaTotal + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
+        <!-- Columnas por día: dentro de cada día, una columna por EMPLEADO.
+             Cada día muestra SOLO a quien atiende ese día. El que no labra no
+             tiene columna: así se lee de un vistazo quién trabaja cada día.
+
+             Cada día mide lo que necesita (`anchoDeDia`). Antes todos reservaban
+             el ancho del día más lleno y los que labran menos dejaban columnas
+             en blanco al final; esa era la franja que se veía como un hueco. -->
+        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.width]="anchoDeDia(dia)" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
+          <!-- Mini header con los empleados de ESE día -->
+          <!--
+            FONDO de columnas, alternado. Una banda por empleado de ESE dia.
+
+            Es lo mismo que hace la vista Dia, con las MISMAS clases: asi el
+            color es el mismo en las dos vistas y no hay que aprender dos paletas.
+
+            Sin esto, al scrollear en la vista Semana los nombres se perdian y
+            los turnos quedaban ahi sin dueno: el mini header de arriba nombra a
+            cada columna, pero de una franja de 20px no se deduce de quien es
+            cada bloque de la mitad de la tarde.
+
+            `offsetHeader` vale 20 en Semana (el alto del mini header) contra 44
+            en Dia, y el `+ 8` es el mismo margen que usa `topParaHora`: por eso
+            las bandas arrancan justo donde arrancan los bloques.
+          -->
+          <div class="columnas-fondo" [style.top.px]="offsetHeader + 8" [style.bottom.px]="0">
+            <div *ngFor="let col of columnasDe(dia)"
+                 class="columna-fondo-celda"
+                 [class.ausente]="col.ausente || !col.trabaja"></div>
+          </div>
+
+          <div class="columnas-header mini">
+            <div *ngFor="let col of columnasDe(dia)"
+                 class="columna-header"
+                 [class.ausente]="col.ausente || !col.trabaja"
+                 [class.en-riesgo]="col.enRiesgo && !col.ausente"
+                 [title]="motivoColumnaAusente(col.empleado.id, fechaISOde(dia)) || ''">
+              <span class="ph-marcas">
+                {{ col.empleado.nombre }}
+                <span class="ph-lock" *ngIf="motivoColumnaAusente(col.empleado.id, fechaISOde(dia))">✕</span>
+              </span>
+            </div>
+          </div>
+
           <!-- Líneas de hora -->
           <div *ngFor="let hora of horasEtiquetas"
             class="linea-hora"
-            [style.top.px]="topParaHora(hora)">
+            [style.top.px]="topParaHoraConHeader(hora)">
           </div>
 
           <!-- Turnos del día -->
@@ -112,7 +206,7 @@
       <div *ngIf="!modoEditarTurno && !modoAtendido">
         <div class="popup-body">
           <div class="detalle-bloque">
-            <div class="popup-fila"><span class="popup-label">Cliente</span><span>{{ turnoSeleccionado.cliente_nombre }}<span *ngIf="!turnoSeleccionado.cliente_telefono" class="sin-telefono">(Sin teléfono registrado)</span></span></div>
+            <div class="popup-fila"><span class="popup-label">Cliente</span><span>{{ turnoSeleccionado.cliente_nombre }}<span *ngIf="!telefonoDe(turnoSeleccionado)" class="sin-telefono">(Sin teléfono registrado)</span></span></div>
             <div class="popup-fila"><span class="popup-label">Servicio</span>
               <span>{{ turnoSeleccionado.estado === 'atendido' && turnoSeleccionado.servicio_nombre_final ? turnoSeleccionado.servicio_nombre_final : turnoSeleccionado.servicio_nombre }}</span>
             </div>
@@ -122,6 +216,8 @@
             <div class="popup-fila"><span class="popup-label">Fecha</span><span>{{ formatearFechaTurno(turnoSeleccionado.fecha) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Hora</span><span>{{ formatearHora(turnoSeleccionado.hora_inicio || turnoSeleccionado.hora) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Duración</span><span>{{ turnoSeleccionado.duracion_minutos || 45 }} min</span></div>
+            <div class="popup-fila"><span class="popup-label">Empleado</span><span>{{ nombreEmpleadoDeTurno(turnoSeleccionado) }}</span></div>
+            <div class="popup-fila"><span class="popup-label">Empleado</span><span>{{ nombreEmpleadoDeTurno(turnoSeleccionado) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Estado</span><span class="badge" [ngClass]="esVencido(turnoSeleccionado) ? 'vencido' : turnoSeleccionado.estado">{{ esVencido(turnoSeleccionado) ? 'vencido' : turnoSeleccionado.estado }}</span></div>
             <div *ngIf="turnoSeleccionado.estado === 'atendido'">
               <div class="popup-fila" *ngIf="turnoSeleccionado.metodo_pago">
@@ -152,7 +248,7 @@
         <div class="popup-body">
           <div class="campo">
             <label>Servicio realizado</label>
-            <select [(ngModel)]="atendidoServicioId" (ngModelChange)="atendidoPrecio = atendidoServicio?.precio || atendidoPrecio; errorAtendido = ''">
+            <select [(ngModel)]="atendidoServicioId" (ngModelChange)="atendidoPrecio = atendidoServicio?.precio || atendidoPrecio; errorAtendido = ''; actualizarVista()">
               <option *ngFor="let s of servicios" [value]="s.id">{{ s.nombre }}</option>
             </select>
           </div>
@@ -165,6 +261,15 @@
             <select [(ngModel)]="atendidoMetodoPago">
               <option *ngFor="let m of metodosPago" [value]="m.nombre">
                 {{ m.emoji }} {{ m.nombre }}
+              </option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Empleado que atendió</label>
+            <select [(ngModel)]="atendidoEmpleadoId">
+              <option [value]="null">-- Seleccionar --</option>
+              <option *ngFor="let e of empleados" [value]="e.id">
+                {{ e.nombre }} ({{ getComisionEmpleadoServicio(e.id) }}%)
               </option>
             </select>
           </div>
@@ -187,17 +292,33 @@
         <div class="popup-body">
           <div class="campo">
             <label>Nueva Fecha</label>
-            <input type="date" [(ngModel)]="nuevaFecha" (ngModelChange)="errorEditarTurno = ''"/>
+            <input type="date" [(ngModel)]="nuevaFecha"
+                   (ngModelChange)="errorEditarTurno = ''; actualizarEmpleadosReprogramar()"/>
           </div>
           <div class="campo">
             <label>Nueva Hora</label>
-            <input type="time" [(ngModel)]="nuevaHora" (ngModelChange)="errorEditarTurno = ''"/>
+            <input type="time" [(ngModel)]="nuevaHora"
+                   (ngModelChange)="errorEditarTurno = ''; actualizarEmpleadosReprogramar()"/>
           </div>
           <div class="campo">
             <label>Nuevo Servicio</label>
-            <select [(ngModel)]="nuevoServicioId" (ngModelChange)="errorEditarTurno = ''">
+            <select [(ngModel)]="nuevoServicioId"
+                    (ngModelChange)="errorEditarTurno = ''; actualizarEmpleadosReprogramar()">
               <option *ngFor="let s of servicios" [value]="s.id">{{ s.nombre }} — ${{ s.precio | number }}</option>
             </select>
+          </div>
+          <div class="campo">
+            <label>Empleado que atiende</label>
+            <select [(ngModel)]="nuevoEmpleadoId"
+                    (ngModelChange)="errorEditarTurno = ''; actualizarEmpleadosReprogramar()">
+              <option [value]="null">-- Sin asignar --</option>
+              <option *ngFor="let e of empleadosReprogramar" [value]="e.id">
+                {{ e.nombre }} ({{ getComisionEmpleadoServicioReprogramar(e.id) }}%){{ e.activo === false ? ' (inactivo)' : '' }}
+              </option>
+            </select>
+            <div *ngIf="empleadoReprogramarNoPuede" class="aviso-empleado">
+              ⚠️ Ese empleado no puede trabajar en esa fecha/hora. Elegí otro.
+            </div>
           </div>
           <div *ngIf="errorEditarTurno" class="error-msg">{{ errorEditarTurno }}</div>
         </div>
@@ -205,7 +326,7 @@
           <button class="btn-atendido" (click)="confirmarEditarTurno()" [disabled]="editandoTurno">
             {{ editandoTurno ? 'Guardando...' : '💾 Confirmar' }}
           </button>
-          <button class="btn-cancelado" (click)="modoEditarTurno = false">↩️ Volver</button>
+          <button class="btn-cancelado" (click)="salirDeEditarTurno()">↩️ Volver</button>
         </div>
       </div>
 
@@ -216,12 +337,12 @@
     <ng-container *ngIf="turnos.length > 0">
       <div
         *ngFor="let turno of turnos"
-        [class]="mini ? 'bloque-turno-semana' : 'bloque-turno'"
+        [class]="claseBloque(turno, !!mini)"
         [ngClass]="getColorTurno(turno)"
-        [style.top.px]="posicionTurno(turno, calcularColumnas(turnos), !!mini).top"
-        [style.height.px]="posicionTurno(turno, calcularColumnas(turnos), !!mini).height"
-        [style.left]="posicionTurno(turno, calcularColumnas(turnos), !!mini).left"
-        [style.width]="posicionTurno(turno, calcularColumnas(turnos), !!mini).width"
+        [style.top.px]="posicionTurno(turno, null, !!mini).top"
+        [style.height.px]="posicionTurno(turno, null, !!mini).height"
+        [style.left]="posicionTurno(turno, null, !!mini).left"
+        [style.width]="posicionTurno(turno, null, !!mini).width"
         (click)="abrirPopup(turno)">
         <div *ngIf="!mini" class="turno-header">
           <span class="turno-hora">{{ formatearHora(turno.hora_inicio || turno.hora) }}</span>

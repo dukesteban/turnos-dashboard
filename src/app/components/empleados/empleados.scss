@@ -1,0 +1,739 @@
+// El detalle del empleado son 5 bloques y quedan muy largos: cada uno es un
+// acordeón, cerrado salvo el primero. Las reglas vienen del partial compartido
+// con Configuración para que las dos copias no se desincronicen.
+//
+// Ojo con la ruta: TRES `..` para llegar a src/ (mismo path que Configuración,
+// porque los dos componentes están en src/app/components/<nombre>/).
+@use '../../../styles/acordeon';
+@use '../../../styles/popup';
+@use '../../../styles/detalle';
+@use '../../../styles/lista';
+
+.empleados-page {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+
+  @media (max-width: 700px) {
+    padding: 12px;
+  }
+}
+
+.alerta {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+  &.exito { background: #dcfce7; color: #166534; }
+  &.error { background: #fee2e2; color: #991b1b; }
+}
+.seccion {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.seccion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  h3 { font-size: 1.05rem; color: #334155; margin: 0; font-weight: 700; }
+}
+
+.badge-count {
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.8rem;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.buscador {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  margin-bottom: 12px;
+  background: #f8fafc;
+  &:focus { outline: none; border-color: #3b82f6; background: white; }
+}
+.campo {
+  margin-bottom: 12px;
+
+  label {
+    display: block;
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 6px;
+  }
+}
+.agregar-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.agregar-titulo {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 10px;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  margin-bottom: 8px;
+  background: #f8fafc;
+  &:focus { outline: none; border-color: #3b82f6; background: white; }
+}
+
+.input-num {
+  width: 80px;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  background: #f8fafc;
+  &:focus { outline: none; border-color: #3b82f6; background: white; }
+}
+
+.comision-row {
+  margin-bottom: 8px;
+}
+
+.comision-label {
+  font-size: 0.8rem;
+  color: #64748b;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.slider {
+  width: 100%;
+  accent-color: #3b82f6;
+}
+
+.dias-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.dia-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+
+  &:has(input:checked) {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #1d4ed8;
+  }
+
+  input {
+    display: none;
+  }
+}
+.btn-agregar {
+  width: 100%;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 9px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  &:hover { background: #2563eb; }
+}
+.vacio {
+  text-align: center;
+  color: #94a3b8;
+  padding: 24px;
+  font-size: 0.88rem;
+}
+
+.vacio-sm {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  padding: 8px 0;
+}
+
+.detalle-bloque {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f1f5f9;
+
+  &:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+  h4 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: #94a3b8;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+}
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 6px;
+  border-radius: 6px;
+  &:hover { background: #f1f5f9; }
+}
+
+.comision-grande {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
+.comision-general {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.label-general {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  min-width: 60px;
+}
+
+.dias-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dia-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: help;
+
+  &.activo {
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-weight: 600;
+  }
+
+  /* Dia con horario parcial: mismo azul pero marcado con borde punteado */
+  &.parcial {
+    border: 1px dashed #1d4ed8;
+  }
+}
+
+.dias-edicion {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ── Jornada ───────────────────────────────────────────────── */
+.jornada-resumen {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.jornada-edicion {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &.nueva { margin-top: 6px; }
+}
+
+.jornada-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  &.inactivo .dia-chip { opacity: 0.45; }
+}
+
+.jornada-horario {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  input[type="time"] {
+    padding: 4px 6px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    background: white;
+    &:focus { outline: none; border-color: #3b82f6; }
+  }
+
+  .guion { color: #94a3b8; font-size: 0.8rem; }
+}
+
+.btn-mini {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 3px 8px;
+  line-height: 1;
+  color: #64748b;
+  &:hover { background: #f1f5f9; }
+}
+
+.ayuda-jornada {
+  margin: 6px 0 0;
+  font-size: 0.73rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.bloque-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  h4 { margin: 0; }
+}
+
+/* ── Ausencias ─────────────────────────────────────────────── */
+// Fila de acción del bloque de ausencias: el botón solo y a la derecha.
+.acciones-ausencias {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.btn-agregar {
+  padding: 7px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover { background: #f8fafc; }
+}
+
+.ausencia-form {
+  margin: 10px 0;
+  padding: 12px;
+  border: 1px dashed #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+
+  .fila {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .campo {
+    flex: 1;
+    min-width: 130px;
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      background: white;
+      &:focus { outline: none; border-color: #3b82f6; }
+    }
+  }
+
+  .opcional { color: #94a3b8; font-weight: 400; }
+}
+
+.btn-primario {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  &:hover:not(:disabled) { background: #1d4ed8; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.ausencia-lista {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ausencia-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  font-size: 0.82rem;
+}
+
+.ausencia-rango { font-weight: 600; color: #854d0e; white-space: nowrap; }
+
+.ausencia-tipo {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.ausencia-motivo {
+  color: #a16207;
+  font-size: 0.78rem;
+  flex: 1;
+  min-width: 0;
+}
+
+// ── Turnos en riesgo ──────────────────────────────────────────
+//
+// Dos tonos distintos porque las dos causas se resuelven distinto:
+//   rojo  = una ausencia lo tapa     → reprogramar o buscar a quién moverlo
+//   ámbar = la jornada no lo cubre   → puede ser un error de la jornada misma
+//                                         (ej: "no trabaja el martes")
+.riesgo-contador {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  border-radius: 9px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.riesgo-lista {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.riesgo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  border: 1px solid #fecaca;
+  background: #fef2f2;              // ausencia lo tapa
+}
+
+.riesgo-jornada {
+  border-color: #fcd34d;
+  background: #fffbeb;              // la jornada no lo cubre
+}
+
+.riesgo-cuando {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.riesgo-fecha {
+  font-weight: 700;
+  color: #7f1d1d;
+  font-variant-numeric: tabular-nums;
+}
+
+.riesgo-jornada .riesgo-fecha { color: #854d0e; }
+.riesgo-dia   { font-size: 0.72rem; color: #991b1b; text-transform: uppercase; }
+.riesgo-hora  { font-size: 0.78rem; color: #b91c1c; font-variant-numeric: tabular-nums; }
+.riesgo-jornada .riesgo-dia,
+.riesgo-jornada .riesgo-hora { color: #a16207; }
+
+.riesgo-que {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.riesgo-cliente { font-weight: 600; color: #1f2937; }
+
+.riesgo-motivo {
+  font-size: 0.75rem;
+  color: #b91c1c;
+}
+.riesgo-jornada .riesgo-motivo { color: #a16207; }
+
+.acciones {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.comisiones-bloque {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 14px;
+  border-bottom: none;
+}
+
+.resumen-periodo {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.periodo-selector {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.btn-periodo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+
+  .icono {
+    font-size: 0.9rem;
+  }
+
+  &.activo {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+  }
+}
+
+.navegacion-fecha {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.fecha-periodo {
+  flex: 1;
+  text-align: center;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.btn-hoy {
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.btn-nav {
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: #64748b;
+
+  &:hover {
+    background: #f8fafc;
+  }
+}
+
+.resumen {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.resumen-item {
+  flex: 1;
+  background: white;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+
+.resumen-label {
+  display: block;
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.resumen-valor {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
+.servicios-lista {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.servicio-item {
+  background: white;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+}
+
+.servicio-fecha {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.servicio-nombre {
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin: 4px 0;
+}
+
+.servicio-monto {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.monto-total {
+  color: #64748b;
+}
+
+.monto-comision {
+  color: #166534;
+  font-weight: 600;
+}
+
+.texto-ayuda {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+
+.servicios-comision-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.servicio-comision-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.servicio-comision-nombre {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.servicio-comision-valor {
+  min-width: 60px;
+  text-align: right;
+}
+
+.comision-valor {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
+.input-comision {
+  width: 60px;
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  text-align: center;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+  }
+}
+
+.servicio-comision-acciones {
+  display: flex;
+  gap: 4px;
+}
+
+// ── EL PIE DEL PANEL ────────────────────────────────────────
+//
+// `.eliminar-bloque` y `.btn-eliminar` se fueron de acá: el pie del detalle es
+// `.detalle-acciones` de `_detalle.scss` (badge + botón gris), el mismo que usa
+// Personas > Proveedores. Un botón ROJO de pantalla completa para una acción
+// reversible exagera el riesgo, y de paso el de inactivar empleado y el de
+// inactivar proveedor parecían dos cosas distintas cuando hacen lo mismo.
+
+/* Estado "guardando" en los_INLINE edits del detalle */

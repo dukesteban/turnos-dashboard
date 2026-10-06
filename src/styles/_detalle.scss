@@ -1,0 +1,156 @@
+// ============================================================
+// LISTA + PANEL DE DETALLE
+// ------------------------------------------------------------
+// El patron de "una lista a la izquierda y, cuando elegis algo, un
+// panel a la derecha con los campos editables".
+//
+// Lo usan Clientes, Empleados y Personas > Proveedores. Cada uno
+// tiene su QUE HACE (los datos son distintos) pero el armazon es
+// el mismo, y el armazon es lo que hace que las tres pantallas se
+// vean como la misma pantalla.
+//
+// OJO: los campos se editan DENTRO del panel, uno por uno, con
+// lapiz -> escribir -> guardar/cancelar. No es un popup. Cuando se
+//udio el ABM de proveedores como popup quedaba distinto de sus dos
+// vecinas de la misma pestana, que es justo lo que se vino a
+// arreglar.
+//
+// `.layout` arranca en UNA columna: el detalle no tiene que existir
+// para que la lista se vea bien. `.con-detalle` es lo que parte en
+// dos, y de y pico ya se deja el ancho completo para que el panel
+// no quede aplastado.
+//
+// Uso:  @use '../../../styles/detalle';
+// ============================================================
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+
+  &.con-detalle {
+    grid-template-columns: 1fr 0.6fr;
+
+    // En el celu no hay lugar para dos columnas y el detalle es lo que
+    // importa: se muestra solo, y la lista se oculta. Al elegir otro se
+    // vuelve a la lista con el boton "atras" del panel.
+    @media (max-width: 700px) {
+      display: block;
+      .lista-seccion { display: none; }
+      .detalle-seccion { width: 100%; box-sizing: border-box; }
+    }
+  }
+}
+
+// La X de cerrar del panel. Adentro de un popup manda la version de
+// `_popup.scss` (`.popup .btn-cerrar`), que es mas specifica: los dos
+// pueden convivir sin pisarse.
+.btn-cerrar {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 4px;
+
+  &:hover { color: #1e293b; }
+}
+
+// Una fila "label + input + lapiz/guardar/cancelar" del panel.
+.campo-editable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .input {
+    flex: 1;
+    margin-bottom: 0;
+  }
+}
+
+// El input del panel. En modo lectura parece un dato (gris, sin borde
+// marcado) y al editar se pone blanco con borde azul: el usuario ve de
+// un vistazo si esta escribiendo o solo leyendo.
+.input-nombre {
+  flex: 1;
+
+  // `min-width: 0` es lo que le PERMITE achicarse. Sin esto el flex item tiene
+  // `min-width: auto`, o sea no baja nunca de su ancho intrinseco: y el de un
+  // `<input>` es el `size` por defecto del HTML, unos 200px. Con eso el panel
+  // de Proveedores (mas angosto) empujaba el lapiz de editar contra el borde y
+  // lo cortaba, mientras en Clientes y Empleados entraba justo de casualidad.
+  //
+  // No se nota hasta que un panel queda angosto: por eso el `min-width` va
+  // aca y no como parche en el componente que se rompio.
+  min-width: 0;
+
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: #f8fafc;
+  color: #1e293b;
+
+  &:not([readonly]) { background: white; border-color: #3b82f6; }
+  &:focus { outline: none; }
+  &[readonly] { cursor: default; }
+}
+
+.datos-campos {
+  .label-campo {
+    flex: 0 0 72px;
+    font-size: 0.9rem;
+    color: #475569;
+  }
+
+  .campo-editable + .campo-editable {
+    margin-top: 12px;
+  }
+}
+
+// "⏳ Guardando…" al lado del campo. Es lo que evita el doble clic:
+// mientras esta esto, los botones del campo no se muestran.
+.guardando-celda {
+  font-size: 0.75rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+// ── EL PIE DEL PANEL: ESTADO + LA ACCION QUE LO CAMBIA ───────
+//
+// El badge Activo/Inactivo a la izquierda y el boton a la derecha.
+//
+// El boton es GRIS CON MARCO, no rojo. Inactivar es reversible: la fila queda
+// tachada y el mismo panel tiene el boton para volver a activarlo. El rojo de
+// "borrar" prometeria mas de lo que hace, y si un dia el inactivar se comiera
+// la fila, el rojo seria la senal de que la accion no tiene vuelta atras.
+//
+// Lo usan Empleados y Personas > Proveedores. Antes cada uno tenia el suyo: el
+// de Proveedores era un boton gris al lado del badge, y el de Empleados un
+// boton rojo de pantalla completa sin badge. Dos acciones parecidas, dos
+// guinea visual.
+
+.detalle-acciones {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+
+  .btn-secundario-sm,
+  .btn-secundario {
+    // A la derecha del badge. Sin el `margin-left: auto` quedan pegados y, en
+    // un panel angosto, el texto del badge y el del boton se pisan.
+    margin-left: auto;
+  }
+}
+
+// El texto que aclara que la accion es reversible. Chiquito y al final, porque
+// es una aclaracion, no algo que haya que leer antes de operar.
+.nota-ayuda {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #94a3b8;
+}

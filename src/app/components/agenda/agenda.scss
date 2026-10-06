@@ -1,11 +1,46 @@
+/* La pantalla tiene que tener UN SOLO scroll, y es el de la grilla.
+ *
+ * Antes había dos: el de la grilla (que sí hace falta, para ver los turnos de la
+ * tarde) y el de la página, que sobre y solo servía para llegar al pie de
+ * versión. Con dos scrollbars hay que adivinar con cuál se está moviendo uno, y
+ * en el celo el gesto sale mal.
+ *
+ * Que quede uno solo depende de que la PÁGINA no scrollee, así que el alto se lo
+ * lleva la grilla: esta página es una columna flex de alto fijo y la grilla se
+ * estira a lo que sobra (`flex: 1`), en vez de medir su alto a mano.
+ *
+ * El alto disponible es la ventana menos el chrome fijo de la app (navbar y pie
+ * de versión). Va con la MISMA variable que el `min-height` de `.main-content` en
+ * app.html, y el detalle de esos 96px esta en styles.scss.
+ */
 .agenda-page {
   padding: 24px;
   max-width: 1100px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--chrome-app));
 }
 
 // CONTROLES
+/* La barra de Día/Semana y la fecha se queda pegada al scrollear.
+ *
+ * `top: 56px` porque la navbar de `app.html` ya es `sticky; top: 0` y mide 56.
+ * Con `top: 0` esta barra quedaría DEBAJO de la navbar, que la taparía.
+ *
+ * Fondo opaco a propósito: la grilla scrollea por atrás y sin fondo se verían
+ * los turnos de arriba a través de los botones.
+ *
+ * Ojo: este bloque y el de la grilla se miden el uno al otro (el `max-height` de
+ * `.grilla-contenedor` depende de cuánto mide esta barra). Si se agrega un
+ * control, hay que volver a medir.
+ */
 .controles {
+  position: sticky;
+  top: 56px;
+  z-index: 11;
+  background: white;
+
   display: flex;
   align-items: center;
   gap: 16px;
@@ -75,12 +110,75 @@
   color: #1e293b;
 }
 
+/* -- IR A UNA FECHA ---------------------------------------------------
+ *
+ * El botón de calendario es un `<input type="date">` transparente PUESTO
+ * ENCIMA de un `<span>` que parece un `.btn-nav` más.
+ *
+ * Por qué un input y no un `<button>` con `showPicker()`: `showPicker()` no
+ * existe en varios navegadores (y en los que existe tira error si no hay un
+ * gesto real del usuario). Con el input transparente lo abre el navegador solo
+ * y no hay nada que pueda fallar.
+ *
+ * `opacity: 0` y NO `display: none` ni `visibility: hidden`: con cualquiera de
+ * esos dos el input no existe para el navegador y el calendario no abre.
+ */
+.ir-a-fecha {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* El input va arriba del `<span>`, así que el click nunca llega al botón falso.
+   `pointer-events: none` lo deja explícito y evita surprises si algún día se
+   reordena el DOM. */
+.btn-calendario {
+  pointer-events: none;
+  font-size: 1rem;
+}
+
+.input-calendario {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
 // CONTENEDOR
+/* El contenedor scrollea en LOS DOS ejes, y eso es lo que permite el header fijo.
+ *
+ * Antes tenía solo `overflow-x: auto`. El problema: en CSS, si un eje no es
+ * `visible`, el otro computa a `auto`. O sea que `overflow-x: auto` dejaba el
+ * `overflow-y` en `auto` IGUAL, el contenedor quedaba siendo un scrollport, y
+ * como su alto es el del contenido NUNCA scrolleaba en vertical. Un `sticky`
+ * adentro se pegaba a ese scrollport que no se mueve: medido, con `top: 98px`
+ * el header quedaba en `-215`, es decir se iba con la página.
+ *
+ * `flex: 1` + `min-height: 0` es lo que lo vuelve scroller vertical de verdad:
+ * se estira hasta el fondo de `.agenda-page` y, gracias al `min-height: 0`,
+ * puede ENCOGER por debajo de su contenido. Sin ese `min-height: 0` un flex
+ * item no baja nunca de su alto intrínseco, la grilla mediría lo que el
+ * contenido (932px medidos) y la página volvería a scrollear.
+ *
+ * Por eso acá ya no hay ningún `max-height` con números medidos a mano: el alto
+ * lo reparte el flexbox.
+ */
 .grilla-contenedor {
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  overflow-x: auto;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  // El rubber-band del celo no debe arrastrar la pagina de atras mientras se
+  // scrollea la grilla.
+  overscroll-behavior: contain;
 }
 
 .spacer-top {
@@ -91,13 +189,62 @@
 .grilla-dia {
   display: flex;
   min-width: 320px;
+
+  /* `width: max-content`, y no solo el `min-width` de 320.
+   *
+   * Es lo que hace que la columna de horas se pueda PEGAR al scrollear en
+   * horizontal. Un `sticky` no viaja libre: se mueve dentro de la caja de su
+   * padre y, si el padre es más angosto que el contenido, se queda sin lugar
+   * donde ir y se va con el scroll. Con solo `min-width: 320` el padre medía
+   * 320 y la grilla scrolleaba a 1024: los `.col-turnos`, que tienen
+   * `min-width: anchoColumnas`, desbordaban al padre. Medido, la columna de
+   * horas quedaba en `234` en vez de `354` (el borde de la grilla), o sea
+   * clavada en el lugar de donde arrancó.
+   *
+   * EL PISO DE `100%` ES OBLIGATORIO Y FUE EL BUG. Con `max-content` pelado la
+   * grilla mide lo del contenido y deja el resto en blanco: con 3 empleados
+   * (778px) en una pantalla de 1100 se veian las columnas apretadas a la
+   * izquierda y un bloque vacio al lado, y en un dia sin empleados (286px) una
+   * franja angosta de grilla con un mar de blanco al lado.
+   *
+   * `min-width: 100%` deja que la grilla se estire hasta llenar el contenedor,
+   * y `max-content` sigue mandando cuando el contenido NO entra y hay que
+   * scrollear. O sea: el ancho es el mas grande de los dos.
+   *
+   * `max(320px, 100%)` y no los dos por separado, porque en un celu muy angosto
+   * el 100% puede ser menos de 320 y los dos pisos se pisan.
+   */
+  width: max-content;
+  min-width: max(320px, 100%);
 }
 
+/* La columna de horas se queda pegada al borde izquierdo al scrollear en
+ * horizontal.
+ *
+ * SOLO en horizontal (`left: 0`), nunca en vertical: cada `.etiqueta-hora-abs`
+ * está posicionada en `top` según su hora, así que si la columna se pegara
+ * arriba los "13:00" dejarían de caer al lado de su línea. Pegada a la izquierda
+ * la columna entera se mueve con el scroll vertical y cada etiqueta sigue en su
+ * lugar.
+ *
+ * `sticky` y no `relative`: sticky sigue siendo un elemento POSICIONADO, así que
+ * las etiquetas de adentro la siguen tomando como referencia, igual que antes.
+ *
+ * `z-index: 6`: arriba de los turnos (1) y de los nombres de empleado (5), para
+ * que al scrollear en horizontal la columna tape lo que pasa por debajo en vez
+ * de dejar asomar turnos al costado.
+ *
+ * Fondo opaco: sin esto se ven los turnos POR DEBAJO de las horas, que es peor
+ * que que se pierdan.
+ */
 .col-horas-abs {
   width: 40px;
   min-width: 40px;
   flex-shrink: 0;
-  position: relative;
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  background: white;
   border-right: 1px solid #e2e8f0;
   padding-top: 8px;
   padding-bottom: 8px;
@@ -117,6 +264,58 @@
   position: relative;
 }
 
+/* Bandas alternadas de fondo, una por columna de empleado.
+ *
+ * El cuerpo de la grilla no tiene columnas: solo líneas de hora horizontales y
+ * los `.bloque-turno`, que son `position: absolute`. Al scrollear hacia abajo
+ * se perdía de quién es cada columna.
+ *
+ * Se reproduce la grilla del header con la MISMA técnica (`flex: 1 1 0` sin
+ * padding) y no copiando el `calc()` de `posicionTurno`. Dos copias de la
+ * matemática un día no coinciden; dos flex nunca.
+ *
+ * **SIN margen.** El margen de 3px de cada lado le corresponde al BLOQUE del
+ * turno, que se posiciona con `calc(pct * i% + 3px)` y `calc(pct% - 6px)`. Si
+ * el fondo también lo tuviera, entre una columna azul y una blanca quedaba una
+ * franja blanca de 6px en el medio que se leía como un hueco: entre dos columnas
+ * blancas no se nota, pero al alternar el color se vuelve evidente. El fondo
+ * tiene que ser la columna COMPLETA, de borde a borde, y el bloque va adentro
+ * con su aire.
+ *
+ * `z-index: 0` porque los bloques van con `z-index: 1` y tienen que quedar
+ * arriba y clickeables. `pointer-events: none` por si acaso.
+ */
+.columnas-fondo {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.columna-fondo-celda {
+  flex: 1 1 0;
+  min-width: 0;
+
+  /* Cada par de columnas una blanca y una con un azul apenas perceptible.
+     `#f5f9fe` es azul de verdad (canal azul arriba de gris), no un gris más
+     claro: a simple vista gris y azul se confunden, y lo que se busca es que
+     el ojo capte "columna / hueco / columna" sin poder decir de qué color es. */
+  &:nth-child(even) { background: #f5f9fe; }
+
+  /* Un empleado ausente se rayaba solo en el header, así que scrolleando no
+     se sabía qué columna era la de la ausencia. Se replica acá con la misma
+     raya. Va DESPUÉS del alternado para ganar en empate de especificidad. */
+  &.ausente {
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(148, 163, 184, 0.13) 0 7px,
+      rgba(148, 163, 184, 0.03) 7px 14px
+    );
+  }
+}
+
 .linea-hora {
   position: absolute;
   left: 0;
@@ -129,6 +328,9 @@
 
 .bloque-turno {
   position: absolute;
+  /* Sin esto el padding (16px) + borde (3px) se SUMAN al width en % y el bloque
+     desborda la columna, pisando al vecino. */
+  box-sizing: border-box;
 
   border-radius: 6px;
   border-left: 3px solid #3b82f6;
@@ -169,6 +371,20 @@
   .turno-servicio { font-size: 0.78rem; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .turno-precio { font-size: 0.75rem; color: #64748b; margin-top: 2px; }
+
+  /* ── Turnos cortos: el bloque no entra y el contenido queda cortado.
+     Se ocultan las lineas de abajo hacia arriba (ver nivelContenido).
+     nivel 2 = las 3 lineas | nivel 1 = sin precio | nivel 0 = solo header */
+  &.nivel-1 {
+    .turno-precio { display: none; }
+  }
+
+  &.nivel-0 {
+    .turno-servicio,
+    .turno-precio { display: none; }
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
 }
 
 .sin-turnos {
@@ -187,8 +403,28 @@
   flex-direction: column;
 }
 
+/* Alto del header de DÍAS de la vista Semana.
+ *
+ * Se declara acá (y no se usa un número suelto en dos lados) porque el `top` del
+ * mini header de NOMBRES tiene que ser exactamente este número: si los nombres
+ * se pegan en `top: 0` se meten DEBAJO del header de días -que es opaco- y no
+ * se ven; si se pasan, queda una franja de turnos por arriba de los nombres.
+ *
+ * Antes el header se medía solo (10 de padding + dos renglones de texto) y el
+ * `top` del mini era un número copiado a mano. El alto queda fijado por CSS
+ * para que las dos cosas no se puedan desincronizar.
+ *
+ * 72 = 10 de padding + día + fecha + motivo del cierre + 10 de padding + el
+ * borde de abajo. La fila del motivo (`.dia-cierre`) es la que lo obliga a
+ * crecer: si algún día no trae motivo, el alto NO se achica (esta vez el número
+ * es fijo, no `auto`), así que los días con y sin motivo quedan a la misma
+ * altura y el header no "salta" al scrollear.
+ */
+$h-header-semana: 72px;
+
 .header-semana {
   display: flex;
+  height: $h-header-semana;
   border-bottom: 2px solid #e2e8f0;
   position: sticky;
   top: 0;
@@ -197,15 +433,30 @@
   min-width: fit-content;
 }
 
+/* La celda vacía que corona la columna de horas en el header de la vista Semana.
+ *
+ * Se pega al mismo borde que `.col-horas-abs` (abajo) para que los días no se
+ * metan por abajo de ella al scrollear en horizontal, y para que las dos formen
+ * UNA sola columna visual de arriba a abajo.
+ *
+ * `z-index: 11`: dentro del `.header-semana` los días no llevan z-index (pintan
+ * en orden de llegada), así que sin esto esta celda queda debajo de ellos.
+ */
 .col-horas-header {
   width: 40px;
   min-width: 40px;
   flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 11;
+  background: white;
 }
 
 .col-dia-header {
-  flex: 1;
-  min-width: 0; /* se sobreescribe con [style.min-width] del HTML */
+  /* `0 0 auto`, no `1`: cada dia mide lo que necesita (`anchoDeDia`). Con
+     flex-grow el navegador los estira todos igual y el ancho del HTML se
+     ignora, que es justo lo que hacia que quedaran desparejos. */
+  flex: 0 0 auto;
   padding: 10px 0;
   text-align: center;
   border-left: 1px solid #f1f5f9;
@@ -213,6 +464,25 @@
 
   .dia-nombre { font-size: 0.72rem; color: #64748b; text-transform: uppercase; }
   .dia-fecha { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-top: 2px; }
+
+  /* Por qué está cerrado el día. Chiquito y con los paréntesis puestos en el
+   * template: el dato es secundario, la fecha es lo que uno busca.
+   *
+   * `nowrap` + ellipsis porque las columnas angostas (un día con un solo
+   * empleado mide 98px) no da lugar para un motivo largo, y un motivo
+   * cortado es mejor que uno que empuje el alto del header y desborde las
+   * celdas de al lado.
+   */
+  .dia-cierre {
+    font-size: 0.65rem;
+    color: #94a3b8;
+    margin-top: 1px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px;
+  }
   .dia-fecha-hoy {
     background: #3b82f6;
     color: white;
@@ -230,8 +500,8 @@
 }
 
 .col-dia-cuerpo {
-  flex: 1;
-  min-width: 0;
+  /* Igual que el header: el ancho lo manda `anchoDeDia`, no el flex. */
+  flex: 0 0 auto;
   position: relative;
   border-left: 1px solid #f1f5f9;
   box-sizing: border-box;
@@ -239,8 +509,7 @@
 
 .bloque-turno-semana {
   position: absolute;
-  left: 2px;
-  right: 2px;
+  box-sizing: border-box;
   border-radius: 4px;
   border-left: 3px solid #3b82f6;
   background: #dbeafe;
@@ -248,6 +517,9 @@
   cursor: pointer;
   overflow: hidden;
   font-size: 0.72rem;
+
+  /* Turnos muy cortos en la vista semana: sobra la fila del servicio */
+  &.mini-nivel-0 .turno-servicio-sm { display: none; }
   transition: filter 0.15s;
   z-index: 1;
 
@@ -259,8 +531,77 @@
   .turno-servicio-sm { color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 
+/* Un día que no se trabaja va RAYADO, no en rojo.
+ *
+ * Antes era `rgba(242, 61, 61, 0.68)`: un bloque rojo sólido, que se lee como
+ * alarma ("algo se rompió") cuando es algo normal y frecuente, tipo un domingo.
+ * Encima el rojo compite con el verde y el amarillo de los estados de turno
+ * (atendido / pendiente), que SÍ son alertas de verdad: con tres colores fuertes
+ * en la misma pantalla, el que significa "cerrado" tenía que gritar.
+ *
+ * La raya es la misma que ya usan las columnas de empleado ausente, así que la
+ * pantalla tiene una sola forma de decir "acá no se trabaja" y no dos.
+ *
+ * Se rayan las DOS capas (header y cuerpo) por el mismo motivo por el que se
+ * rayó al empleado ausente en las dos: rayado solo arriba, al scrollear se
+ * pierde y uno cree que el día es normal. El cuerpo no tiene fondo propio que
+ * compita (los `.bloque-turno-semana` van con `z-index: 1` encima), así que la
+ * raya se ve sin tapar los turnos que hubiera.
+ */
 .col-dia-header.dia-cerrado {
-  background: #f23d3dad;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(148, 163, 184, 0.16) 0 7px,
+    rgba(148, 163, 184, 0.04) 7px 14px
+  );
+  border-left-color: #cbd5e1;
+
+  .dia-nombre { color: #94a3b8; }
+  .dia-fecha { color: #94a3b8; font-weight: 500; }
+}
+
+.col-dia-cuerpo.dia-cerrado {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(148, 163, 184, 0.10) 0 7px,
+    rgba(148, 163, 184, 0.02) 7px 14px
+  );
+
+  /* Las bandas de columna se vuelven transparentes para que se vea la raya de
+   * arriba. Mismo criterio que en la vista Día (`.col-turnos.dia-cerrado`): si
+   * las celdas pares siguen pintando su azul, el día cerrado sale rayado en unas
+   * columnas y liso en otras, que se lee como un error de maquetado en vez de
+   * como "acá no se trabaja".
+   *
+   * También se va la raya de "empleado ausente": si el día entero está cerrado,
+   * qué empleado falta adentro es ruido.
+   */
+  .columna-fondo-celda { background: transparent; }
+}
+
+/* El mismo rayado en la vista Día, para que "acá no se trabaja" se lea igual en
+ * las dos vistas y no haya que recordar cuál de las dos usa el rojo y cuál la
+ * raya.
+ *
+ * La raya va en `.col-turnos` y las celdas de fondo se vuelven transparentes.
+ * Al revés NO sirve: si se raya cada `.columna-fondo-celda` por separado, cada
+ * celda reinicia el degradado en su propio origen (el `background-position` por
+ * defecto es el de la caja) y las líneas salen cortadas en cada frontera de
+ * columna. Con UNA sola capa arriba, las rayas atraviesan el día parejas de
+ * izquierda a derecha, que es como se lee de bien.
+ *
+ * Al ponerlas transparentes también se va el azul de las celdas pares y la raya
+ * de "empleado ausente", y está bien: si el día entero está cerrado, qué
+ * empleado falta adentro es ruido.
+ */
+.col-turnos.dia-cerrado {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(148, 163, 184, 0.10) 0 7px,
+    rgba(148, 163, 184, 0.02) 7px 14px
+  );
+
+  .columna-fondo-celda { background: transparent; }
 }
 
 .aviso-cerrado {
@@ -317,6 +658,14 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+/* Faltaba este bloque: sin el gap de 12px las filas del popup quedan
+   apiladas y el modal se ve mas angosto que el de Turnos. */
+.detalle-bloque {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .popup-fila {
@@ -378,6 +727,18 @@
   .btn-editar { background: #fef9c3; color: #334155; &:hover { background: #feefc3; } }
 }
 
+/* Aviso cuando el empleado elegido no puede trabajar esa fecha/hora */
+.aviso-empleado {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 6px 8px;
+  line-height: 1.4;
+}
+
 .error-msg {
   color: #991b1b;
   font-size: 0.85rem;
@@ -436,4 +797,172 @@ textarea {
   font-family: inherit;
   &:focus { outline: none; border-color: #3b82f6; }
 }
+}
+
+/* -- HEADER DE COLUMNAS: imita el header de dias ---------------- */
+.columnas-header {
+  /* `sticky` y NO `absolute`, aunque los dos lo ubican arriba. La diferencia es que
+   * `absolute` se va con el scroll y `sticky` se queda pegado: es lo que permite
+   * ver de QUIÉN es cada columna mientras se bajan los turnos de la tarde.
+   *
+   * `top: 0` (y no 98px) porque el scroller ahora es `.grilla-contenedor`, que
+   * arranca justo debajo de los controles. Los controles y la navbar quedan
+   * AFUERA de ese scroller, asi que no hay que sumar sus alturas aqui.
+   *
+   * `sticky` exige estar en el flujo: el header pasa a ocupar los primeros 44px
+   * de `.col-turnos`. No mueve nada porque el resto de los hijos (`.linea-hora`,
+   * `.bloque-turno`, `.columnas-fondo`) son `absolute` y se posicionan con
+   * `topParaHoraConHeader()`, que YA suma el `offsetHeader`. Es el mismo criterio
+   * con el que se arman las bandas de fondo.
+   *
+   * El fondo tiene que ser opaco: si no, al scrollear se ven los turnos de
+   * alrededor POR DEBAJO de los nombres, que es peor que que se pierdan.
+   */
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* 44 y 20, los MISMOS números que `H_HEADER_COLUMNAS` / `H_HEADER_MINI` en el
+     componente. Antes el CSS decía 42 y 22: 2px de diferencia, y como el
+     `offsetHeader` de TypeScript es el que ubica los turnos y las bandas de
+     fondo, quedaba una franja blanca entre el borde del header y el primer
+     turno. La constante manda porque es la que participa del cálculo de
+     posiciones; el CSS tiene que acompañar. */
+  height: 44px;
+  display: flex;
+  /* SIN padding. Antes tenía `0 2px`, que corría el header 2px a la derecha
+     respecto de los `.bloque-turno` y de las bandas de fondo: los tres son
+     hijos de `.col-turnos` y se posicionan con `calc(pct * i% + 3px)`, sin
+     padding. Con el padding, el título quedaba 2px corrida respecto de la
+     columna que rotula. */
+  box-sizing: border-box;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  /* 5: arriba de las bandas de fondo (`0`) y de los bloques de turno (`1`). */
+  z-index: 5;
+
+  &.mini {
+    /* Esta es la fila de NOMBRES de la vista Semana: una por día, dentro de
+     * `.col-dia-cuerpo`. Se pegan abajo del header de días, que ya está pegado
+     * arriba, así que el offset es el alto de ese header (y no `0`, que los
+     * escondería debajo). De ahí la variable en vez de un número suelto.
+     *
+     * Lo que queda pegado al scrollear en Semana son las DOS filas: los días de
+     * arriba y los nombres de abajo de cada uno.
+     */
+    top: $h-header-semana;
+    height: 20px;
+  }
+}
+
+.columna-header {
+  /* flex:1 1 0 SIN margen, igual que `.columna-fondo-celda`: el header y la
+     banda tienen que ser la columna completa y de borde a borde. Con margen en
+     los dos, entre una columna azul y una blanca quedaba una franja blanca de
+     6px en el medio que parecía un hueco. El aire de 3px lo lleva el bloque del
+     turno, que se posiciona con `calc(pct * i% + 3px)`.
+     El separador `border-left` es lo que marca dónde termina una columna. */
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 5px 3px;
+  text-align: center;
+  border-left: 1px solid #dbe3ec;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  &:first-child { border-left: none; }
+
+  /* Mismo alternado que el cuerpo, para que el header y la columna de abajo se
+     lean como la MISMA columna y no como dos cosas distintas. */
+  &:nth-child(even) { background: #f5f9fe; }
+
+  // RETIRADO con los puestos: .sin-asignar y .sin-gente ya no aplican.
+  // La columna es el empleado y siempre tiene nombre.
+
+  /* Columna del empleado ausente: se sigue viendo (no se borra el historico)
+     pero rayada para que se lea que ahi no se puede agendar. */
+  &.ausente {
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(148, 163, 184, 0.13) 0 7px,
+      rgba(148, 163, 184, 0.03) 7px 14px
+    );
+    border-left: 1px dashed #94a3b8;
+
+    /* El nombre se apaga: se lee que no atiende sin tapar nada */
+    .ph-marcas { color: #94a3b8; }
+    .ph-nombre { color: #94a3b8; }
+  }
+
+  /* Turnos en riesgo: la jornada o una ausencia dejaron turnos sin cubrir.
+     No es lo mismo que "ausente": aqui PUEDE trabajar, pero tiene algo que
+     resolver. Se marca en ambar para que se distinga de un dia normal. */
+  &.en-riesgo {
+    background: rgba(251, 191, 36, 0.14);
+    border-left: 2px solid #f59e0b;
+  }
+
+  .mini & {
+    padding: 0 2px;
+    justify-content: center;
+  }
+}
+
+/* Indicador inline de "no disponible". NO es una fila extra: el header tiene
+   altura fija con overflow:hidden y una 3ra linea cortaba el nombre. */
+.ph-lock {
+  display: inline-block;
+  margin-right: 3px;
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #b45309;
+  vertical-align: 1px;
+}
+
+/* Aviso de "tiene turnos en riesgo". Distinto del ✕ de ausente: el ⚠ es ámbar. */
+.ph-riesgo {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #b45309;
+  vertical-align: 1px;
+}
+
+/* Réplica .dia-nombre / .dia-fecha del header de días.
+ *
+ * El nombre del empleado es lo que define la columna, así que va en negrita y
+ * oscuro. Antes era 0.68rem en #64748b sin peso: se leía como una etiqueta
+ * placeable, no como el título de una columna. El uppercase se mantiene porque
+ * en una grilla de N columnas lo que se busca es escanear los nombres de un
+ * vistazo, y las mayúsculas lo consiguen mejor que el interletraje.
+ */
+.ph-nombre {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1e293b;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ph-marcas {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  .mini & {
+    font-size: 0.66rem;
+    font-weight: 700;
+    margin-top: 0;
+  }
 }

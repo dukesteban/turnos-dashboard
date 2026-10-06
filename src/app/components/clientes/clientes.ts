@@ -2,6 +2,8 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
+import { problemaTelefono } from '../../utils/telefono';
+import { contiene, coincideTelefono } from '../../utils/texto';
 
 @Component({
   selector: 'app-clientes',
@@ -38,11 +40,16 @@ export class ClientesComponent implements OnInit {
   }
 
   get clientesFiltrados(): any[] {
+    // `contiene` y no `includes` a secas: con un `includes` normal, buscar
+    // "maria" NO encontraba a "María Gómez" y el usuario veía lista vacia
+    // teniendo al cliente cargado en la base.
+    //
+    // El telefono va por `coincideTelefono` porque se guardan con el formato que
+    // escribio el usuario: buscar "115555" tiene que encontrar a "11 5555-1111".
     if (!this.busqueda) return this.clientes;
-    const q = this.busqueda.toLowerCase();
     return this.clientes.filter(c =>
-      c.nombre?.toLowerCase().includes(q) ||
-      c.telefonos?.some((t: any) => t.telefono?.includes(q))
+      contiene(c.nombre, this.busqueda) ||
+      c.telefonos?.some((t: any) => coincideTelefono(t.telefono, this.busqueda))
     );
   }
 
@@ -69,6 +76,9 @@ export class ClientesComponent implements OnInit {
   }
 
   async guardarNombre() {
+    // Sin el guard, un clic en "guardar" sin cliente seleccionado (o con el
+    // detalle cerrado) rompe la pantalla con "no se puede leer editando de null".
+    if (!this.clienteSeleccionado) return this.mostrarError('❌ No hay ningún cliente seleccionado.');
     const nombreNorm = this.supabase.normalizarNombre(this.clienteSeleccionado.nombre);
     this.clienteSeleccionado.nombre = nombreNorm;
 
@@ -90,7 +100,8 @@ export class ClientesComponent implements OnInit {
   }
 
   async agregarTelefono() {
-    if (!this.nuevoTelefono.trim()) return;
+    const problema = problemaTelefono(this.nuevoTelefono);
+    if (problema) return this.mostrarError(`❌ ${problema}`);
     try {
       const tel = await this.supabase.agregarTelefono(this.clienteSeleccionado.id, this.nuevoTelefono.trim());
       this.clienteSeleccionado.telefonos = [...(this.clienteSeleccionado.telefonos || []), tel];
@@ -134,7 +145,8 @@ export class ClientesComponent implements OnInit {
   }
 
   async guardarTelefono(tel: any) {
-    if (!tel._telEditando?.trim()) return;
+    const problema = problemaTelefono(tel._telEditando);
+    if (problema) return this.mostrarError(`❌ ${problema}`);
     try {
       await this.supabase.editarTelefono(tel.id, tel._telEditando.trim());
       tel.telefono = tel._telEditando.trim();
@@ -150,11 +162,10 @@ export class ClientesComponent implements OnInit {
 
   get clientesParaFusionar(): any[] {
     if (!this.busquedaFusionar) return [];
-    const q = this.busquedaFusionar.toLowerCase();
     return this.clientes.filter(c =>
       c.id !== this.clienteSeleccionado?.id &&
-      (c.nombre?.toLowerCase().includes(q) ||
-      c.telefonos?.some((t: any) => t.telefono?.includes(q)))
+      (contiene(c.nombre, this.busquedaFusionar) ||
+      c.telefonos?.some((t: any) => coincideTelefono(t.telefono, this.busquedaFusionar)))
     );
   }
 
@@ -186,7 +197,12 @@ export class ClientesComponent implements OnInit {
 
   formatearFecha(fecha: string): string {
     if (!fecha) return '';
-    const f = new Date(fecha + 'T12:00:00');
+    // 'Z' + getUTC*: antes parseaba a hora LOCAL y leia UTC, asi que el dia
+    // depended del offset del navegador. Funcionaba de -12 a +12, pero en +13 y
+    // +14 (Tonga, Kiritimati, Chatham) corria un dia. Parsear y leer en la misma
+    // zona lo hace independiente del timezone del cliente. Hay un test que
+    // fuerza esas zonas para que el bug no pueda volver sin que se note.
+    const f = new Date(fecha + 'T12:00:00Z');
     const dia = this.diasSemana[f.getUTCDay()];
     const d = String(f.getUTCDate()).padStart(2, '0');
     const m = String(f.getUTCMonth() + 1).padStart(2, '0');

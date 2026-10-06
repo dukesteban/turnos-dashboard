@@ -1,1 +1,90 @@
-/* You can add global styles to this file, and also import other style files */
+/* ============================================================
+   ESTILOS GLOBALES
+   ------------------------------------------------------------
+   OJO: los estilos globales van acá, NO en un <style> dentro de
+   app.html. Angular le agrega [_ngcontent-xxx] a los selectores de
+   los templates, así que un `body { ... }` puesto en app.html queda
+   como `body[_ngcontent-abc]` y nunca matchea nada: la fuente no se
+   terminaba aplicando y todo el texto caía a la tipografía por
+   defecto del navegador (Times).
+   ============================================================ */
+
+/* Chrome fijo de la app: lo que NO es contenido y por lo tanto no se scrollea.
+ *
+ * Vive acá y no repetido en cada pantalla porque hay dos lugares que lo
+ * necesitan para lo mismo (`.main-content` en app.html y `.agenda-page` en
+ * agenda.scss) y si se desincronizan aparece el síntoma clásico: scrollbar de
+ * página en una pantalla que no debería scrollear.
+ *
+ *   56  navbar
+ *   40  .version-footer (12 de padding + el renglón de texto)
+ *
+ * POR QUÉ 96 Y NO 112
+ *
+ * Antes daba 112 porque al `body` le sobraba el `margin: 8px` del navegador (8
+ * arriba + 8 abajo) y había que descontarlo. Con el `margin: 0` de más abajo esos
+ * 16px ya no existen.
+ *
+ * Si se vuelve a poner un margen en el `body`, esto tiene que volver a 112 o la
+ * página scrollea 16px en todas las pantallas. La cuenta para no hacer la
+ * aritmética a mano: navbar + footer + (margen de body arriba + margen de body abajo).
+ */
+:root {
+  --chrome-app: 96px;
+}
+
+/* `box-sizing: border-box` en TODO.
+   Sin esto, un `width: 100%` con padding y borde mide 100% MÁS el
+   padding y el borde, y el elemento se sale de su contenedor. Pasaba en el
+   buscador de proveedores y en los campos de fecha/hora de Ausencias: los dos
+   se veían cortados del lado derecho.
+
+   El valor por defecto de CSS (`content-box`) hace que casi todo `width: 100%`
+   con padding sea un bug esperando. Es el reset que hace el 99% de las
+   librerías y lo que espera cualquiera que lea el CSS después. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* `margin: 0` y no el de 8px que pone el navegador, Y NO POR PROLIJO: por el navbar.
+ *
+ * El navbar es `position: sticky; top: 0`, así que con el margen del body quedaba
+ * con un escalón, en dos posiciones distintas según el scroll:
+ *
+ *   sin scroll   y=8  → y=64    (el margen del body lo corría hacia abajo)
+ *   scrolleado   y=0  → y=56    (ya está pegado)
+ *
+ * Eso rompía lo que sea `position: fixed` con un `top` fijo abajo del navbar: los
+ * botones flotantes de la derecha del Dashboard quedan a `top: 64px`, así que sin
+ * scroll terminaban PEGADOS al navbar (terminaba en 64, el botón arrancaba en 64)
+ * y con scroll quedaban bien separados. Medido, era justo lo que se veía.
+ *
+ * La otra mitad del motivo es que el navbar no llegaba a los bordes: con una franja
+ * blanca de 8px a los costados y arriba, en cualquier pantalla.
+ *
+ * EL CONTENIDO DE LAS PÁGINAS NO SE MUEVE: cada pantalla tiene su propio
+ * `padding: 24px` (`.dashboard-page`, `.agenda-page`, `.caja-page`, los popups...), y
+ * eso ya estaba contando el padding. Lo único que cambia de lugar es el navbar, que
+ * es justo lo que se quería arreglar, y `--chrome-app` de arriba, que ya descuenta
+ * los 16px que dejaron de existir.
+ *
+ * Si algún día esto vuelve a tener margen, hay que revisar las dos pantallas que
+ * usan `100vh - var(--chrome-app)`: `.main-content` en app.html y `.agenda-page` en
+ * agenda.scss.
+ */
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Los controles de formulario NO heredan font-family del body (limitación
+   de HTML), por eso el texto de un <input> se veía con otra letra que el
+   de un <span> en la misma fila. */
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+}

@@ -1,0 +1,232 @@
+// ── EL POPUP: FONDO, TARJETA, HEADER Y BODY ─────────────────
+//
+// El "cascarón" de todos los formularios. Vive acá porque lo usan Caja (pago,
+// compra), Personas > Proveedores y el Dashboard.
+//
+// Faltaba, y no se notaba: Proveedores se había mudado de Caja copiando el
+// markup pero no los estilos, así que su popup salía sin fondo, sin centrado y
+// con el ✕ descolocado, pegado al final de la página en vez de encima. El
+// `.popup-acciones` sí se veía (venía de acá), lo que hace el fallo bastante
+// confuso: parecía medio roto.
+//
+// Los valores son los de Caja, que es el popup del que salió el de Proveedores.
+// Dashboard y Empleados tienen su propia versión (con la header dividida por una
+// línea) y NO los tocan: unificar esos tres es un cambio de aspecto de toda la
+// app, no un arreglo de un parcial.
+//
+// OJO: esto lo trae `@use '../../../styles/popup'` dentro del SCSS del
+// COMPONENTE, así que Angular le pone el `[_ngcontent-xxx]` de ese componente y
+// las reglas solo alcanzan a SU template. Por eso Dashboard y Empleados pueden
+// seguir con la suya sin que se pisen.
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.popup {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  .popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    h3 {
+      margin: 0;
+      font-size: 1rem;
+      color: #1e293b;
+    }
+  }
+  .popup-body {
+    padding: 20px;
+    // Con muchos campos (3 filas) el popup se pasa de alto en un celu; el body
+    // scrollea y el header queda fijo con el ✕ siempre alcanzable.
+    overflow-y: auto;
+  }
+  .btn-cerrar {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: #64748b;
+    padding: 4px 8px;
+    border-radius: 6px;
+    &:hover { background: #f1f5f9; }
+  }
+}
+// ── LA CAJITA DE LOS CAMPOS ──────────────────────────────────
+// La cajita gris con los campos de un formulario (`.form-caja`). La usan los
+// popups de Caja (pago y compra) y el de Proveedores.
+//
+// Estaba en `caja.scss` y se copió a `proveedores.scss` al mudarse el ABM. Dos
+// copias de un formulario garantizan que un día los labels de uno queden más
+// chicos que los del otro y nadie sepa cuál es el bueno.
+.form-caja {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 14px;
+  .fila {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .campo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+    flex: 1;
+    min-width: 160px;
+    label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #475569;
+    }
+    .opcional { font-weight: 400; color: #94a3b8; }
+    input, select {
+      padding: 9px 11px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-family: inherit;
+      &:focus {
+        outline: none;
+        border-color: #1d4ed8;
+        box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
+      }
+    }
+  }
+}
+// ── PIE DE POPUP: botones de guardar y cancelar ─────────────
+//
+// Shared por Dashboard (modal de Nuevo turno) y Caja (registrar pago, compra y
+// proveedor). Vive en un partial y no duplicado por la misma razón que el de los
+// acordeones: dos copias de estos valores se desincronizan y un día un popup
+// guarda en verde y el otro en azul sin que nadie lo haya tocado.
+//
+// Uso:  @use '../../../styles/popup';
+//
+// Por qué el guardar es verde y el cancelar es rojo (y no gris): en un popup de
+// alta las dos acciones son "salió bien" / "salí sin hacer nada", no una
+//jerarquía de primaria/secundaria. Cancelar en rojo evita que alguien lo lea
+// como "la otra opción".
+.popup-acciones {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px 20px;
+  button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    &:disabled { opacity: 0.6; cursor: default; }
+  }
+}
+.btn-atendido {
+  background: #dcfce7;
+  color: #166534;
+  &:hover:not(:disabled) { background: #bbf7d0; }
+}
+.btn-cancelado {
+  background: #fee2e2;
+  color: #991b1b;
+  &:hover:not(:disabled) { background: #fecaca; }
+}
+// El mensaje de error de un popup. Sin el ❌/⚠️: el texto ya dice qué pasó y el
+// prefijo doble queda como ruido.
+.error-msg {
+  color: #991b1b;
+  font-size: 0.85rem;
+  background: #fee2e2;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+// Botón azul principal. Vive acá porque los popups lo usan y cada pantalla
+// mantenía su propia copia.
+.btn-primary {
+  padding: 9px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #1d4ed8;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  &:hover:not(:disabled) { background: #1e40af; }
+  &:disabled { opacity: 0.6; cursor: default; }
+}
+
+// Boton gris con marco: el contrapeso del azul. Es el "Cancelar" de los
+// formularios y el "Agregar" de las pantallas que comparten sitio con un alta.
+.btn-secondary {
+  padding: 9px 14px;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled) { background: #e2e8f0; }
+  &:disabled { opacity: 0.6; cursor: default; }
+}
+
+// La fila de abajo de un formulario: "Editar", o "Guardar" + "Cancelar".
+//
+// Los tres botones son excluyentes por `*ngIf` sobre el MISMO flag de edicion, no
+// se ocultan por CSS: asi el template se lee de un vistazo y son tres estados, no
+// tres botones que a veces se pisan.
+//
+// `margin-top` y no `padding-top`: los campos de arriba ya traen su margen.
+.botones-edicion {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 16px;
+}
+
+// Botón chico y gris, el contrapeso de un botón azul.
+//
+// `.btn-secundario-sm` vive acá aunque su nombre diga "de popup", porque
+// Personas > Proveedores lo usa en el PANEL DE DETALLE (el "Inactivar" y el
+// "Reactivar"), no en un popup. Es un botón chico y gris, y este es el partial
+// donde viven los botones.
+//
+// Lo que sí se movió a `_buscador-crear.scss` es el combo de buscar-y-crear:
+// ese lo usan solo Dashboard y Caja, y dejarlo acá le costaba el budget de
+// estilo a los componentes que solo quieren el cascarón.
+.btn-secundario-sm {
+  padding: 6px 12px;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:hover { background: #e2e8f0; }
+}

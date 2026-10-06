@@ -1,0 +1,29 @@
+// Shell de "Personas". Es solo la barra de pestañas y el panel: cada pantalla
+// hija trae su propio estilo (`.clientes-page`, `.empleados-page`,
+// `.proveedores-page`). Acá no se redefine nada de ellas.
+//
+// El `@use` tiene que estar ARRIBA de todo: Sass exige que las directivas `@use`
+// precedan a cualquier otra regla.
+@use '../../../styles/tabs';
+
+.personas-page {
+  min-height: calc(100vh - 56px);
+}
+
+// El partial `_tabs.scss` trae el ESTILO de la barra. Acá va solo el espacio que
+// la rodea, que es distinto en cada pantalla (Caja lo tiene en `.caja-page`).
+.tabs-personas {
+  padding: 12px 24px 0;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.tab-panel {
+  background: white;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+@media (max-width: 700px) {
+  .tabs-personas { padding: 10px 14px 0; }
+}

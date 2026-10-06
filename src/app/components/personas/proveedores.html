@@ -1,0 +1,233 @@
+<!--
+  ABM de proveedores. Se mudó desde la pestaña "Proveedores" de Caja: el alta,
+  la edición, el inactivado y el buscador son fichas de persona, no plata. En
+  Caja quedó lo que sí es plata (las compras y su total).
+
+  LA LISTA ES LA DE EMPLEADOS, Tal cual: avatar con la inicial, nombre en
+  negrita, el dato de contacto abajo, el badge Activo/Inactivo y el chevron.
+  No hay lápiz ni tache en la fila a propósito: se edita haciendo click, y el
+  inactivar es una acción destructiva que va adentro del panel, donde está la
+  confirmación. Con los dos íconos la lista parecía una grilla de acciones y no
+  una lista de personas.
+
+  LA EDICIÓN ES EL PANEL DE DETALLE, no un popup, y con UN botón "Editar" para
+  todo el bloque (como Configuración > General), no un lápiz por campo: cuatro
+  lápices encolumna son cuatro cosas que se pueden editar sin querer, y el que
+  se editaba de verdad quedaba sin destino claro.
+
+  Los estilos vienen de `_lista.scss`, `_detalle.scss` y `_popup.scss`.
+-->
+<div class="proveedores-page">
+
+  <div class="layout" [class.con-detalle]="proveedorSeleccionado">
+
+    <!-- LISTA -->
+    <div class="seccion lista-seccion">
+      <div class="seccion-header">
+        <span class="badge-count">Total: {{ proveedoresFiltrados.length }}</span>
+        <button class="btn-primary" (click)="abrirFormProveedor()">
+          ➕ Nuevo
+        </button>
+      </div>
+
+      <input type="text" class="buscador" [(ngModel)]="busquedaProveedor"
+             placeholder="🔍 Buscar por nombre..." />
+
+      <div *ngIf="cargando" class="vacio">Cargando...</div>
+
+      <div *ngIf="!cargando && proveedores.length === 0" class="vacio">
+        Todavía no hay proveedores
+      </div>
+
+      <div *ngIf="!cargando && proveedores.length > 0 && proveedoresFiltrados.length === 0" class="vacio">
+        Ningún proveedor coincide con "{{ busquedaProveedor }}"
+      </div>
+
+      <!--
+        `role="button"` + `tabindex` + los dos handlers de teclado: el item es
+        un botón de hecho y sin esto no se puede llegar con el teclado ni con un
+        lector de pantalla. Es el mismo contrato que la lista de Empleados.
+      -->
+      <div class="lista">
+        <div *ngFor="let p of proveedoresFiltrados"
+             class="item"
+             [class.activo]="proveedorSeleccionado?.id === p.id"
+             [class.inactivo]="!p.activo"
+             role="button"
+             tabindex="0"
+             (click)="seleccionarProveedor(p)"
+             (keydown.enter)="seleccionarProveedor(p)"
+             (keydown.space)="seleccionarProveedor(p); $event.preventDefault()">
+
+          <div class="avatar">{{ p.nombre?.charAt(0)?.toUpperCase() }}</div>
+
+          <div class="info">
+            <div class="nombre">{{ p.nombre }}</div>
+            <!--
+              El contacto y el teléfono van en la misma línea separados por un
+              punto. Siempre los dos: si el contacto falta queda solo el
+              teléfono y la línea se ve descuadrada hacia el medio.
+            -->
+            <div class="sub">
+              <span *ngIf="p.contacto">{{ p.contacto }}</span>
+              <span *ngIf="p.contacto && p.telefono"> · </span>
+              <span *ngIf="p.telefono">{{ p.telefono }}</span>
+              <span *ngIf="!p.contacto && !p.telefono">Sin datos de contacto</span>
+            </div>
+          </div>
+
+          <div class="estado-badge" [class.inactivo]="!p.activo">
+            {{ p.activo ? 'Activo' : 'Inactivo' }}
+          </div>
+
+          <!--
+            El chevron es decorativo: el ⌨ de Enter y Espacio ya abren el detalle,
+            asi que el "role=button" no tiene que anunciar nada extra.
+          -->
+          <div class="arrow" aria-hidden="true">›</div>
+        </div>
+      </div>
+    </div><!-- /.lista-seccion -->
+
+    <!-- DETALLE -->
+    <div *ngIf="proveedorSeleccionado" class="seccion detalle-seccion">
+
+      <!--
+        Los mensajes viven ACÁ y no en la página: el detalle es lo que se está
+        mirando, y un mensaje que aparece arriba de la pantalla, a la izquierda
+        de donde estás mirando, no se ve.
+      -->
+      <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
+      <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
+
+      <div class="seccion-header">
+        <h3>Detalle del proveedor</h3>
+        <button class="btn-cerrar" (click)="cerrarDetalle()" title="Cerrar"
+                aria-label="Cerrar detalle">✕</button>
+      </div>
+
+      <!--
+        Un `*ngFor` sobre `CAMPOS` en vez de cuatro bloques a mano: son los
+        mismos cuatro campos siempre y cuatro copias del mismo markup son
+        cuatro lugares donde se puede olvidar algo.
+      -->
+      <div class="datos-campos">
+        <div *ngFor="let c of CAMPOS" class="campo-editable">
+          <label class="label-campo">{{ c.label }}</label>
+          <input type="text" class="input-nombre"
+                 [(ngModel)]="proveedorSeleccionado[c.clave]"
+                 [attr.placeholder]="c.placeholder || '—'"
+                 [readonly]="!proveedorSeleccionado.editando"
+                 [attr.aria-label]="c.label" />
+        </div>
+      </div>
+
+      <!--
+        UN botón para todo el bloque, como en Configuración > General. Antes
+        había un lápiz por campo: cuatro lápices encolumna parecen cuatro
+        acciones y el que se editaba de verdad quedaba sin destino claro.
+
+        Los tres botones son excluyentes (`*ngIf` sobre el mismo `editando`), no
+        se ocultan por CSS: en el template se lee de un vistazo que son tres
+        estados y no tres botones que a veces se pisan.
+      -->
+      <div class="botones-edicion">
+        <button *ngIf="!proveedorSeleccionado.editando" class="btn-primary"
+                (click)="editarProveedor()">
+          ✏️ Editar
+        </button>
+
+        <button *ngIf="proveedorSeleccionado.editando" class="btn-primary"
+                [disabled]="proveedorSeleccionado.guardandoCampo"
+                (click)="guardarProveedor()">
+          {{ proveedorSeleccionado.guardandoCampo ? 'Guardando...' : '💾 Guardar' }}
+        </button>
+
+        <button *ngIf="proveedorSeleccionado.editando" class="btn-secondary"
+                [disabled]="proveedorSeleccionado.guardandoCampo"
+                (click)="cancelarEdicion()">
+          ↩️ Cancelar
+        </button>
+      </div>
+
+      <!--
+        El estado y el inactivar van DEBAJO de los botones, con un borde arriba:
+        son otra cosa (el estado del registro), no parte del formulario. Si van
+        arriba, se lee "este proveedor está en edición".
+      -->
+      <div class="detalle-acciones">
+        <span class="estado-badge" [class.inactivo]="!proveedorSeleccionado.activo">
+          {{ proveedorSeleccionado.activo ? 'Activo' : 'Inactivo' }}
+        </span>
+
+        <button *ngIf="proveedorSeleccionado.activo" class="btn-secundario-sm"
+                [disabled]="proveedorSeleccionado.editando"
+                (click)="inactivarProveedor(proveedorSeleccionado)">
+          🚫 Inactivar
+        </button>
+        <button *ngIf="!proveedorSeleccionado.activo" class="btn-secundario-sm"
+                [disabled]="proveedorSeleccionado.editando"
+                (click)="reactivarProveedor(proveedorSeleccionado)">
+          ♻️ Reactivar
+        </button>
+      </div>
+
+      <p class="nota-ayuda">
+        Inactivar no borra: las deudas ya registradas siguen apuntando a este
+        proveedor. Reactivarlo lo vuelve a ofrecer en el popup de "Nueva deuda"
+        de Caja.
+      </p>
+    </div><!-- /.detalle-seccion -->
+
+  </div><!-- /.layout -->
+
+</div><!-- /.proveedores-page -->
+
+<!-- POPUP: ALTA (la edición va en el panel de detalle, no acá) -->
+<div *ngIf="mostrarFormProveedor" class="popup-overlay" (click)="cerrarFormProveedor()">
+  <div class="popup" (click)="$event.stopPropagation()">
+    <div class="popup-header">
+      <h3>➕ Nuevo proveedor</h3>
+      <button class="btn-cerrar" (click)="cerrarFormProveedor()">✕</button>
+    </div>
+
+    <div class="popup-body">
+      <div *ngIf="mensajeError" class="error-msg">{{ mensajeError }}</div>
+
+      <div class="form-caja">
+        <div class="campo">
+          <label>Nombre</label>
+          <input type="text" [(ngModel)]="nuevoProveedor.nombre"
+                 placeholder="Ej: Químicas del Sur" (ngModelChange)="mensajeError = ''" />
+        </div>
+        <div class="fila">
+          <div class="campo">
+            <label>Contacto</label>
+            <input type="text" [(ngModel)]="nuevoProveedor.contacto"
+                   placeholder="Quién atiende" (ngModelChange)="mensajeError = ''" />
+          </div>
+          <div class="campo">
+            <label>Teléfono</label>
+            <input type="text" [(ngModel)]="nuevoProveedor.telefono" (ngModelChange)="mensajeError = ''" />
+          </div>
+        </div>
+        <div class="campo">
+          <label>Domicilio</label>
+          <input type="text" [(ngModel)]="nuevoProveedor.domicilio"
+                 placeholder="Ej: Av. Corrientes 1234" (ngModelChange)="mensajeError = ''" />
+        </div>
+        <div class="campo">
+          <label>Notas <span class="opcional">(opcional)</span></label>
+          <input type="text" [(ngModel)]="nuevoProveedor.notas" (ngModelChange)="mensajeError = ''" />
+        </div>
+      </div>
+    </div>
+
+    <div class="popup-acciones">
+      <button class="btn-atendido" [disabled]="guardando" (click)="guardarNuevo()">
+        {{ guardando ? 'Guardando...' : '💾 Guardar proveedor' }}
+      </button>
+      <button class="btn-cancelado" (click)="cerrarFormProveedor()">↩️ Cancelar</button>
+    </div>
+  </div>
+</div>

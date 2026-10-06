@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
 import { AuthService } from '../../services/auth';
+import { paraComparar } from '../../utils/texto';
 
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -16,15 +17,97 @@ const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Vier
 export class ConfiguracionComponent implements OnInit {
 
   // Acordeones
+  // (acordeonPuestos se fue con la tabla `puestos`, migracion 011)
   acordeonDatos = true;
   acordeonHorarios = false;
   acordeonServicios = false;
   acordeonPassword = false;
 
+  // ── PUESTOS DE TRABAJO: RETIRADO ────────────────────────────
+  //
+  // La agenda ya no usa puestos: cada columna es un EMPLEADO. La tabla
+  // `puestos` se borra en la migracion 011, junto con esta seccion.
+  //
+  // Todo lo de abajo quedo comentado para poder consultarlo si hace falta.
+  // Nota: dentro de los bloques comentados NO puede haber `*/` (cierra antes de
+  // tiempo), por eso los JSDoc internos se pasaron a comentarios `//`.
+
+  // Los 7 campos de la seccion de Puestos (puestos, empleadosActivos,
+  // mensajePuestos, mensajeErrorPuestos, guardandoPuestos, mostrarFormPuesto,
+  // nuevoPuesto) se eliminaron: el HTML los dejo de referenciar. Los metodos
+  // quedaron comentados mas abajo, entre bloques /* */.
+
+  // Puestos activos que tienen un empleado activo y por lo tanto se pueden agendar.
+  // (RETIRADO con los puestos)
+  /*
+  get puestosAgendables(): number {
+    return this.puestos.filter((p: any) => this.puestoAgendable(p)).length;
+  }
+  */
+
+  /* RETIRADO con los puestos (ver bloque de metodos al final del archivo).
+  puestoAgendable(p: any): boolean {
+    if (!p?.activo) return false;
+    if (!p.empleado_id) return false;
+    if (p.empleado && p.empleado.activo === false) return false;
+    return true;
+  }
+
+  // Empleados ya asignados a otro puesto (para no ofrecerlos dos veces).
+  empleadoEnOtroPuesto(empleadoId: number, excluirPuestoId?: number): boolean {
+    return this.puestos.some(
+      (p: any) => p.empleado_id === empleadoId && p.activo && p.id !== excluirPuestoId
+    );
+  }
+
+  // Nombre del empleado asignado al puesto (columna de solo lectura).
+  nombreEmpleadoDePuesto(puesto: any): string {
+    return puesto?.empleado?.nombre || '— Sin asignar —';
+  }
+
+  // Normaliza nombres para comparar: sin mayusculas, sin espacios de sobra.
+  private normNombre(nombre: string): string {
+    return (nombre || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  // Ya existe otro puesto con ese nombre? La base tambien lo bloquea (indice unico).
+  nombrePuestoDuplicado(nombre: string, excluirPuestoId?: number): boolean {
+    const n = this.normNombre(nombre);
+    if (!n) return false;
+    return this.puestos.some(
+      (p: any) => p.id !== excluirPuestoId && this.normNombre(p.nombre) === n
+    );
+  }
+
+  // Traduce errores de la base a algo entendible.
+  private errorPuesto(e: any): string {
+    const code = e?.code || '';
+    const msg = String(e?.message || '');
+    if (code === '23505' || /duplicate key|unique/i.test(msg)) {
+      return '❌ Ya existe un puesto con ese nombre. Usá otro nombre.';
+    }
+    if (/row-level security/i.test(msg)) {
+      return '❌ No tenés permiso para modificar los puestos.';
+    }
+    return `❌ ${msg || 'No se pudo guardar el puesto'}`;
+  }
+
+  get avisosPuestos(): string[] {
+    const out: string[] = [];
+    const sinGente = this.puestos.filter((p: any) => p.activo && !this.puestoAgendable(p));
+    if (sinGente.length) {
+      out.push(`${sinGente.length} de ${this.puestos.filter((p: any) => p.activo).length} puestos activos sin empleado: no se pueden agendar.`);
+    }
+    if (this.puestosAgendables === 0 && this.puestos.some((p: any) => p.activo)) {
+      out.push('Ningún puesto tiene empleado asignado: no se pueden recibir turnos.');
+    }
+    return out;
+  }
+  */
+
   // Datos del negocio
   nombreNegocio = '';
   descripcion = '';
-  puestosXTurno = 1;
   editandoDatos = false;
   guardando = false;
   mensajeDatos = '';
@@ -87,7 +170,7 @@ export class ConfiguracionComponent implements OnInit {
     const config = await this.supabase.getConfiguracion();
     this.nombreNegocio = config.find((c: any) => c.clave === 'nombre_negocio')?.valor || '';
     this.descripcion = config.find((c: any) => c.clave === 'descripcion')?.valor || '';
-    this.puestosXTurno = parseInt(config.find((c: any) => c.clave === 'puestos_por_turno')?.valor) || 1;
+
     this.horasLimiteCancelacion = parseInt(config.find((c: any) => c.clave === 'horas_limite_cancelacion')?.valor) || 12;
     this.recordatorioCuando = config.find((c: any) => c.clave === 'recordatorio_cuando')?.valor || 'dia_anterior';
     this.recordatorioHora = config.find((c: any) => c.clave === 'recordatorio_hora')?.valor || '08:00';
@@ -103,15 +186,148 @@ export class ConfiguracionComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
+  // ── PUESTOS DE TRABAJO: RETIRADO ────────────────────────────
+  //
+  // Seccion completa comentada. La agenda ya no usa puestos: cada columna es
+  // un EMPLEADO. Los empleados se administran en la pantalla Empleados y los
+  // servicios/metodos/horarios/dias cerrados siguen abajo sin cambios.
+  //
+  // La tabla `puestos` se borra en la migracion 011.
+  //
+  /*
+  async cargarPuestos() {
+    this.puestos = await this.supabase.getPuestos();
+    this.empleadosActivos = await this.supabase.getEmpleados();
+    this.cdr.detectChanges();
+  }
+
+  async agregarPuesto() {
+    if (this.guardandoPuestos) return;
+    this.mensajeErrorPuestos = '';
+    this.mensajePuestos = '';
+    const nombre = (this.nuevoPuesto.nombre || '').trim();
+    if (!nombre) {
+      this.mensajeErrorPuestos = '❌ Ingresá un nombre.';
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.nombrePuestoDuplicado(nombre)) {
+      this.mensajeErrorPuestos = `❌ Ya existe un puesto llamado "${nombre}".`;
+      this.cdr.detectChanges();
+      return;
+    }
+    const empId = this.nuevoPuesto.empleado_id ? Number(this.nuevoPuesto.empleado_id) : null;
+    if (empId && this.empleadoEnOtroPuesto(empId)) {
+      this.mensajeErrorPuestos = '❌ Ese empleado ya está asignado a otro puesto.';
+      this.cdr.detectChanges();
+      return;
+    }
+    this.guardandoPuestos = true;
+    this.cdr.detectChanges();
+    try {
+      await this.supabase.crearPuesto({
+        nombre,
+        empleado_id: empId,
+        orden: this.puestos.length,
+      });
+      this.nuevoPuesto = { nombre: '', empleado_id: null };
+      this.mostrarFormPuesto = false;
+      await this.cargarPuestos();
+      this.mostrarMensaje(`✅ "${nombre}" agregado.`, 'puestos');
+    } catch (e: any) {
+      this.mensajeErrorPuestos = this.errorPuesto(e);
+    } finally {
+      this.guardandoPuestos = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async togglePuesto(puesto: any) {
+    if (puesto.guardando) return;
+    this.mensajeErrorPuestos = '';
+    try {
+      const nuevoActivo = !puesto.activo;
+      // Al activar sin empleado sigue visible pero no agendable.
+      await this.supabase.actualizarPuesto(puesto.id, {
+        activo: nuevoActivo,
+        empleado_id: nuevoActivo ? puesto.empleado_id : null,
+      });
+      await this.cargarPuestos();
+      this.mostrarMensaje(nuevoActivo ? '✅ Puesto activado.' : '✅ Puesto desactivado.', 'puestos');
+    } catch (e: any) {
+      this.mensajeErrorPuestos = `❌ ${e.message || 'Error'}`;
+    }
+  }
+
+  cancelarPuesto(puesto: any) {
+    puesto.nombre = puesto._nombreOrig ?? puesto.nombre;
+    puesto.empleado_id = puesto._empleadoOrig ?? puesto.empleado_id;
+    puesto.editando = false;
+    this.mensajeErrorPuestos = '';
+  }
+
+  // Baja logica: el puesto se desactiva, no se borra (preserva el historico).
+  async eliminarPuesto(puesto: any) {
+    if (!confirm(
+      `¿Desactivar "${puesto.nombre}"?\n\nNo se borra: los turnos que ya lo usaron siguen guardados. ` +
+      `Lo podés volver a activar cuando quieras.`
+    )) return;
+    this.mensajeErrorPuestos = '';
+    try {
+      await this.supabase.desactivarPuesto(puesto.id);
+      await this.cargarPuestos();
+      this.mostrarMensaje('✅ Puesto desactivado.', 'puestos');
+    } catch (e: any) {
+      this.mensajeErrorPuestos = `❌ ${e.message || 'Error'}`;
+    }
+  }
+
+  async guardarPuesto(puesto: any) {
+    if (puesto.guardando) return;   // evita el doble envio del mismo click
+    this.mensajeErrorPuestos = '';
+    this.mensajePuestos = '';
+
+    const nombre = (puesto.nombre || '').trim();
+    if (!nombre) {
+      this.mensajeErrorPuestos = '❌ El puesto necesita un nombre.';
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.nombrePuestoDuplicado(nombre, puesto.id)) {
+      this.mensajeErrorPuestos = `❌ Ya existe un puesto llamado "${nombre}".`;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (puesto.empleado_id && this.empleadoEnOtroPuesto(puesto.empleado_id, puesto.id)) {
+      this.mensajeErrorPuestos = '❌ Ese empleado ya está asignado a otro puesto.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    puesto.guardando = true;
+    this.cdr.detectChanges();
+    try {
+      await this.supabase.actualizarPuesto(puesto.id, {
+        nombre,
+        empleado_id: puesto.empleado_id ? Number(puesto.empleado_id) : null,
+      });
+      puesto.editando = false;
+      puesto.guardando = false;
+      // El guardado ya esta: si falla la recarga no se pierde el cambio.
+      try { await this.cargarPuestos(); } catch { }   // si falla la recarga, no se pierde el cambio
+      this.mostrarMensaje(`✅ "${nombre}" guardado.`, 'puestos');
+    } catch (e: any) {
+      puesto.guardando = false;
+      this.mensajeErrorPuestos = this.errorPuesto(e);
+      this.cdr.detectChanges();
+    }
+  }
+  */
+
   // ── DATOS DEL NEGOCIO ──────────────────────────────────────
 
   async guardarConfiguracion() {
     this.mensajeDatos = '';
-    if (this.puestosXTurno < 1 || this.puestosXTurno > 3 || !Number.isInteger(this.puestosXTurno)) {
-      this.mensajeErrorDatos = '❌ Los puestos por turno deben ser un número entre 1 y 3.';
-      this.cdr.detectChanges();
-      return;
-    }
     if (this.horasLimiteCancelacion < 1 || this.horasLimiteCancelacion > 48 || !Number.isInteger(this.horasLimiteCancelacion)) {
       this.mensajeErrorDatos = '❌ El límite de cancelación debe ser entre 1 y 48 horas.';
       this.cdr.detectChanges();
@@ -121,7 +337,6 @@ export class ConfiguracionComponent implements OnInit {
     try {
       await this.supabase.upsertConfiguracion('nombre_negocio', this.nombreNegocio);
       await this.supabase.upsertConfiguracion('descripcion', this.descripcion);
-      await this.supabase.upsertConfiguracion('puestos_por_turno', String(this.puestosXTurno));
       await this.supabase.upsertConfiguracion('horas_limite_cancelacion', String(this.horasLimiteCancelacion));
       await this.supabase.upsertConfiguracion('recordatorio_cuando', this.recordatorioCuando);
       await this.supabase.upsertConfiguracion('recordatorio_hora', this.recordatorioHora);
@@ -164,7 +379,7 @@ export class ConfiguracionComponent implements OnInit {
       this.diasCerrados.sort((a, b) => a.fecha.localeCompare(b.fecha));
       this.mostrarFormDiaCerrado = false;
       this.nuevoDiaCerrado = { fecha: '', fecha_hasta: '', motivo: '' };
-      this.mostrarMensaje('✅ Día/período de cierre agregado.', 'diasCerrados' as any);
+      this.mostrarMensaje('✅ Día/período de cierre agregado.', 'diasCerrados');
     } catch (e) {
       this.mensajeErrorDiasCerrados = '❌ Error al agregar.';
       this.cdr.detectChanges();
@@ -184,6 +399,7 @@ export class ConfiguracionComponent implements OnInit {
   }
 
   async guardarDiaCerrado(dia: any) {
+    if (dia.guardando) return;
     this.mensajeErrorDiasCerrados = '';
     if (!dia.fecha) {
       this.mensajeErrorDiasCerrados = '❌ La fecha es obligatoria.';
@@ -195,11 +411,15 @@ export class ConfiguracionComponent implements OnInit {
       this.cdr.detectChanges();
       return;
     }
+    dia.guardando = true;
+    this.cdr.detectChanges();
     try {
       await this.supabase.updateDiasCerrados(dia.id, dia.fecha, dia.fecha_hasta || null, dia.motivo);
       dia.editando = false;
-      this.mostrarMensaje('✅ Día/período actualizado.', 'diasCerrados' as any);
+      dia.guardando = false;
+      this.mostrarMensaje('✅ Día/período actualizado.', 'diasCerrados');
     } catch (e) {
+      dia.guardando = false;
       this.mensajeErrorDiasCerrados = '❌ Error al actualizar.';
       this.cdr.detectChanges();
     }
@@ -234,6 +454,7 @@ export class ConfiguracionComponent implements OnInit {
   }
 
   async toggleHorario(horario: any) {
+    if (horario.guardando) return;   // dos clicks rapidos = el ! se aplicaba dos veces
     this.mensajeErrorHorarios = '';
     const nuevoEstado = !horario.activo;
     if (nuevoEstado) {
@@ -243,9 +464,18 @@ export class ConfiguracionComponent implements OnInit {
         return;
       }
     }
+    horario.guardando = true;
     horario.activo = nuevoEstado;
-    await this.supabase.updateHorario(horario.id, { activo: horario.activo });
     this.cdr.detectChanges();
+    try {
+      await this.supabase.updateHorario(horario.id, { activo: horario.activo });
+    } catch (e) {
+      horario.activo = !nuevoEstado;   // revertir para no mentirle al usuario
+      this.mensajeErrorHorarios = '❌ No se pudo actualizar.';
+    } finally {
+      horario.guardando = false;
+      this.cdr.detectChanges();
+    }
   }
 
   toggleFormHorario() {
@@ -257,15 +487,19 @@ export class ConfiguracionComponent implements OnInit {
   }
 
   async guardarHorario(horario: any) {
+    if (horario.guardando) return;
     this.mensajeErrorHorarios = '';
     if (!this.validarHorario(horario.hora_inicio, horario.hora_fin)) {
       this.mensajeErrorHorarios = '❌ La hora de inicio debe ser menor que la hora de fin.';
       this.cdr.detectChanges();
       return;
     }
+    horario.guardando = true;
+    this.cdr.detectChanges();
     try {
       const horariosDB = await this.supabase.getHorarios();
       if (this.seSuperpone(horario, horariosDB)) {
+        horario.guardando = false;
         this.mensajeErrorHorarios = '⚠️ El rango horario se superpone con otro activo existente.';
         this.cdr.detectChanges();
         return;
@@ -282,8 +516,10 @@ export class ConfiguracionComponent implements OnInit {
       horario.hora_inicio = horaInicioNorm;
       horario.hora_fin = horaFinNorm;
       horario.editando = false;
+      horario.guardando = false;
       this.mostrarMensaje('✅ Horario actualizado.', 'horarios');
     } catch (e) {
+      horario.guardando = false;
       this.mensajeErrorHorarios = '❌ Error al actualizar el horario.';
       this.cdr.detectChanges();
     }
@@ -362,16 +598,23 @@ export class ConfiguracionComponent implements OnInit {
   // ── SERVICIOS ──────────────────────────────────────────────
 
   async guardarServicio(servicio: any) {
+    if (servicio.guardando) return;
     this.mensajeErrorServicios = '';
+    servicio.guardando = true;
+    this.cdr.detectChanges();
     try {
       const servicios = await this.supabase.getServicios();
+      // `paraComparar` y no `trim().toLowerCase()`: con trim solo, "Lavado
+      //  Simple" (doble espacio) pasaba como un servicio NUEVO y quedaban dos
+      // filas que en pantalla se ven idénticas.
       const exist = servicios.some(
         (s: any) =>
-          s.nombre.trim().toLowerCase() === servicio.nombre.trim().toLowerCase() &&
+          paraComparar(s.nombre) === paraComparar(servicio.nombre) &&
           s.id !== servicio.id
       );
 
       if (exist) {
+        servicio.guardando = false;
         this.mensajeErrorServicios = '⚠️ Ya existe un servicio con ese nombre.';
         this.cdr.detectChanges();
         return;
@@ -384,17 +627,30 @@ export class ConfiguracionComponent implements OnInit {
         activo: servicio.activo
       });
       servicio.editando = false;
+      servicio.guardando = false;
       this.mostrarMensaje('✅ Servicio actualizado.', 'servicios');
     } catch (e) {
+      servicio.guardando = false;
       this.mensajeErrorServicios = '❌ Error al actualizar el servicio.';
       this.cdr.detectChanges();
     }
   }
 
   async toggleServicio(servicio: any) {
-    servicio.activo = !servicio.activo;
-    await this.supabase.updateServicio(servicio.id, { activo: servicio.activo });
+    if (servicio.guardando) return;
+    const nuevoEstado = !servicio.activo;
+    servicio.guardando = true;
+    servicio.activo = nuevoEstado;
     this.cdr.detectChanges();
+    try {
+      await this.supabase.updateServicio(servicio.id, { activo: nuevoEstado });
+    } catch (e) {
+      servicio.activo = !nuevoEstado;
+      this.mensajeErrorServicios = '❌ No se pudo actualizar.';
+    } finally {
+      servicio.guardando = false;
+      this.cdr.detectChanges();
+    }
   }
 
   toggleFormServicio() {
@@ -416,7 +672,7 @@ export class ConfiguracionComponent implements OnInit {
       const servicios = await this.supabase.getServicios();
       const exist = servicios.some(
         (s: any) =>
-          s.nombre.trim().toLowerCase() === this.nuevoServicio.nombre.trim().toLowerCase() &&
+          paraComparar(s.nombre) === paraComparar(this.nuevoServicio.nombre) &&
           s.id !== this.nuevoServicio.id
       );
 
@@ -456,7 +712,7 @@ export class ConfiguracionComponent implements OnInit {
     this.mensajeErrorServicios = '';
   }
 
-    // ── METODOS DE PAGO ──────────────────────────────────────────────
+  // ── METODOS DE PAGO ───────────────────────────────────────
 
   async agregarMetodoPago() {
     this.mensajeErrorMetodosPago = '';
@@ -481,6 +737,9 @@ export class ConfiguracionComponent implements OnInit {
   }
 
   async guardarMetodoPago(metodo: any) {
+    if (metodo.guardando) return;
+    metodo.guardando = true;
+    this.cdr.detectChanges();
     try {
       await this.supabase.updateMetodoPago(metodo.id, {
         nombre: metodo.nombre,
@@ -488,8 +747,10 @@ export class ConfiguracionComponent implements OnInit {
         activo: metodo.activo
       });
       metodo.editando = false;
+      metodo.guardando = false;
       this.mostrarMensaje('✅ Método actualizado.', 'metodosPago');
     } catch (e) {
+      metodo.guardando = false;
       this.mensajeErrorMetodosPago = '❌ Error al actualizar.';
       this.cdr.detectChanges();
     }
@@ -503,9 +764,20 @@ export class ConfiguracionComponent implements OnInit {
   }
 
   async toggleMetodoPago(metodo: any) {
-    metodo.activo = !metodo.activo;
-    await this.supabase.updateMetodoPago(metodo.id, { activo: metodo.activo });
+    if (metodo.guardando) return;
+    const nuevoEstado = !metodo.activo;
+    metodo.guardando = true;
+    metodo.activo = nuevoEstado;
     this.cdr.detectChanges();
+    try {
+      await this.supabase.updateMetodoPago(metodo.id, { activo: nuevoEstado });
+    } catch (e) {
+      metodo.activo = !nuevoEstado;
+      this.mensajeErrorMetodosPago = '❌ No se pudo actualizar.';
+    } finally {
+      metodo.guardando = false;
+      this.cdr.detectChanges();
+    }
   }
 
   async eliminarMetodoPago(id: number) {
@@ -578,7 +850,10 @@ export class ConfiguracionComponent implements OnInit {
       this.passwordActual = '';
       this.passwordNueva = '';
       this.passwordRepetir = '';
-      this.mensajePassword = `✅ Contraseña cambiada. Te quedan ${2 - this.cambiosHoy} cambio(s) hoy.`;
+      // Siempre queda 1: esta linea solo se alcanza cuando `cambiosHoy` es 0 o
+      // 1 (con 2 ya se bloquea arriba). El mensaje era "Te quedan 1 cambio(s)",
+      // a medio hacer. No hay rama plural porque no hay caso que la alcance.
+      this.mensajePassword = '✅ Contraseña cambiada. Te queda 1 cambio hoy.';
       setTimeout(() => { this.mensajePassword = ''; this.cdr.detectChanges(); }, 3000);
     } catch (e) {
       this.mensajeErrorPassword = '❌ Error al cambiar la contraseña.';
@@ -589,6 +864,9 @@ export class ConfiguracionComponent implements OnInit {
 
   // ── UTILS ──────────────────────────────────────────────────
 
+  // La rama 'puestos' se elimino junto con la seccion (migracion 011). Si alguna
+  // vez vuelve a hacer falta, hay que reponer tambien mensajePuestos y
+  // mensajeErrorPuestos, que se fueron con ella.
   mostrarMensaje(msg: string, seccion: 'datos' | 'horarios' | 'servicios' | 'diasCerrados' | 'metodosPago') {
     if (seccion === 'datos') { this.mensajeDatos = msg; this.mensajeErrorDatos = ''; }
     else if (seccion === 'horarios') { this.mensajeHorarios = msg; this.mensajeErrorHorarios = ''; }

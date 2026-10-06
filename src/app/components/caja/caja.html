@@ -1,0 +1,1040 @@
+<div class="caja-page">
+
+  <!-- Controles -->
+  <div class="controles">
+    <div class="vistas">
+      <button [class.activo]="vista === 'dia'" (click)="cambiarVista('dia')">📅 Día</button>
+      <!--
+        La semana se agregó porque el bloque de pagos a empleados vive a
+        quincena: con solo Día y Mes no había forma de mirar "cómo viene la
+        segunda quincena" sin caer a un día y sumar quince a mano.
+      -->
+      <button [class.activo]="vista === 'semana'" (click)="cambiarVista('semana')">🗓️ Semana</button>
+      <button [class.activo]="vista === 'mes'" (click)="cambiarVista('mes')">📆 Mes</button>
+    </div>
+    <div class="navegacion">
+      <button class="btn-nav" (click)="navegar(-1)">‹</button>
+      <button class="btn-hoy" (click)="irHoy()">{{ vista === 'dia' ? 'Hoy' : 'Actual' }}</button>
+      <button class="btn-nav" (click)="navegar(1)">›</button>
+      <!--
+        Ir a una fecha cualquiera. Mismo truco que Dashboard y Agenda: un
+        `<input type="date">` TRANSPARENTE encima de un botón con el ícono, y que
+        sea el navegador el que abra su calendario. Sin `showPicker()` ni
+        JavaScript.
+
+        El input va con `[value]` y NO con `[(ngModel)]` a propósito: el valor
+        cambia SOLO cuando el usuario elige una fecha, y no cuando se navega con
+        los `<`/`>` o se aprieta "Actual". Con `ngModel` el input reescribía su
+        propio valor en cada cambio de estado y el calendario abría en el día que
+        se estaba mirando en vez del que el usuario acababa de elegir.
+
+        El `[value]` es el `AAAA-MM-DD` de HOY y no el de `fechaActual`, por la
+        misma razón: si se pone el de `fechaActual`, al elegir un día el `change`
+        dispara y el input se reescribe con la fecha nueva, que ya es la elegida.
+        Ir con el de hoy deja el input como "lo que elegí", que es lo que el
+        calendario tiene que mostrar.
+      -->
+      <span class="ir-a-fecha">
+        <span class="btn-nav btn-calendario" aria-hidden="true">📅</span>
+        <input type="date"
+               class="input-calendario"
+               [value]="hoyISO()"
+               (change)="irAFecha($any($event.target).value)"
+               aria-label="Ir a una fecha" />
+      </span>
+    </div>
+    <div class="fecha-titulo">{{ tituloFecha }}</div>
+  </div>
+  <!--
+    RESUMEN DE CAJA: tres TARJETAS fijas, arriba de las pestañas.
+
+    ESTÁN ANTES DE LAS PESTAÑAS Y DESPUÉS DE LOS CONTROLES a pedido del usuario:
+    los tres números son del PERÍODO, no de la pestaña. Si vivieran abajo de las
+    pestañas, al cambiar de pestaña parecería que cambian de valor, cuando lo
+    único que cambia es el detalle de abajo.
+
+    ── NINGÚN NÚMERO NEGATIVO ────────────────────────────────────────────────
+    Todo se muestra en positivo, sin `−`, y el color dice de quién es el dinero:
+
+      · verde = entra a la caja, o queda a tu favor
+      · rojo  = sale de la caja, o le debés a alguien
+
+    El `−$50.000` que había antes no significaba nada para quien lo leía: un
+    número negativo es una resta, no una salida de plata. Y el `−` en un cero
+    ("−$0") era directamente un error de forma: no hay nada que restar.
+
+    ── SIN FRASE DEBAJO ──────────────────────────────────────────────────────
+    Estas tres NO llevan la palabra de "Debo" / "A favor" que sí llevan los tres
+    cuadros de cada pestaña. La razón es que acá la frase sería FALSA:
+
+    "Pagos a empleados $50.000" con "Debo" debajo dice que debés 50.000, cuando
+    esos 50.000 ya los pagaste. No hay nada que debas. Es plata que YA SALIÓ, y
+    el rojo del cuadro ya lo dice; la palabra de abajo lo contradecía.
+
+    Y "Ingresos" con "Entró" al lado de un número que cambia según el período no
+    aporta nada: si el verde no alcanza para leer la etiqueta, el problema es el
+    nombre de la etiqueta, no que falte una palabra.
+
+    En las pestañas el cuadro se titula "Debe / Haber" y ahí la palabra SÍ hace
+    falta, porque el título no dice de qué lado está la plata.
+  -->
+  <div class="stats stats-resumen">
+    <div class="stat-card verde">
+      <div class="stat-icon">💰</div>
+      <div class="stat-info">
+        <span class="stat-label">Ingresos</span>
+        <span class="stat-value">${{ totalIngresos | number }}</span>
+        <span class="stat-nota stat-nota-vacia">&nbsp;</span>
+      </div>
+    </div>
+
+    <div class="stat-card rojo">
+      <div class="stat-icon">👷</div>
+      <div class="stat-info">
+        <span class="stat-label">Pagos a empleados</span>
+        <!-- Sin signo y sin frase, siempre. -->
+        <span class="stat-value">${{ totalPagadoEmpleados | number }}</span>
+        <span class="stat-nota stat-nota-vacia">&nbsp;</span>
+      </div>
+    </div>
+
+    <div class="stat-card" [ngClass]="totalPagadoProveedores > 0 ? 'rojo' : 'verde'">
+      <div class="stat-icon">🧾</div>
+      <div class="stat-info">
+        <!-- El nombre corto, y el número es lo PAGADO, no lo comprado. Comprar
+             no es pagar: si compraste y no abonaste, no debés nada. El detalle
+             de qué se compró y qué se pagó está en la pestaña Gastos. -->
+        <span class="stat-label">Gastos</span>
+        <span class="stat-value">${{ totalPagadoProveedores | number }}</span>
+        <span class="stat-nota stat-nota-vacia">&nbsp;</span>
+      </div>
+    </div>
+  </div>
+
+  <!--
+    El estilo de las pastitas NO es de este archivo: viene de `_tabs.scss`, el
+    mismo partial que usa Personas. `.tabs-caja` solo aporta el margen de abajo.
+  -->
+  <div class="tabs tabs-caja">
+    <button [class.activo]="tab === 'ingresos'" (click)="cambiarTab('ingresos')">
+      📈 Ingresos
+    </button>
+    <button [class.activo]="tab === 'empleados'" (click)="cambiarTab('empleados')">
+      👷 Empleados
+    </button>
+    <button [class.activo]="tab === 'gastos'" (click)="cambiarTab('gastos')">
+      💸 Gastos
+    </button>
+  </div>
+
+  <!-- ══════════ PESTAÑA 1: INGRESOS ══════════
+       Esta es la pantalla que antes se llamaba Ganancias, tal cual estaba. -->
+  <div *ngIf="esTab('ingresos')">
+
+  <!--
+    STATS DE LA PESTAÑA.
+
+    "Total ganancias" SE SACÓ: mostraba exactamente lo mismo que la tarjeta
+    "Ingresos" de arriba ($52.000 contra $52.000), y dos números iguales en dos
+    filas de la misma pantalla se leen como un error de cálculo.
+
+    El orden lo pidió el usuario: Turnos atendidos, Servicio más vendido y al
+    final Pago más usado. Los dos últimos son texto y pueden ser largos, así que
+    van juntos y no se parte la fila al medio.
+  -->
+  <div class="stats stats-ingresos">
+    <div class="stat-card azul">
+      <div class="stat-icon">✅</div>
+      <div class="stat-info">
+        <span class="stat-label">Turnos atendidos</span>
+        <span class="stat-value">{{ totalAtendidos }}</span>
+        <span class="stat-nota stat-nota-vacia">&nbsp;</span>
+      </div>
+    </div>
+    <div class="stat-card violeta">
+      <div class="stat-icon">⭐</div>
+      <div class="stat-info">
+        <span class="stat-label">Servicio más vendido</span>
+        <span class="stat-value stat-value-sm">{{ servicioMasVendido }}</span>
+        <span class="stat-nota stat-nota-vacia">&nbsp;</span>
+      </div>
+    </div>
+    <div class="stat-card naranja">
+      <div class="stat-icon">💳</div>
+      <div class="stat-info">
+        <span class="stat-label">Pago más usado</span>
+        <span class="stat-value stat-value-sm">{{ metodoPagoMasUsado }}</span>
+        <span class="stat-nota stat-nota-vacia">&nbsp;</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-inferior">
+
+    <!-- Gráfico -->
+    <div class="seccion">
+      <h3>{{ vista === 'dia' ? 'Ganancias por hora' : 'Ganancias por día' }}</h3>
+      <div *ngIf="cargando" class="vacio">Cargando...</div>
+      <div *ngIf="!cargando && totalAtendidos === 0" class="vacio">Sin datos para este período</div>
+      <div *ngIf="!cargando && totalAtendidos > 0" class="grafico" #graficoRef>
+        <div class="grafico-inner">
+          <div *ngFor="let barra of datosGrafico" class="barra-col" [class.clickeable]="vista === 'mes' && barra.total > 0" (click)="irADia(barra.label)">
+            <div class="barra-wrap">
+              <div class="barra-valor" *ngIf="barra.total > 0">${{ barra.total | number }}</div>
+              <div class="barra"
+                [style.height.%]="(barra.total / maxGrafico) * 100"
+                [class.tiene-datos]="barra.total > 0">
+              </div>
+            </div>
+            <div class="barra-label">{{ barra.label }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Por servicio -->
+    <div class="seccion">
+      <h3>Por servicio</h3>
+      <div *ngIf="totalPorServicio.length === 0" class="vacio">Sin datos</div>
+      <div class="servicios-lista">
+        <div *ngFor="let s of totalPorServicio" class="servicio-fila">
+          <div class="servicio-info">
+            <span class="servicio-nombre">{{ s.nombre }}</span>
+            <span class="servicio-cantidad">{{ s.cantidad }} {{ s.cantidad === 1 ? 'vez' : 'veces' }}</span>
+          </div>
+          <div class="servicio-barra-wrap">
+            <div class="servicio-barra" [style.width.%]="(s.total / totalGanancias) * 100"></div>
+          </div>
+          <span class="servicio-total">${{ s.total | number }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Por método de pago -->
+    <div class="seccion">
+      <h3>Por método de pago</h3>
+      <div *ngIf="totalPorMetodoPago.length === 0" class="vacio">Sin datos</div>
+      <div class="servicios-lista">
+        <div *ngFor="let m of totalPorMetodoPago" class="servicio-fila">
+          <div class="servicio-info">
+            <span class="servicio-nombre">{{ m.metodo }}</span>
+            <span class="servicio-cantidad">{{ m.cantidad }} {{ m.cantidad === 1 ? 'turno' : 'turnos' }}</span>
+          </div>
+          <div class="servicio-barra-wrap">
+            <div class="servicio-barra" [style.width.%]="(m.total / totalGanancias) * 100"></div>
+          </div>
+          <span class="servicio-total">${{ m.total | number }}</span>
+        </div>
+      </div>
+    </div>
+  </div><!-- /.grid-inferior -->
+  </div><!-- /esTab('ingresos') -->
+
+<!-- ══════════ PESTAÑA 2: EMPLEADOS ══════════ -->
+  <!--
+    CÓMO SE LEE ESTA PESTAÑA
+
+    Arriba se elige el PERÍODO (los controles de la barra). Abajo, el EMPLEADO que
+    se está mirando, y entre los dos TRES CUADROS que son toda la respuesta:
+
+        Le debo  ·  Le pagué  ·  Debe / Haber
+
+    El tercero es el que cambió de nombre y de forma. Decir "Falta pagar $25.000"
+    al lado de la palabra "A favor" era contradictorio, y el `−$50.000` de antes
+    no significaba nada para quien lo leía. Ahora el número va SIEMPRE en
+    positivo, el color dice de qué lado está (rojo = le debo, verde = me deben) y
+    el título es "Debe / Haber", que no promete ninguna de las dos cosas: la
+    palabra de una o dos palabras de abajo sí.
+
+    Que sean tres y no uno es el punto. Con un solo número "Compras a empleados
+    -$12.000" no se sabe si se debe. Con los tres, la respuesta se lee sola.
+
+    Abajo de los cuadros, TODO lo demás va en acordeones: los turnos atendidos, los
+    pagos que le hiciste, y al FINAL la tabla con todos los empleados para
+    comparar. Los dos primeros arrancan abiertos (son el detalle del que estás
+    mirando) y el de todos cerrado (es la vista larga).
+  -->
+<div *ngIf="esTab('empleados')" class="tab-body">
+
+  <!--
+    Confirmación de "Registrar pago". Va ACÁ arriba, y no adentro del popup, porque
+    el popup se cierra al guardar: si el cartel quedara adentro no se vería nunca y
+    el pago se guardaría sin ninguna señal de que se guardó.
+  -->
+  <div *ngIf="mensajePagos" class="alerta exito">{{ mensajePagos }}</div>
+
+  <!-- ═══ QUIÉN MIRAMOS ═══ -->
+  <div class="seccion selector-seccion">
+    <div class="selector-bloque">
+      <label class="selector-label">Empleado</label>
+      <select
+        class="select-empleado"
+        [ngModel]="seleccionEmpleado"
+        (ngModelChange)="elegirEmpleadoDelCombo($event)"
+        aria-label="Empleado">
+        <!-- "Todos" PRIMERO, y es el estado en el que arranca.
+             La primera pregunta al abrir la caja es "¿cuánto debo en total?", no
+             "¿cuánto le debo a Fulano?". Y un combo que arranca en una persona
+             obliga a todos a confirmar que esa era la que querían ver. -->
+        <option value="todos">Todos</option>
+        <option *ngFor="let e of todosLosEmpleados" [ngValue]="e.id">{{ e.nombre }}</option>
+      </select>
+    </div>
+    <div class="selector-periodo">
+      <span class="selector-label">Período</span>
+      <span class="selector-valor">{{ tituloFecha }}</span>
+    </div>
+  </div>
+
+  <div *ngIf="!hayEmpleados" class="vacio">
+    No hay empleados cargados
+  </div>
+
+  <!-- ═══ LOS TRES MONTOS ═══ -->
+  <ng-container *ngIf="hayEmpleados">
+
+    <!--
+      Los tres cuadros van SIEMPRE juntos y en este orden, que es el orden en que
+      se piensa: cuánto generó, cuánto le diste, y en qué estado quedó la cuenta.
+
+      EL TERCER CUADRO NO SE LLAMA "FALTA PAGAR". Ese título decía una cosa y el
+      número decía la contraria cuando el saldo estaba a favor: "Falta pagar
+      $25.000" al lado de "A favor" es directamente contradictorio, y fue lo que
+      se leyo como ambiguo en la ronda anterior. Ahora el titulo es "Debe / Haber", que no
+      promete ninguna de las dos cosas: el color y la palabra de abajo dicen cuál
+      de las dos es.
+
+      EL NÚMERO SIEMPRE EN POSITIVO, incluido el cero. Ni `−` ni raya: un negativo
+      es una resta y no una salida de plata, y cuatro tarjetas de la misma fila
+      tienen que poder leerse igual. Por eso el cero es `$0` y no `—`.
+    -->
+    <div class="stats stats-trio">
+      <div class="stat-card azul">
+        <div class="stat-icon">📋</div>
+        <div class="stat-info">
+          <span class="stat-label">Le debo</span>
+          <span class="stat-value">${{ deboEmpleado | number:'1.0-0' }}</span>
+          <span class="stat-nota">{{ turnosEmpleadoActual }} {{ turnosEmpleadoActual === 1 ? 'turno' : 'turnos' }}</span>
+        </div>
+      </div>
+
+      <div class="stat-card violeta">
+        <div class="stat-icon">💸</div>
+        <div class="stat-info">
+          <span class="stat-label">Le pagué</span>
+          <span class="stat-value">${{ pagueEmpleado | number:'1.0-0' }}</span>
+          <span class="stat-nota">{{ pagosEmpleadoActual.length }} {{ pagosEmpleadoActual.length === 1 ? 'pago' : 'pagos' }}</span>
+        </div>
+      </div>
+
+      <!-- El número y el color salen de los MISMOS getters que llenan las dos
+           columnas de la tabla de abajo, así que el cuadro y la fila no pueden
+           contradecirse. -->
+      <div class="stat-card respuesta" [ngClass]="debeEmpleadoTotal > 0 ? 'rojo' : 'verde'">
+        <div class="stat-icon">{{ debeEmpleadoTotal > 0 ? '⏳' : (haberEmpleadoTotal > 0 ? '✅' : '⚪') }}</div>
+        <div class="stat-info">
+          <span class="stat-label">Debe / Haber</span>
+          <span class="stat-value">${{ saldoEmpleado | number:'1.0-0' }}</span>
+          <span class="stat-nota">{{ textoSaldoEmpleado }}</span>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+
+  <!-- ═══ DE DÓNDE SALE "LE DEBO" ═══ -->
+  <!--
+    El encabezado lleva la cantidad y el total. Con el acordeón cerrado es lo
+    único que se ve de esta tabla, y sin el total había que abrirlo para saber
+    si algo había pasado adentro.
+  -->
+  <div class="acordeon">
+    <div class="acordeon-header" (click)="acordeonDetalle = !acordeonDetalle">
+      <span>🧾 Turnos atendidos</span>
+      <span class="acordeon-total">
+        {{ comisionesDetalle.length }} · ${{ totalComisionesDetalle | number:'1.0-0' }}
+        <span class="chevron" [class.abierto]="acordeonDetalle">›</span>
+      </span>
+    </div>
+    <div class="acordeon-body" [class.visible]="acordeonDetalle">
+
+      <div *ngIf="comisionesDetalle.length === 0" class="vacio">
+        No atendió ningún turno en este período
+      </div>
+
+      <div *ngIf="comisionesDetalle.length > 0" class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <!-- La columna del empleado va SOLO en "Todos": si ya elegiste uno,
+                   el nombre está arriba y repetirlo en cada fila es ruido. -->
+              <th *ngIf="mostrarTodos" class="celda-principal">Empleado</th>
+              <th class="col-angosta">Fecha</th>
+              <th class="col-angosta">Hora</th>
+              <th>Servicio</th>
+              <th>Precio</th>
+              <th>Comisión</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let c of comisionesDetalle">
+              <td *ngIf="mostrarTodos" class="celda-principal">{{ c.empleado }}</td>
+              <td>{{ formatearFechaCorta(c.fecha) }}</td>
+              <td>{{ c.hora }}</td>
+              <td>{{ c.servicio }}</td>
+              <td>${{ c.precio | number:'1.0-0' }}</td>
+              <td class="celda-comision">${{ c.comision | number:'1.2-2' }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td *ngIf="mostrarTodos">Total</td>
+              <td>Total</td>
+              <td></td>
+              <td>{{ comisionesDetalle.length }} servicios</td>
+              <td></td>
+              <td class="celda-comision">${{ totalComisionesDetalle | number:'1.2-2' }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGOS REALIZADOS ═══ -->
+  <div class="acordeon">
+    <div class="acordeon-header" (click)="acordeonPagos = !acordeonPagos">
+      <span>🧮 Pagos realizados</span>
+      <span class="acordeon-total">
+        {{ pagosEmpleadoActual.length }} · ${{ pagueEmpleado | number:'1.0-0' }}
+        <span class="chevron" [class.abierto]="acordeonPagos">›</span>
+      </span>
+    </div>
+    <div class="acordeon-body" [class.visible]="acordeonPagos">
+
+      <div class="seccion-header seccion-sin-borde">
+        <span></span>
+        <button class="btn-primary" (click)="abrirFormPago()">
+          {{ mostrarFormPago ? 'Cancelar' : '➕ Registrar pago' }}
+        </button>
+      </div>
+
+      <div *ngIf="pagosEmpleadoActual.length === 0" class="vacio">
+        No le registraste ningún pago en este período
+      </div>
+
+      <div *ngIf="pagosEmpleadoActual.length > 0" class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th *ngIf="mostrarTodos" class="celda-principal">Empleado</th>
+              <th class="col-angosta">Fecha</th>
+              <th>Monto</th>
+              <th>Método</th>
+              <th>Notas</th>
+              <th class="col-acciones"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of pagosEmpleadoActual">
+              <td *ngIf="mostrarTodos" class="celda-principal">{{ nombreDeEmpleado(p.empleado_id) }}</td>
+              <td>{{ formatearFechaCorta(p.fecha) }}</td>
+              <td>${{ p.monto | number }}</td>
+              <td>{{ p.metodo }}</td>
+              <td class="celda-tenue">{{ p.notas || '—' }}</td>
+              <td class="celda-acciones">
+                <button class="btn-icon" (click)="eliminarPago(p)" title="Borrar">🗑️</button>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td *ngIf="mostrarTodos">Total</td>
+              <td>Total</td>
+              <td>${{ pagueEmpleado | number }}</td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TODOS LOS EMPLEADOS, PARA COMPARAR ═══ -->
+  <!--
+    Va AL FINAL y arranca CERRADO: es la vista larga, para comparar a quién
+    hay que pagarle primero. Lo que se mira primero son los tres cuadros de
+    arriba.
+  -->
+  <div class="acordeon">
+    <div class="acordeon-header" (click)="acordeonTotales = !acordeonTotales">
+      <span>👥 Todos los empleados</span>
+      <span class="acordeon-total">
+        {{ pagosPorEmpleado.length }}
+        <span class="chevron" [class.abierto]="acordeonTotales">›</span>
+      </span>
+    </div>
+    <div class="acordeon-body" [class.visible]="acordeonTotales">
+
+      <div *ngIf="pagosPorEmpleado.length === 0" class="vacio">
+        No hay turnos atendidos ni pagos en este período
+      </div>
+
+      <div *ngIf="pagosPorEmpleado.length > 0" class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Empleado</th>
+              <th class="col-angosta">Turnos</th>
+              <th>Le debo</th>
+              <th>Le pagué</th>
+              <!--
+                DOS columnas y NO una con signo. "Debe" es lo que le debo yo, en
+                rojo; "Haber" es lo que me deben a mí, en verde. Nunca las dos a
+                la vez: son la misma diferencia partida.
+
+                Con una sola columna había que mirar el signo para saber de quién
+                era el dinero, y era exactamente lo que el usuario no entendía.
+                Ahora cada celda dice sola de qué lado está.
+              -->
+              <th class="col-debe">Debe</th>
+              <th class="col-haber">Haber</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let f of pagosPorEmpleado"
+                (click)="elegirEmpleado(f.empleado_id)"
+                [class.fila-actual]="!mostrarTodos && f.empleado_id === empleadoActual">
+              <td class="celda-principal">{{ f.nombre }}</td>
+              <td>{{ f.turnos }}</td>
+              <td>${{ f.sugerido | number:'1.0-0' }}</td>
+              <td>${{ f.pagado | number:'1.0-0' }}</td>
+              <td [ngClass]="claseDebe(f.faltaPagar)" class="celda-diferencia">
+                ${{ f.faltaPagar > 0 ? (f.faltaPagar | number:'1.0-0') : 0 | number:'1.0-0' }}
+              </td>
+              <td [ngClass]="claseHaber(f.faltaPagar)" class="celda-diferencia">
+                ${{ f.faltaPagar < 0 ? (-f.faltaPagar | number:'1.0-0') : 0 | number:'1.0-0' }}
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Total</td>
+              <td></td>
+              <td>${{ totalSugerido | number:'1.0-0' }}</td>
+              <td>${{ totalPagadoEmpleados | number:'1.0-0' }}</td>
+              <td [ngClass]="claseDebe(totalFaltaPagar)" class="celda-diferencia">
+                ${{ totalFaltaPagar > 0 ? (totalFaltaPagar | number:'1.0-0') : 0 | number:'1.0-0' }}
+              </td>
+              <td [ngClass]="claseHaber(totalFaltaPagar)" class="celda-diferencia">
+                ${{ totalFaltaPagar < 0 ? (-totalFaltaPagar | number:'1.0-0') : 0 | number:'1.0-0' }}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div><!-- /esTab('empleados') -->
+
+  <!-- ══════════ POPUP: REGISTRAR PAGO ══════════
+       Mismo patrón que el popup de "Nuevo turno" del Dashboard. -->
+  <div *ngIf="mostrarFormPago" class="popup-overlay" (click)="cerrarFormPago()">
+    <div class="popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <h3>💸 Registrar pago</h3>
+        <button class="btn-cerrar" (click)="cerrarFormPago()">✕</button>
+      </div>
+
+      <div class="popup-body">
+        <div *ngIf="mensajeErrorPagos" class="error-msg">{{ mensajeErrorPagos }}</div>
+
+        <div class="form-caja">
+          <div class="campo">
+            <label>Empleado</label>
+            <select [(ngModel)]="nuevoPago.empleado_id" (ngModelChange)="mensajeErrorPagos = ''">
+              <option [ngValue]="null">Elegí…</option>
+              <option *ngFor="let e of empleadosParaPago" [ngValue]="e.id">{{ e.nombre }}</option>
+            </select>
+          </div>
+          <div class="fila">
+            <div class="campo">
+              <label>Fecha</label>
+              <input type="date" [(ngModel)]="nuevoPago.fecha" (ngModelChange)="mensajeErrorPagos = ''" />
+            </div>
+            <div class="campo">
+              <label>Monto</label>
+              <input type="number" [(ngModel)]="nuevoPago.monto" min="0" step="0.01" placeholder="0"
+                     (ngModelChange)="mensajeErrorPagos = ''" />
+            </div>
+          </div>
+          <div class="campo">
+            <label>Método</label>
+            <select [(ngModel)]="nuevoPago.metodo" (ngModelChange)="mensajeErrorPagos = ''">
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Notas <span class="opcional">(opcional)</span></label>
+            <input type="text" [(ngModel)]="nuevoPago.notas" placeholder="Ej: quincena de octubre"
+                   (ngModelChange)="mensajeErrorPagos = ''" />
+          </div>
+        </div>
+      </div>
+
+      <div class="popup-acciones">
+        <button class="btn-atendido" [disabled]="guardandoPago" (click)="guardarPago()">
+          {{ guardandoPago ? 'Guardando...' : '💾 Guardar pago' }}
+        </button>
+        <button class="btn-cancelado" (click)="cerrarFormPago()">↩️ Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ POPUP: REGISTRAR PAGO A PROVEEDOR ══════════
+       Mismo patrón que el popup de "Registrar pago" de arriba, con el proveedor
+       como `<select>` y no como buscador: acá el proveedor SIEMPRE ya existe
+       (se eligió arriba o en la tabla de todos) y lo que se quiere es elegir a
+       QUIÉN se le paga, no crearlo. Para crear un proveedor está el popup de
+       "Registrar compra", que sí lleva la búsqueda con creación inline. -->
+  <div *ngIf="mostrarFormPagoProveedor" class="popup-overlay"
+       (click)="cerrarFormPagoProveedor()">
+    <div class="popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <h3>💸 Registrar pago</h3>
+        <button class="btn-cerrar" (click)="cerrarFormPagoProveedor()">✕</button>
+      </div>
+
+      <div class="popup-body">
+        <div *ngIf="mensajeErrorPagoProveedor" class="error-msg">
+          {{ mensajeErrorPagoProveedor }}
+        </div>
+
+        <div class="form-caja">
+          <div class="campo">
+            <label>Proveedor</label>
+            <select [(ngModel)]="nuevoPagoProveedor.proveedor_id"
+                    (ngModelChange)="mensajeErrorPagoProveedor = ''">
+              <option [ngValue]="null">Elegí...</option>
+              <option *ngFor="let p of proveedoresActivos" [ngValue]="p.id">{{ p.nombre }}</option>
+            </select>
+          </div>
+          <!--
+            El saldo que le queda a este proveedor ANTES de pagar. Sin esto hay
+            que ir a la tabla de abajo a buscarlo, y el popup queda como una caja
+            a ciegas: se anota un monto y no se sabe si completa la deuda o la
+            pasa.
+          -->
+          <div class="campo">
+            <label>Saldo pendiente</label>
+            <div class="saldo-pendiente">
+              <span *ngIf="nuevoPagoProveedor.proveedor_id">
+                ${{ saldoDeProveedor(nuevoPagoProveedor.proveedor_id) | number }}
+              </span>
+              <span *ngIf="!nuevoPagoProveedor.proveedor_id" class="saldo-vacio">
+                Elegí un proveedor
+              </span>
+            </div>
+          </div>
+
+
+          <div class="fila">
+            <div class="campo">
+              <label>Fecha</label>
+              <input type="date" [(ngModel)]="nuevoPagoProveedor.fecha"
+                     (ngModelChange)="mensajeErrorPagoProveedor = ''" />
+            </div>
+            <div class="campo">
+              <label>Monto</label>
+              <input type="number" [(ngModel)]="nuevoPagoProveedor.monto" min="0" step="0.01"
+                     placeholder="0" (ngModelChange)="mensajeErrorPagoProveedor = ''" />
+            </div>
+          </div>
+
+          <div class="campo">
+            <label>Método</label>
+            <select [(ngModel)]="nuevoPagoProveedor.metodo"
+                    (ngModelChange)="mensajeErrorPagoProveedor = ''">
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+
+          <div class="campo">
+            <label>Notas <span class="opcional">(opcional)</span></label>
+            <input type="text" [(ngModel)]="nuevoPagoProveedor.notas"
+                   placeholder="Ej: pago de la quincena"
+                   (ngModelChange)="mensajeErrorPagoProveedor = ''" />
+          </div>
+
+          <!--
+            Pagar de MÁS se permite a propósito: a veces se adelanta plata para
+            quedar a deber, y en ese caso el botón tiene que dejar pasar. Por eso
+            acá no hay bloqueo, solo un texto informativo que el template muestra
+            cuando el abono supera el saldo pendiente de ese proveedor.
+          -->
+          <div *ngIf="pagoProveedorLoDejaAFavor()" class="nota-info">
+            ℹ️ Este pago supera lo que le debés: va a quedar a su favor.
+          </div>
+        </div>
+      </div>
+
+      <div class="popup-acciones">
+        <button class="btn-atendido" [disabled]="guardandoPagoProveedor"
+                (click)="guardarPagoProveedor()">
+          {{ guardandoPagoProveedor ? 'Guardando...' : '💾 Guardar pago' }}
+        </button>
+        <button class="btn-cancelado" (click)="cerrarFormPagoProveedor()">↩️ Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ POPUP: REGISTRAR COMPRA ══════════ -->
+  <div *ngIf="mostrarFormCompra" class="popup-overlay" (click)="cerrarFormCompra()">
+    <div class="popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <h3>{{ editandoCompra ? '📝 Editar deuda' : '📝 Nueva deuda' }}</h3>
+        <button class="btn-cerrar" (click)="cerrarFormCompra()">✕</button>
+      </div>
+
+      <div class="popup-body">
+        <div *ngIf="mensajeError" class="error-msg">{{ mensajeError }}</div>
+
+        <div class="form-caja">
+          <!-- Proveedor: buscador, no combo. Mismo patrón que el cliente de
+               "Nuevo turno": se escribe, sale la lista, y si no aparece se crea
+               ahí mismo en vez de tener que cerrar, ir a la lista y volver. -->
+          <div class="campo">
+            <label>Proveedor</label>
+
+            <div *ngIf="proveedorSeleccionado" class="seleccionado-ok">
+              ✅ {{ proveedorSeleccionado.nombre }}
+              <button class="btn-secundario-sm" (click)="quitarProveedorPopup()">Cambiar</button>
+            </div>
+
+            <ng-container *ngIf="!proveedorSeleccionado">
+              <input type="text" [(ngModel)]="busquedaProveedorPopup"
+                     (ngModelChange)="mensajeError = ''"
+                     placeholder="Buscar proveedor..." />
+
+              <div *ngIf="resultadosBusquedaProveedor.length > 0" class="dropdown-busqueda">
+                <div *ngFor="let p of resultadosBusquedaProveedor" class="dropdown-item"
+                     (click)="seleccionarProveedorPopup(p)">
+                  <span class="dropdown-nombre">{{ p.nombre }}</span>
+                  <span class="dropdown-extra">{{ p.contacto || '—' }}</span>
+                </div>
+              </div>
+
+              <div *ngIf="puedeCrearProveedorDesdePopup" class="crear-inline">
+                <span>No se encontró el proveedor.</span>
+                <button class="btn-crear-inline" *ngIf="!mostrarFormNuevoProveedor"
+                        (click)="mostrarFormNuevoProveedor = true; mensajeError = ''">
+                  ➕ Crear "{{ busquedaProveedorPopup.trim() }}"
+                </button>
+                <div *ngIf="mostrarFormNuevoProveedor" class="form-crear-inline">
+                  <input type="text" [(ngModel)]="nombreNuevoProveedor"
+                         (ngModelChange)="mensajeError = ''"
+                         placeholder="Nombre del proveedor" />
+                  <!-- `.btn-primary` (azul), NO `.btn-atendido`: ese verde es el
+                       del pie del popup, el de "Guardar compra". Acá el botón
+                       crea una fila en un form embebido, y tiene que verse igual
+                       al "Crear" del cliente en "Nuevo turno". -->
+                  <button class="btn-primary" [disabled]="guardando"
+                          (click)="crearYSeleccionarProveedor()">Crear</button>
+                  <button class="btn-secundario-sm"
+                          (click)="mostrarFormNuevoProveedor = false; mensajeError = ''">Cancelar</button>
+                </div>
+              </div>
+            </ng-container>
+          </div>
+
+          <div class="fila">
+            <div class="campo">
+              <label>Fecha</label>
+              <input type="date" [(ngModel)]="nuevaCompra.fecha" (ngModelChange)="mensajeError = ''" />
+            </div>
+            <div class="campo">
+              <label>Cantidad</label>
+              <input type="number" [(ngModel)]="nuevaCompra.cantidad" min="0.01" step="0.01"
+                     (ngModelChange)="mensajeError = ''" />
+            </div>
+          </div>
+          <div class="campo">
+            <label>Concepto</label>
+            <input type="text" [(ngModel)]="nuevaCompra.concepto"
+                   placeholder="Ej: 12 bidones de shampoo" (ngModelChange)="mensajeError = ''" />
+          </div>
+          <div class="campo">
+            <label>Monto total</label>
+            <input type="number" [(ngModel)]="nuevaCompra.monto" min="0" step="0.01" placeholder="0"
+                   (ngModelChange)="mensajeError = ''" />
+          </div>
+        </div>
+      </div>
+
+      <div class="popup-acciones">
+        <button class="btn-atendido" [disabled]="guardando" (click)="guardarCompra()">
+          {{ guardando ? 'Guardando...' : (editandoCompra ? '💾 Guardar cambios' : '💾 Guardar deuda') }}
+        </button>
+        <button class="btn-cancelado" (click)="cerrarFormCompra()">↩️ Cancelar</button>
+      </div>
+    </div>
+  </div>
+<div *ngIf="esTab('gastos')" class="tab-body">
+  <!-- Ídem: el error va dentro del popup, el éxito queda en la pestaña. -->
+  <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
+
+  <!-- ═══ QUIÉN MIRAMOS ═══ -->
+  <div class="seccion selector-seccion">
+    <div class="selector-bloque">
+      <label class="selector-label">Proveedor</label>
+      <select
+        class="select-empleado"
+        [ngModel]="seleccionProveedor"
+        (ngModelChange)="elegirProveedorDelCombo($event)"
+        aria-label="Proveedor">
+        <!-- "Todos" primero, por lo mismo que en Empleados. -->
+        <option value="todos">Todos</option>
+        <option *ngFor="let p of proveedores" [ngValue]="p.id">{{ p.nombre }}</option>
+      </select>
+    </div>
+    <div class="selector-periodo">
+      <span class="selector-label">Período</span>
+      <span class="selector-valor">{{ tituloFecha }}</span>
+    </div>
+  </div>
+
+  <div *ngIf="!hayProveedores" class="vacio">
+    No hay proveedores cargados
+  </div>
+
+  <!-- ═══ LOS TRES MONTOS ═══ -->
+  <ng-container *ngIf="hayProveedores">
+
+    <!--
+      Mismo criterio que en Empleados, y por la misma razón: el número va
+      SIEMPRE en positivo (incluido el cero, como `$0`), el color dice de qué
+      lado está el dinero, y el tercer cuadro se titula "Debe / Haber" en vez de
+      "Le debo", porque "Le debo" más un número a tu favor es contradictorio igual
+      que "Falta pagar" lo era del lado de los empleados.
+    -->
+    <div class="stats stats-trio">
+      <div class="stat-card azul">
+        <div class="stat-icon">📦</div>
+        <div class="stat-info">
+          <span class="stat-label">Le compré</span>
+          <span class="stat-value">${{ compreProveedor | number }}</span>
+          <span class="stat-nota">{{ comprasProveedorActual.length }} {{ comprasProveedorActual.length === 1 ? 'deuda' : 'deudas' }}</span>
+        </div>
+      </div>
+
+      <div class="stat-card violeta">
+        <div class="stat-icon">💸</div>
+        <div class="stat-info">
+          <span class="stat-label">Le pagué</span>
+          <span class="stat-value">${{ pagueProveedor | number }}</span>
+          <span class="stat-nota">{{ pagosProveedorActual.length }} {{ pagosProveedorActual.length === 1 ? 'abono' : 'abonos' }}</span>
+        </div>
+      </div>
+
+      <div class="stat-card respuesta" [ngClass]="debeProveedorTotal > 0 ? 'rojo' : 'verde'">
+        <div class="stat-icon">{{ debeProveedorTotal > 0 ? '⏳' : (haberProveedorTotal > 0 ? '✅' : '⚪') }}</div>
+        <div class="stat-info">
+          <span class="stat-label">Debe / Haber</span>
+          <span class="stat-value">${{ saldoProveedorTotal | number }}</span>
+          <span class="stat-nota">{{ textoSaldoProveedorTotal }}</span>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+
+  <!-- ═══ PAGOS REALIZADOS ═══ -->
+  <div class="acordeon">
+    <div class="acordeon-header" (click)="acordeonPagosProv = !acordeonPagosProv">
+      <span>🧮 Pagos realizados</span>
+      <span class="acordeon-total">
+        {{ pagosProveedorActual.length }} · ${{ pagueProveedor | number }}
+        <span class="chevron" [class.abierto]="acordeonPagosProv">›</span>
+      </span>
+    </div>
+    <div class="acordeon-body" [class.visible]="acordeonPagosProv">
+
+      <div class="seccion-header seccion-sin-borde">
+        <span></span>
+        <button class="btn-primary" (click)="abrirFormPagoProveedor()">
+          ➕ Registrar pago
+        </button>
+      </div>
+
+      <div *ngIf="pagosProveedorActual.length === 0" class="vacio">
+        No le registraste ningún pago en este período
+      </div>
+
+      <div *ngIf="pagosProveedorActual.length > 0" class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th *ngIf="mostrarTodos" class="celda-principal">Proveedor</th>
+              <th class="col-angosta">Fecha</th>
+              <th>Monto</th>
+              <th>Método</th>
+              <th>Notas</th>
+              <th class="col-acciones"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of pagosProveedorActual">
+              <td *ngIf="mostrarTodos" class="celda-principal">{{ nombreDeProveedor(p.proveedor_id) }}</td>
+              <td>{{ formatearFechaCorta(p.fecha) }}</td>
+              <td>${{ p.monto | number }}</td>
+              <td>{{ p.metodo }}</td>
+              <td class="celda-tenue">{{ p.notas || '—' }}</td>
+              <td class="celda-acciones">
+                <button class="btn-icon" (click)="eliminarPagoProveedor(p)" title="Borrar">🗑️</button>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td *ngIf="mostrarTodos">Total</td>
+              <td>Total</td>
+              <td>${{ pagueProveedor | number }}</td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ COMPRAS / SERVICIOS DEL PERÍODO ═══ -->
+  <div class="acordeon">
+    <div class="acordeon-header" (click)="acordeonCompras = !acordeonCompras">
+      <span>📦 Compras / Servicios</span>
+      <span class="acordeon-total">
+        {{ comprasProveedorActual.length }} · ${{ compreProveedor | number }}
+        <span class="chevron" [class.abierto]="acordeonCompras">›</span>
+      </span>
+    </div>
+    <div class="acordeon-body" [class.visible]="acordeonCompras">
+
+      <div class="seccion-header seccion-sin-borde">
+        <span></span>
+        <button class="btn-primary" (click)="abrirFormCompra()">
+          ➕ Nueva deuda
+        </button>
+      </div>
+
+      <div *ngIf="comprasProveedorActual.length === 0" class="vacio">
+        No le debiste nada a este proveedor en este período
+      </div>
+
+      <div *ngIf="comprasProveedorActual.length > 0" class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th *ngIf="mostrarTodos" class="celda-principal">Proveedor</th>
+              <th class="col-angosta">Fecha</th>
+              <th>Concepto</th>
+              <th class="col-angosta">Cant.</th>
+              <th>Monto</th>
+              <th class="col-acciones"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let c of comprasProveedorActual">
+              <td *ngIf="mostrarTodos" class="celda-principal">{{ nombreDeProveedor(c.proveedor_id) }}</td>
+              <td>{{ formatearFechaCorta(c.fecha) }}</td>
+              <td>{{ c.concepto }}</td>
+              <td>{{ c.cantidad }}</td>
+              <td>${{ c.monto | number }}</td>
+              <td class="celda-acciones">
+                <button class="btn-icon" (click)="abrirFormCompra(c)" title="Editar">✏️</button>
+                <button class="btn-icon" (click)="eliminarCompra(c)" title="Borrar">🗑️</button>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td *ngIf="mostrarTodos">Total</td>
+              <td>Total</td>
+              <td></td>
+              <td></td>
+              <td>${{ compreProveedor | number }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TODOS LOS PROVEEDORES, PARA COMPARAR ═══ -->
+  <!-- Al final y cerrado, igual que el de Empleados. -->
+  <div class="acordeon">
+    <div class="acordeon-header" (click)="acordeonSaldo = !acordeonSaldo">
+      <span>🏦 Todos los proveedores</span>
+      <span class="acordeon-total">
+        {{ saldoPorProveedor.length }}
+        <span class="chevron" [class.abierto]="acordeonSaldo">›</span>
+      </span>
+    </div>
+    <div class="acordeon-body" [class.visible]="acordeonSaldo">
+
+      <div *ngIf="saldoPorProveedor.length === 0" class="vacio">
+        No hay deudas ni pagos en este período
+      </div>
+
+      <div *ngIf="saldoPorProveedor.length > 0" class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Proveedor</th>
+              <th>Le compré</th>
+              <th>Le pagué</th>
+              <!-- Dos columnas, igual que en Empleados. -->
+              <th class="col-debe">Debe</th>
+              <th class="col-haber">Haber</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of saldoPorProveedor"
+                (click)="elegirProveedor(p.proveedor_id)"
+                [class.fila-actual]="!mostrarTodos && p.proveedor_id === proveedorActual">
+              <td class="celda-principal">{{ p.nombre }}</td>
+              <td>${{ p.comprado | number }}</td>
+              <td>${{ p.pagado | number }}</td>
+              <td [ngClass]="claseDebe(p.saldo)" class="celda-diferencia">
+                ${{ p.saldo > 0 ? (p.saldo | number) : 0 | number }}
+              </td>
+              <td [ngClass]="claseHaber(p.saldo)" class="celda-diferencia">
+                ${{ p.saldo < 0 ? (-p.saldo | number) : 0 | number }}
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Total</td>
+              <td>${{ totalCompras | number }}</td>
+              <td>${{ totalPagadoProveedores | number }}</td>
+              <td [ngClass]="claseDebe(debeProveedorTotal)" class="celda-diferencia">
+                ${{ debeProveedorTotal | number }}
+              </td>
+              <td [ngClass]="claseHaber(haberProveedorTotal)" class="celda-diferencia">
+                ${{ haberProveedorTotal | number }}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div><!-- /esTab('gastos') -->
+
+</div><!-- /.caja-page -->

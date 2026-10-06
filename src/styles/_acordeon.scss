@@ -1,0 +1,67 @@
+// ── ACORDEÓN ─────────────────────────────────────────────────
+//
+// Reglas compartidas por Configuración y Empleados.
+//
+// Vive en un partial y no duplicado en cada componente a propósito: las dos
+// copias se desincronizan. Ya pasó con el `exclude` del `tsconfig`, que estaba
+// escrito con una ruta que no matcheaba ningún archivo y por lo tanto no
+// excluía nada. Un patrón que "debería" funcionar y no funciona es peor que no
+// tener patrón.
+//
+// Uso:  @use '../../styles/acordeon';
+//       (los componentes son standalone, así que hay que importarlo en cada uno:
+//        no hay encapsulación compartida entre ellos)
+//
+// Importante: el body usa `display: none` en vez de `*ngIf` a propósito. Con
+// `*ngIf` Angular destruye el contenido y se pierde el estado de edición
+// (media jornada a medio guardar, un formulario de ausencia abierto). Con
+// `display` el DOM queda y el estado sobrevive al colapso.
+
+.acordeon {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.acordeon-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #1e293b;
+  user-select: none;
+  transition: background 0.15s;
+
+  &:hover { background: #f8fafc; }
+
+  // El encabezado a la izquierda crece; el chevron queda pegado a la derecha.
+  > span:first-child {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .chevron {
+    font-size: 1.2rem;
+    color: #94a3b8;
+    transform: rotate(90deg);
+    transition: transform 0.2s;
+    display: inline-block;
+    flex-shrink: 0;
+
+    &.abierto { transform: rotate(-90deg); }
+  }
+}
+
+.acordeon-body {
+  display: none;
+  padding: 0 20px 20px;
+
+  &.visible { display: block; }
+}

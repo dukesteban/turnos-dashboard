@@ -1,7 +1,10 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { SupabaseService } from '../../services/supabase';
+import { nombreMes, fechaDesdeISO } from '../../utils/fechas';
+import { contiene } from '../../utils/texto';
 
 @Component({
   selector: 'app-dashboard',
@@ -34,10 +37,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
   mostrarPopup = false;
   horarios: any[] = [];
   servicios: any[] = [];
+  empleados: any[] = [];
+  // Puestos de trabajo: RETIRADO. Las columnas de la agenda son empleados.
+  ausencias: any[] = [];
+  /** Telefono ACTUAL por cliente. El del turno es un snapshot y puede estar viejo. */
+  telefonosPorCliente: Record<number, string> = {};
+
+  /** Telefono vigente del cliente de un turno. */
+  telefonoDe(turno: any): string | null {
+    if (!turno) return null;
+    const actual = turno.cliente_id ? this.telefonosPorCliente[turno.cliente_id] : null;
+    return actual || turno.cliente_telefono || null;
+  }
+  /** Lista filtrada para el form de reprogramar (no pisa this.empleados). */
+  empleadosReprogramar: any[] = [];
+  /** El empleado elegido NO puede trabajar esa fecha/hora (se muestra con aviso). */
+  empleadoReprogramarNoPuede = false;
   mostrarPopupCancelacion = false;
   motivoCancelacion = '';
   enviandoMensaje = false;
   nombreNegocio = localStorage.getItem('nombre_negocio') || '';
+  atendidoEmpleadoId: number | null = null;
 
   // Editar/Postergar
   modoEditarTurno = false;
@@ -46,6 +66,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   nuevaFecha = '';
   nuevaHora = '';
   nuevoServicioId: number | null = null;
+  nuevoEmpleadoId: number | null = null;
   esperandoConfirmacion = false;
   mostrarPopupPostergacion = false;
   motivoPostergacion = '';
@@ -56,12 +77,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // Nuevo turno
   mostrarModalNuevoTurno = false;
-  clientesBuscados: any[] = [];
+  /** Lista completa para filtrar en memoria. La carga `cargarClientesBusqueda`. */
+  todosLosClientes: any[] = [];
+  cargandoClientesBusqueda = false;
   clienteSeleccionadoNuevo: any = null;
   busquedaCliente = '';
   nuevoTurnoFecha = '';
   nuevoTurnoHora = '';
   nuevoTurnoServicioId: number | null = null;
+  nuevoTurnoEmpleadoId: number | null = null;
+  empleadosLibres: any[] = [];
+  comisionesPorServicio: any[] = [];
   guardandoNuevoTurno = false;
   errorNuevoTurno = '';
   mostrarFormNuevoCliente = false;
@@ -71,11 +97,54 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.servicios.find(s => s.id == Number(this.nuevoServicioId)) || null;
   }
 
-  constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
+  /** Nombre del empleado del turno. */
+  nombreEmpleadoDeTurno(turno: any): string {
+    const id = this.empleadoDeTurno(turno);
+    if (!id) return 'Sin empleado';
+    return this.empleados.find((e: any) => e.id === id)?.nombre || 'Sin empleado';
+  }
+
+  /**
+   * ID del empleado del turno. Es OBLIGATORIO: define la columna de la agenda
+   * y es quien cobra la comisión. Ya no se deriva del puesto.
+   */
+  empleadoDeTurno(turno: any): number | null {
+    return turno?.empleado_id ?? null;
+  }
+
+  constructor(
+    private supabase: SupabaseService,
+    private cdr: ChangeDetectorRef,
+    private router: Router
+  ) {}
+
+  /**
+   * Los tres botones flotantes de arriba a la derecha.
+   *
+   * NO duplican la acción: los popups viven en `CajaComponent`, no acá. El botón
+   * salta a Caja con `?accion=...` y Caja abre el popup que corresponde (ver
+   * `CajaComponent.abrirAccionDeUrl`).
+   *
+   * Por qué un parámetro de URL y no un servicio con un flag: la URL sobrevive a un
+   * F5 y a que el usuario pase el link, así que el mismo enlace vuelve a abrir el
+   * popup. Con un flag en memoria, recargar la página lo cerraba en silencio y
+   * parecía un botón que a veces no anda.
+   *
+   * `union` y no `string` a propósito: es la lista cerrada de los tres botones, y
+   * si uno se agrega o se renombra el compilador avisa en vez de dejar un botón que
+   * navega a una acción que Caja no conoce (que abriría la pantalla sin popup, sin
+   * decir nada).
+   */
+  irACaja(accion: 'pago-empleado' | 'deuda' | 'pago-proveedor') {
+    this.router.navigate(['/ganancias'], { queryParams: { accion } });
+  }
 
   async ngOnInit() {
     await this.cargarTurnos();
     this.metodosPago = await this.supabase.getMetodosPago();
+    this.empleados = await this.supabase.getEmpleados();
+    this.ausencias = await this.supabase.getAusencias();
+    this.telefonosPorCliente = await this.supabase.getTelefonosPorCliente();
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
     });
@@ -144,6 +213,34 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.fechaTurnos = new Date();
   }
 
+  /**
+   * Fecha de referencia de la sección, en "AAAA-MM-DD": el formato que quiere el
+   * `<input type="date">`.
+   *
+   * Es `toLocaleDateString('en-CA')` y no `toISOString()` a proposito:
+   * `toISOString()` convierte a UTC, asi que a la tarde (o en cualquier
+   * timezone negative) devuelve el dia ANTERIOR. El input se bindearia al dia
+   * equivocado y, al elegir una fecha, saltaria dos dias.
+   */
+  get fechaTurnosISO(): string {
+    return this.fechaTurnos.toLocaleDateString('en-CA');
+  }
+
+  /**
+   * Salta a la semana o al mes que contienen la fecha elegida.
+   *
+   * No hay que hacer nada mas: `rangoSemanaTurnos`, `tituloMesTurnos` y
+   * `turnosFiltrados` salen todos de `fechaTurnos`, asi que con mover esa
+   * variable se reacomodan el titulo y la tabla juntos.
+   *
+   * En la vista Mes la fecha da igual dentro del mismo mes (solo se mira el ano
+   * y el mes), asi que elegir el 28/09 muestra Setiembre.
+   */
+  irAFechaTurnos(iso: string) {
+    const d = fechaDesdeISO(iso);
+    if (d) this.fechaTurnos = d;
+  }
+
   toggleIngresos() {
     this.mostrarIngresos = !this.mostrarIngresos;
     sessionStorage.setItem('mostrarIngresos', String(this.mostrarIngresos));
@@ -175,6 +272,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.turnoSeleccionado = null;
     this.modoEditarTurno = false;
     this.modoAtendido = false;
+    // Limpiar tambien los carteles del form de reprogramar: si no, reaparecen
+    // al abrir el siguiente turno.
+    this.editandoTurno = false;
+    this.errorEditarTurno = '';
+    this.empleadoReprogramarNoPuede = false;
+    this.empleadosReprogramar = this.empleados;
     this.cdr.detectChanges();
   }
 
@@ -186,7 +289,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.atendidoMetodoPago = this.metodosPago[0]?.nombre || '';
       this.atendidoPrecio = this.turnoSeleccionado.precio;
       this.atendidoObservaciones = '';
+      this.atendidoEmpleadoId = this.empleadoDeTurno(this.turnoSeleccionado);
       this.errorAtendido = '';
+      await this.cargarComisionesPorServicio();
+      this.cdr.detectChanges();
       return;
     }
     if (estado === 'pendiente') {
@@ -213,16 +319,59 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
       return;
     }
+    const servicio = this.atendidoServicio;
+
+    // Sin empleado no se puede guardar: se perderia la comision y el turno
+    // no tendria columna en la agenda.
+    if (!this.atendidoEmpleadoId) {
+      this.errorAtendido = '❌ Elegí el empleado que atendió.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // Jornada semanal + ausencias del empleado que se esta anotando
+    const puede = await this.supabase.empleadoPuedeAtender(
+      this.atendidoEmpleadoId,
+      this.turnoSeleccionado.fecha,
+      (this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora || '00:00').slice(0, 5),
+      servicio?.duracion_minutos || this.turnoSeleccionado.duracion_minutos || 45,
+      this.ausencias
+    );
+    if (!puede.ok) {
+      const nombreEmp = this.empleados.find((e: any) => e.id === this.atendidoEmpleadoId)?.nombre;
+      this.errorAtendido = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // No puede pisar otro turno suyo en ese rango
+    const dur = servicio?.duracion_minutos || this.turnoSeleccionado.duracion_minutos || 45;
+    const ocupado = await this.supabase.empleadoEstaOcupado(
+      this.atendidoEmpleadoId,
+      this.turnoSeleccionado.fecha,
+      this.turnoSeleccionado.hora_inicio?.slice(0, 5) || this.turnoSeleccionado.hora?.slice(0, 5),
+      dur,
+      this.turnoSeleccionado.id
+    );
+    if (ocupado) {
+      const nombreEmp = this.empleados.find((e: any) => e.id === this.atendidoEmpleadoId)?.nombre;
+      this.errorAtendido = `❌ ${nombreEmp || 'Ese empleado'} ya tiene otro turno en ese horario.`;
+      this.cdr.detectChanges();
+      return;
+    }
+
     this.guardandoAtendido = true;
     try {
-      const servicio = this.atendidoServicio;
       await this.supabase.marcarAtendido(this.turnoSeleccionado.id, {
         servicio_nombre_final: servicio?.nombre || this.turnoSeleccionado.servicio_nombre,
+        servicio_id_final: servicio?.id ?? null,
         precio_final: this.atendidoPrecio,
         metodo_pago: this.atendidoMetodoPago,
-        observaciones: this.atendidoObservaciones
+        observaciones: this.atendidoObservaciones,
+        empleado_id: this.atendidoEmpleadoId
       });
-      await this.cargarTurnos(); // cargarDatos() en dashboard
+      await this.cargarTurnos();
+      await this.cargarComisionesPorServicio();
       this.cerrarPopup();
     } catch (e) {
       this.errorAtendido = '❌ Error al guardar.';
@@ -236,7 +385,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.nuevaFecha = this.turnoSeleccionado.fecha;
     this.nuevaHora = this.turnoSeleccionado.hora_inicio?.slice(0,5) || this.turnoSeleccionado.hora?.slice(0,5) || '';
     this.nuevoServicioId = this.turnoSeleccionado.servicio_id;
+    this.nuevoEmpleadoId = this.empleadoDeTurno(this.turnoSeleccionado);
     this.errorEditarTurno = '';
+    this.actualizarEmpleadosReprogramar();
     this.cdr.detectChanges();
   }
 
@@ -291,17 +442,32 @@ export class DashboardComponent implements OnInit, OnDestroy {
       fin.setMinutes(fin.getMinutes() + servicio.duracion_minutos);
       const horaFin = `${String(fin.getHours()).padStart(2,'0')}:${String(fin.getMinutes()).padStart(2,'0')}`;
 
-      // Validar solapamiento
-      const solapados = await this.supabase.getTurnosSolapados(
-        this.nuevaFecha, this.nuevaHora, horaFin, this.turnoSeleccionado.id
+      // Validar que el empleado pueda trabajar ese dia (jornada + ausencias)
+      if (this.nuevoEmpleadoId) {
+        const puede = await this.supabase.empleadoPuedeAtender(
+          this.nuevoEmpleadoId, this.nuevaFecha, this.nuevaHora,
+          servicio.duracion_minutos, this.ausencias
+        );
+        if (!puede.ok) {
+          const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
+          this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
+          return;
+        }
+      }
+
+      // Validar que el puesto elegido no este ocupado en ese rango
+      // El empleado es obligatorio: define la columna de la agenda y la comision.
+      if (!this.nuevoEmpleadoId) {
+        this.errorEditarTurno = '❌ Elegí el empleado que atiende.';
+        return;
+      }
+      const ocupado = await this.supabase.empleadoEstaOcupado(
+        this.nuevoEmpleadoId, this.nuevaFecha, this.nuevaHora,
+        servicio.duracion_minutos, this.turnoSeleccionado.id
       );
-      const puestos = await this.supabase.getPuestosXTurno();
-      if (solapados.length >= puestos) {
-        this.errorEditarTurno = puestos === 1
-          ? `Ya hay un turno de ${solapados[0].cliente_nombre} a esa hora.`
-          : `Ya se alcanzó el límite de ${puestos} turnos simultáneos para ese horario.`;
-        this.editandoTurno = false;
-        this.cdr.detectChanges();
+      if (ocupado) {
+        const nombreEmp = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId)?.nombre;
+        this.errorEditarTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
         return;
       }
 
@@ -315,17 +481,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
       if (!dentroHorario) {
         this.errorEditarTurno = 'El horario está fuera del horario de atención.';
-        this.editandoTurno = false;
-        this.cdr.detectChanges();
         return;
       }
 
-      // Confirm DESPUÉS de validar
-      //this.editandoTurno = false;
-      //if (!confirm('¿Confirmar cambio de turno?')) return;
-      //this.editandoTurno = true; 
-
-      this.editandoTurno = false;
       await this.supabase.editarTurno(this.turnoSeleccionado.id, {
         fecha: this.nuevaFecha,
         hora: this.nuevaHora,
@@ -333,16 +491,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
         servicio_id: servicio.id,
         servicio_nombre: servicio.nombre,
         precio: servicio.precio,
-        duracion_minutos: servicio.duracion_minutos
+        duracion_minutos: servicio.duracion_minutos,
+        empleado_id: this.nuevoEmpleadoId
       });
       await this.cargarTurnos();
+      await this.cargarComisionesPorServicio();
       await this.iniciarNotificacionPostergacion(this.nuevaFecha, this.nuevaHora, servicio.nombre);
     } catch (e) {
       console.error('Error en confirmarEditarTurno:', e);
       this.errorEditarTurno = '❌ Error al guardar. Intentá de nuevo.';
+    } finally {
+      // El reset va en finally y no en cada return: con 4 caminos de salida
+      // es facil olvidarse y el boton queda en "Guardando..." para siempre.
+      this.editandoTurno = false;
+      this.cdr.detectChanges();
     }
-
-    this.editandoTurno = false;
   }
 
   private formatearFechaCorta(fecha: Date): string {
@@ -361,8 +524,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   get tituloMesTurnos(): string {
-    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    return `${meses[this.fechaTurnos.getMonth()]} ${this.fechaTurnos.getFullYear()}`;
+    return nombreMes(this.fechaTurnos.getMonth(), this.fechaTurnos.getFullYear());
   }
 
   formatearHora(hora: string): string {
@@ -385,19 +547,63 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.servicios.find(s => s.id == this.nuevoTurnoServicioId) || null;
   }
 
-  async buscarClientesNuevo() {
-    if (!this.busquedaCliente.trim()) {
-      this.clientesBuscados = [];
-      return;
+  /**
+   * Resultados de la búsqueda de cliente del modal de Nuevo turno.
+   *
+   * Es un GETTER y no un campo: filtra contra `todosLosClientes` cada vez que se
+   * lee. Con un campo había que acordarse de recalcularlo, y si la lista se
+   * cargaba tarde el dropdown quedaba vacío aunque el cliente estuviera.
+   *
+   * Filtra por NOMBRE y por TELÉFONO, sin acentos. Antes-usaba
+   * `supabase.buscarClientes()`, que era una consulta a la base **por cada tecla**
+   * con `.ilike()`, que además no ignora acentos: buscar "maria" no encontraba a
+   * "María Gómez".
+   */
+  get clientesBuscados(): any[] {
+    const q = this.busquedaCliente.trim();
+    if (!q) return [];
+    return this.todosLosClientes
+      .filter((c: any) =>
+        contiene(c.nombre, q) ||
+        c.telefonos?.some((t: any) => contiene(t.telefono, q))
+      )
+      .slice(0, 8);
+  }
+
+  /**
+   * Carga la lista completa de clientes UNA vez, para poder filtrar en memoria.
+   *
+   * Solo trae los activos: el alta de un turno para un cliente dado de baja no
+   * tiene sentido. Es la misma lista que usa la pantalla de Clientes.
+   */
+  async cargarClientesBusqueda(forzar = false) {
+    if (this.todosLosClientes.length && !forzar) return;
+    this.cargandoClientesBusqueda = true;
+    this.cdr.detectChanges();
+    try {
+      this.todosLosClientes = (await this.supabase.getClientes())
+        .filter((c: any) => c.activo !== false);
+    } catch (e) {
+      // Si falla, el buscador queda sin resultados y se puede crear el cliente.
+      this.todosLosClientes = [];
     }
-    this.clientesBuscados = await this.supabase.buscarClientes(this.busquedaCliente);
+    this.cargandoClientesBusqueda = false;
     this.cdr.detectChanges();
   }
 
   seleccionarClienteNuevo(cliente: any) {
     this.clienteSeleccionadoNuevo = cliente;
     this.busquedaCliente = cliente.nombre;
-    this.clientesBuscados = [];
+    this.cdr.detectChanges();
+  }
+
+  /** Deseleccionar, para elegir o crear otro cliente. */
+  quitarClienteNuevo() {
+    this.clienteSeleccionadoNuevo = null;
+    this.busquedaCliente = '';
+    this.errorNuevoTurno = '';
+    this.mostrarFormNuevoCliente = false;
+    this.nombreNuevoCliente = '';
     this.cdr.detectChanges();
   }
 
@@ -405,14 +611,158 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.mostrarModalNuevoTurno = true;
     this.clienteSeleccionadoNuevo = null;
     this.busquedaCliente = '';
-    this.clientesBuscados = [];
+    // El formulario de "crear cliente" también se limpia al ABRIR, no solo al
+    // guardar o al cancelar.
+    //
+    // Sin esto: se abre el modal, se busca un nombre que no existe, se toca
+    // "Crear", se escribe el nombre y se cierra el modal sin guardar. Al
+    // volver a abrir, `mostrarFormNuevoCliente` seguía en true, así que la
+    // cajita de crear aparecía YA ABIERTA al primer error de búsqueda, con el
+    // texto del intento anterior adentro. Para usarla había que apretar
+    // "Cancelar" primero.
+    //
+    // Ojo: `busquedaCliente = ''` la tapaba, y por eso el bug pasaba
+    // desapercibido: se veía solo al volver a escribir algo que no matchea.
+    this.mostrarFormNuevoCliente = false;
+    this.nombreNuevoCliente = '';
     this.nuevoTurnoFecha = '';
     this.nuevoTurnoHora = '';
     this.nuevoTurnoServicioId = null;
+    this.nuevoTurnoEmpleadoId = null;
+    this.empleadosLibres = [];
+    this.comisionesPorServicio = [];
     this.errorNuevoTurno = '';
     if (!this.servicios.length) this.supabase.getServicios().then(s => { this.servicios = s; this.cdr.detectChanges(); });
     if (!this.horarios.length) this.supabase.getHorarios().then(h => { this.horarios = h; this.cdr.detectChanges(); });
+    if (!this.empleados.length) this.supabase.getEmpleados().then(e => { this.empleados = e; this.cdr.detectChanges(); });
+    // Los clientes se cargan una vez y después se filtra en memoria. La segunda
+    // vez que se abre el modal no vuelve a pedir la lista.
+    this.cargarClientesBusqueda();
+    this.cargarComisionesPorServicio();
     this.cdr.detectChanges();
+  }
+
+  async cargarComisionesPorServicio() {
+    this.comisionesPorServicio = await this.supabase.getComisionesEmpleado(this.empleados.map((e: any) => e.id));
+    this.cdr.detectChanges();
+  }
+
+  async actualizarEmpleadosLibres() {
+    if (!this.nuevoTurnoFecha || !this.nuevoTurnoHora || !this.nuevoTurnoServicioId) {
+      this.empleadosLibres = [];
+      this.cdr.detectChanges();
+      return;
+    }
+    const servicio = this.servicios.find(s => s.id == this.nuevoTurnoServicioId);
+    if (!servicio) return;
+
+    // Disponibilidad real por empleado. getEmpleadosDisponibles ya aplica jornada
+    // semanal y ausencias, asi que alcanza con mirar `puede_atender` + `libre`.
+    // El combo muestra SOLO estos: es lo que pediste (elegir de los que pueden).
+    const disponibles = await this.supabase.getEmpleadosDisponibles(
+      this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos, this.ausencias
+    );
+
+    this.empleadosLibres = disponibles
+      .filter((d: any) => d.puede_atender && d.libre)
+      .map((d: any) => this.empleados.find((e: any) => e.id === d.empleado_id))
+      .filter(Boolean);
+
+    // Si el empleado elegido quedo fuera de la lista, se limpia la seleccion
+    if (this.nuevoTurnoEmpleadoId && !this.empleadosLibres.some((e: any) => e.id === this.nuevoTurnoEmpleadoId)) {
+      this.nuevoTurnoEmpleadoId = null;
+    }
+    this.cdr.detectChanges();
+  }
+
+  async onServicioChange() {
+    this.errorNuevoTurno = '';
+    await this.actualizarEmpleadosLibres();
+    this.cdr.detectChanges();
+  }
+
+  onAtendidoServicioChange() {
+    this.errorAtendido = '';
+    if (this.comisionesPorServicio.length === 0) {
+      this.cargarComisionesPorServicio();
+    }
+    this.cdr.detectChanges();
+  }
+
+  actualizarVista() {
+    this.cdr.detectChanges();
+  }
+
+  getComisionEmpleadoAtendido(empleadoId: number): number {
+    if (!this.atendidoServicioId) return 0;
+    const comision = this.comisionesPorServicio.find(
+      (c: any) => c.empleado_id === empleadoId && c.servicio_id === this.atendidoServicioId
+    );
+    if (comision) return comision.porcentaje;
+    const empleado = this.empleados.find((e: any) => e.id === empleadoId);
+    return empleado?.comision_porcentaje || 0;
+  }
+
+  async actualizarEmpleadosReprogramar() {
+    if (!this.nuevaFecha) {
+      this.empleadosReprogramar = this.empleados;
+      this.empleadoReprogramarNoPuede = false;
+      return;
+    }
+    const servicio = this.servicios.find((s: any) => s.id == this.nuevoServicioId);
+    const dur = servicio?.duracion_minutos || 45;
+
+    // Lista APARTE: antes se reasignaba this.empleados con un filter y la
+    // lista original se perdia para siempre.
+    const disponibles = await this.supabase.getEmpleadosDisponibles(
+      this.nuevaFecha, this.nuevaHora || '00:00', dur, this.ausencias
+    );
+    const puede = (e: any) =>
+      !!disponibles.some((d: any) => d.empleado_id === e.id && d.puede_atender);
+
+    // Se incluye igual al que ya esta asignado: si no, al guardar un turno que
+    // no se toco se perderia el empleado.
+    this.empleadosReprogramar = this.empleados.filter(
+      (e: any) => puede(e) || e.id === this.nuevoEmpleadoId
+    );
+    const elegido = this.empleados.find((e: any) => e.id === this.nuevoEmpleadoId);
+    this.empleadoReprogramarNoPuede = !!elegido && !puede(elegido);
+    this.cdr.detectChanges();
+  }
+
+  /** Sale del form de reprogramar limpiando todos los carteles. */
+  salirDeEditarTurno() {
+    this.modoEditarTurno = false;
+    this.editandoTurno = false;
+    this.errorEditarTurno = '';
+    this.empleadoReprogramarNoPuede = false;
+    this.empleadosReprogramar = this.empleados;
+    this.cdr.detectChanges();
+  }
+
+  onFechaReprogramarChange() {
+    this.errorEditarTurno = '';
+    this.actualizarEmpleadosReprogramar();
+  }
+
+  getComisionEmpleadoServicio(empleadoId: number): number {
+    if (!this.nuevoTurnoServicioId) return 0;
+    const comision = this.comisionesPorServicio.find(
+      (c: any) => c.empleado_id === empleadoId && c.servicio_id === this.nuevoTurnoServicioId
+    );
+    if (comision) return comision.porcentaje;
+    const empleado = this.empleados.find((e: any) => e.id === empleadoId);
+    return empleado?.comision_porcentaje || 0;
+  }
+
+  getComisionEmpleadoServicioReprogramar(empleadoId: number): number {
+    if (!this.nuevoServicioId) return 0;
+    const comision = this.comisionesPorServicio.find(
+      (c: any) => c.empleado_id === empleadoId && c.servicio_id === this.nuevoServicioId
+    );
+    if (comision) return comision.porcentaje;
+    const empleado = this.empleados.find((e: any) => e.id === empleadoId);
+    return empleado?.comision_porcentaje || 0;
   }
 
   cerrarModalNuevoTurno() {
@@ -455,15 +805,35 @@ export class DashboardComponent implements OnInit, OnDestroy {
       fin.setMinutes(fin.getMinutes() + servicio.duracion_minutos);
       const horaFin = `${String(fin.getHours()).padStart(2,'0')}:${String(fin.getMinutes()).padStart(2,'0')}`;
 
-      // Validar solapamiento
-      const solapados = await this.supabase.getTurnosSolapados(
-        this.nuevoTurnoFecha, this.nuevoTurnoHora, horaFin, 0
+      // El empleado es OBLIGATORIO en la app. El modo "automático" (tomar el
+      // primero libre) queda solo en el servicio, para el agente de WhatsApp.
+      const empleadoId: number | null = this.nuevoTurnoEmpleadoId;
+      if (!empleadoId) {
+        this.errorNuevoTurno = '❌ Elegí el empleado que atiende.';
+        this.guardandoNuevoTurno = false;
+        this.cdr.detectChanges();
+        return;
+      }
+
+      const nombreEmp = this.empleados.find((e: any) => e.id === empleadoId)?.nombre;
+
+      // Jornada semanal + ausencias
+      const puede = await this.supabase.empleadoPuedeAtender(
+        empleadoId, this.nuevoTurnoFecha, this.nuevoTurnoHora,
+        servicio.duracion_minutos, this.ausencias
       );
-      const puestos = await this.supabase.getPuestosXTurno();
-      if (solapados.length >= puestos) {
-        this.errorNuevoTurno = puestos === 1
-          ? `Ya hay un turno de ${solapados[0].cliente_nombre} a esa hora.`
-          : `Ya se alcanzó el límite de ${puestos} turnos simultáneos para ese horario.`;
+      if (!puede.ok) {
+        this.errorNuevoTurno = `❌ ${nombreEmp || 'Ese empleado'}: ${puede.motivo}.`;
+        this.guardandoNuevoTurno = false;
+        this.cdr.detectChanges();
+        return;
+      }
+
+      const ocupado = await this.supabase.empleadoEstaOcupado(
+        empleadoId, this.nuevoTurnoFecha, this.nuevoTurnoHora, servicio.duracion_minutos, 0
+      );
+      if (ocupado) {
+        this.errorNuevoTurno = `❌ ${nombreEmp || 'Ese empleado'} ya tiene un turno en ese horario.`;
         this.guardandoNuevoTurno = false;
         this.cdr.detectChanges();
         return;
@@ -484,7 +854,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const telefono = this.clienteSeleccionadoNuevo.telefonos?.[0]?.telefono || '';
+      // Sin teléfono = NULL (la columna ya no es NOT NULL); '' sería un 3er estado.
+      const telefono = this.clienteSeleccionadoNuevo.telefonos?.[0]?.telefono || null;
 
       await this.supabase.crearTurnoManual({
         cliente_id: this.clienteSeleccionadoNuevo.id,
@@ -498,9 +869,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
         servicio_nombre: servicio.nombre,
         precio: servicio.precio,
         duracion_minutos: servicio.duracion_minutos,
-        estado: 'pendiente'
+        estado: 'pendiente',
+        empleado_id: empleadoId
       });
       await this.cargarTurnos();
+      await this.cargarComisionesPorServicio();
       this.cerrarModalNuevoTurno();
     } catch (e) {
       console.error('Error en guardarNuevoTurno:', e);
@@ -524,9 +897,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     try {
       const cliente = await this.supabase.crearCliente(nombreNorm);
-      this.seleccionarClienteNuevo({ ...cliente, telefonos: [] });
+      const nuevo = { ...cliente, telefonos: [], activo: true };
+      // Se suma a la lista en memoria: como el buscador filtra contra ella, si no
+      // el cliente recién creado no aparecería al buscarlo de nuevo hasta
+      // recargar la página.
+      this.todosLosClientes = [...this.todosLosClientes, nuevo]
+        .sort((a: any, b: any) => a.nombre.localeCompare(b.nombre, 'es'));
+      // El form inline se cierra ANTES de seleccionar. Al revés, `seleccionar`
+      // dispara un detectChanges con el form todavía abierto y Angular lo
+      // detecta como cambio en vivo (NG0100) en modo desarrollo.
       this.mostrarFormNuevoCliente = false;
       this.nombreNuevoCliente = '';
+      this.seleccionarClienteNuevo(nuevo);
     } catch (e) {
       this.errorNuevoTurno = '❌ Error al crear el cliente.';
     }
@@ -535,7 +917,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   async iniciarCancelacion() {
     if (this.turnoSeleccionado) {
       await this.supabase.updateEstadoTurno(this.turnoSeleccionado.id, 'cancelado');
-      if (this.turnoSeleccionado.cliente_telefono && 
+      if (this.telefonoDe(this.turnoSeleccionado) &&
           confirm('¿Querés enviarle un mensaje de WhatsApp al cliente?')) {
         this.motivoCancelacion = '';
         this.mostrarPopupCancelacion = true;
@@ -551,7 +933,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   async enviarMensajeCancelacion() {
-    if (!this.turnoSeleccionado?.cliente_telefono) return;
+    if (!this.telefonoDe(this.turnoSeleccionado)) return;
     this.enviandoMensaje = true;
     try {
       const fecha = this.formatearFecha(this.turnoSeleccionado.fecha);
@@ -562,7 +944,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
-          to: this.turnoSeleccionado.cliente_telefono,
+          to: this.telefonoDe(this.turnoSeleccionado),
           type: 'text',
           text: { body: mensaje }
         })
@@ -583,7 +965,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   async iniciarNotificacionPostergacion(nuevaFecha: string, nuevaHora: string, nuevoServicio: string) {
-    const telefonoCliente = this.turnoSeleccionado?.cliente_telefono;
+    const telefonoCliente = this.telefonoDe(this.turnoSeleccionado);
     if (!telefonoCliente) {
       this.cerrarPopup();
       await this.cargarTurnos();
@@ -610,7 +992,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
-          to: this.turnoSeleccionado.cliente_telefono,
+          to: this.telefonoDe(this.turnoSeleccionado),
           type: 'text',
           text: { body: mensaje }
         })

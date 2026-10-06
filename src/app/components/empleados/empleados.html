@@ -1,0 +1,407 @@
+<div class="empleados-page">
+
+  <div class="layout" [class.con-detalle]="empleadoSeleccionado">
+
+    <!-- LISTA -->
+    <div class="seccion lista-seccion">
+      <div class="seccion-header">
+        <span class="badge-count">Total: {{ empleadosFiltrados.length }}</span>
+        <button class="btn-primary" (click)="abrirModalNuevoEmpleado()">➕ Nuevo</button>
+      </div>
+      <input type="text" class="buscador" [(ngModel)]="busqueda" placeholder="🔍 Buscar por nombre..." />
+
+      <div class="lista">
+        <div *ngFor="let empleado of empleadosFiltrados"
+          class="item"
+          [class.activo]="empleadoSeleccionado?.id === empleado.id"
+          [class.inactivo]="!empleado.activo"
+          role="button"
+          tabindex="0"
+          (click)="seleccionarEmpleado(empleado)"
+          (keydown.enter)="seleccionarEmpleado(empleado)"
+          (keydown.space)="seleccionarEmpleado(empleado); $event.preventDefault()">
+          <div class="avatar">{{ empleado.nombre?.charAt(0)?.toUpperCase() }}</div>
+          <div class="info">
+            <div class="nombre">{{ empleado.nombre }}</div>
+            <div class="sub">{{ empleado.telefono || 'Sin teléfono' }}</div>
+          </div>
+          <!-- Badge de estado en vez de la comisión: en la lista importa saber si
+               labra, no cuánto cobra. El % sigue en el panel de detalle. -->
+          <div class="estado-badge" [class.inactivo]="!empleado.activo">
+            {{ empleado.activo ? 'Activo' : 'Inactivo' }}
+          </div>
+          <div class="arrow">›</div>
+        </div>
+        <div *ngIf="empleadosFiltrados.length === 0" class="vacio">No se encontraron empleados</div>
+      </div>
+    </div>
+
+    <!-- DETALLE -->
+    <div *ngIf="empleadoSeleccionado" class="seccion detalle-seccion">
+      <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
+      <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
+
+      <div class="seccion-header">
+        <h3>Detalle del empleado</h3>
+        <button class="btn-cerrar" (click)="cerrarDetalle()">✕</button>
+      </div>
+
+      <!-- DATOS (nombre + teléfono) -->
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonDatos = !acordeonDatos">
+          <span>Datos</span>
+          <span class="chevron" [class.abierto]="acordeonDatos">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonDatos">
+          <!--
+            UN solo boton "Editar" para los dos campos, como en Personas >
+            Proveedores. Antes habia un lapiz por campo (y dos flags distintos:
+            `editando` para el nombre y `editandoTelefono` para el telefono), y
+            dos lapices en una columna de dos campos parecen cuatro acciones.
+
+            Los dos flags se unnieron en uno solo y el guardado es UNA llamada
+            con los dos campos: o se guarda la ficha o no se guarda.
+          -->
+          <div class="datos-campos">
+            <div class="campo-editable">
+              <label class="label-campo">Nombre</label>
+              <input type="text" [(ngModel)]="empleadoSeleccionado.nombre"
+                [readonly]="!empleadoSeleccionado.editando"
+                class="input-nombre" />
+            </div>
+
+            <div class="campo-editable">
+              <label class="label-campo">Teléfono</label>
+              <input type="text" [(ngModel)]="empleadoSeleccionado.telefono"
+                [readonly]="!empleadoSeleccionado.editando"
+                class="input-nombre" />
+            </div>
+          </div>
+
+          <div class="botones-edicion">
+            <button *ngIf="!empleadoSeleccionado.editando" class="btn-primary"
+                    (click)="editarDatos()">
+              ✏️ Editar
+            </button>
+
+            <button *ngIf="empleadoSeleccionado.editando" class="btn-primary"
+                    [disabled]="empleadoSeleccionado.guardando"
+                    (click)="guardarDatos()">
+              {{ empleadoSeleccionado.guardando ? 'Guardando...' : '💾 Guardar' }}
+            </button>
+
+            <button *ngIf="empleadoSeleccionado.editando" class="btn-secondary"
+                    [disabled]="empleadoSeleccionado.guardando"
+                    (click)="cancelarEdicionDatos()">
+              ↩️ Cancelar
+            </button>
+          </div>
+
+          <span *ngIf="empleadoSeleccionado.guardando" class="guardando-celda">⏳ Guardando…</span>
+        </div>
+      </div>
+
+      <!-- COMISIÓN POR SERVICIO
+           Va segundo, arriba de Jornada: es lo que se consulta todos los días
+           ("cuánto le debo a este chabón"), más que la disponibilidad. -->
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonComisiones = !acordeonComisiones">
+          <span>Comisión por servicio</span>
+          <span class="chevron" [class.abierto]="acordeonComisiones">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonComisiones">
+        <div class="campo-editable comision-general">
+          <span class="label-general">General</span>
+          <span *ngIf="!empleadoSeleccionado.editandoComision" class="comision-grande">{{ empleadoSeleccionado.comision_porcentaje }}%</span>
+          <input *ngIf="empleadoSeleccionado.editandoComision" type="number" [(ngModel)]="empleadoSeleccionado.comision_porcentaje"
+            min="0" max="100" class="input-num" />
+          <button *ngIf="!empleadoSeleccionado.editandoComision" class="btn-icon" (click)="empleadoSeleccionado.editandoComision = true">✏️</button>
+          <button *ngIf="empleadoSeleccionado.editandoComision && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarComision()">💾</button>
+          <button *ngIf="empleadoSeleccionado.editandoComision" class="btn-icon" (click)="empleadoSeleccionado.editandoComision = false">↩️</button>
+        </div>
+
+        <!-- Configuración por servicio -->
+        <p class="texto-ayuda">Configurá un porcentaje específico para cada servicio. Si no se configura, se usa la comisión general.</p>
+        <div class="servicios-comision-lista">
+          <div *ngFor="let servicio of servicios" class="servicio-comision-item">
+            <div class="servicio-comision-nombre">{{ servicio.nombre }}</div>
+            <div class="servicio-comision-valor">
+              <span *ngIf="editandoComisionServicio !== servicio.id" class="comision-valor">
+                {{ getComisionServicio(servicio.id) }}%
+              </span>
+              <input *ngIf="editandoComisionServicio === servicio.id" type="number" [(ngModel)]="nuevaComisionServicio" min="0" max="100" class="input-comision" />
+            </div>
+            <div class="servicio-comision-acciones">
+              <button *ngIf="editandoComisionServicio !== servicio.id" class="btn-icon" (click)="editarComisionServicio(servicio.id)">✏️</button>
+              <button *ngIf="editandoComisionServicio === servicio.id && !empleadoSeleccionado.guardando" class="btn-icon" (click)="guardarComisionServicio(servicio.id)">💾</button>
+              <button *ngIf="editandoComisionServicio === servicio.id" class="btn-icon" (click)="editandoComisionServicio = null">↩️</button>
+            </div>
+          </div>
+        </div>
+
+        <!--
+          SE MUDÓ EL "RESUMEN POR PERÍODO" A CAJA.
+
+          Este bloque decía "Servicios / Total a pagar" con el detalle turno por
+          turno del empleado elegido. Era un asunto de caja, no de la ficha: para
+          ver cuánto se le tiene que pagar a alguien había que abrir su ficha acá.
+
+          Ahora está en Caja → Empleados, como "Detalle de comisiones", con un
+          selector de empleado y el filtro Día/Semana/Mes de toda la pantalla.
+
+          Lo que QUEDÓ en esta pantalla es el bloque de arriba (L118-140): los
+          porcentajes de comisión por servicio, que sí son parte de la ficha
+          (se editan acá, con el plumín).
+        -->
+
+      <!-- JORNADA -->
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonJornada = !acordeonJornada">
+          <span>Jornada</span>
+          <span class="chevron" [class.abierto]="acordeonJornada">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonJornada">
+        <div *ngIf="!empleadoSeleccionado.editandoJornada" class="dias-display">
+          <span *ngFor="let dia of diasCompletos; let i = index"
+            class="dia-badge"
+            [class.activo]="empleadoSeleccionado.jornada[i].activo"
+            [class.parcial]="empleadoSeleccionado.jornada[i].activo && empleadoSeleccionado.jornada[i].hora_fin"
+            [title]="!empleadoSeleccionado.jornada[i].activo ? 'No trabaja'
+              : (empleadoSeleccionado.jornada[i].hora_fin
+                  ? (empleadoSeleccionado.jornada[i].hora_inicio + ' - ' + empleadoSeleccionado.jornada[i].hora_fin)
+                  : 'Jornada completa')">
+            {{ diasSemana[i] }}
+          </span>
+          <button class="btn-icon" (click)="empleadoSeleccionado.editandoJornada = true">✏️</button>
+        </div>
+        <div *ngIf="!empleadoSeleccionado.editandoJornada" class="jornada-resumen">
+          {{ resumenJornada }}
+        </div>
+
+        <div *ngIf="empleadoSeleccionado.editandoJornada" class="jornada-edicion">
+          <div *ngFor="let dia of diasSemana; let i = index" class="jornada-fila"
+               [class.inactivo]="!empleadoSeleccionado.jornada[i].activo">
+            <label class="dia-chip">
+              <input type="checkbox"
+                     [ngModel]="empleadoSeleccionado.jornada[i].activo"
+                     (ngModelChange)="$event ? activarDia(i) : desactivarDia(i)" />
+              <span>{{ dia }}</span>
+            </label>
+            <div class="jornada-horario" *ngIf="empleadoSeleccionado.jornada[i].activo">
+              <input type="time" [(ngModel)]="empleadoSeleccionado.jornada[i].hora_inicio" />
+              <span class="guion">→</span>
+              <input type="time" [(ngModel)]="empleadoSeleccionado.jornada[i].hora_fin" />
+              <button class="btn-mini" (click)="limpiarHorario(i)" title="Jornada completa (sin tope)">∞</button>
+            </div>
+          </div>
+          <p class="ayuda-jornada">
+            Sin horario = jornada completa. Con horario, el servicio tiene que
+            terminar antes de la hora de fin.
+          </p>
+          <div class="acciones">
+            <button class="btn-icon" [disabled]="empleadoSeleccionado.guardando" (click)="guardarJornada()">💾</button>
+            <button class="btn-icon" (click)="cancelarJornada()">↩️</button>
+          </div>
+        </div>
+        </div>
+      </div>
+
+      <!-- AUSENCIAS -->
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonAusencias = !acordeonAusencias">
+          <span>Ausencias</span>
+          <span class="chevron" [class.abierto]="acordeonAusencias">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonAusencias">
+        <!-- El botón va solo y a la derecha, con etiqueta. Antes era un ➕
+             suelto en un flex con `space-between` al lado de un texto largo: el
+             texto se enrollaba y el ícono quedaba descolgado (y en un celu un
+             ➕ solo no dice qué abre). -->
+        <div class="acciones-ausencias">
+          <button class="btn-agregar" (click)="mostrarFormAusencia ? mostrarFormAusencia = false : abrirFormAusencia()">
+            {{ mostrarFormAusencia ? '↩️ Cerrar' : '➕ Agregar ausencia' }}
+          </button>
+        </div>
+        <p class="ayuda-jornada">
+          Fechas donde no atiende. Con horario, bloquea solo esa franja del día.
+        </p>
+
+        <div *ngIf="mostrarFormAusencia" class="ausencia-form">
+          <div class="fila">
+            <div class="campo">
+              <label>Desde</label>
+              <input type="date" [(ngModel)]="nuevaAusencia.desde" (ngModelChange)="mostrarError('')" />
+            </div>
+            <div class="campo">
+              <label>Hasta <span class="opcional">(opcional)</span></label>
+              <input type="date" [(ngModel)]="nuevaAusencia.hasta" (ngModelChange)="mostrarError('')" />
+            </div>
+            <div class="campo">
+              <label>Tipo</label>
+              <select [(ngModel)]="nuevaAusencia.tipo">
+                <option value="vacaciones">🏖 Vacaciones</option>
+                <option value="medio_jornada">🕐 Medio día</option>
+                <option value="baja">🤒 Baja</option>
+                <option value="capacitacion">🎓 Capacitación</option>
+                <option value="ausencia">📋 Otro</option>
+              </select>
+            </div>
+          </div>
+          <div class="fila">
+            <div class="campo">
+              <label>Desde <span class="opcional">(opcional)</span></label>
+              <input type="time" [(ngModel)]="nuevaAusencia.hora_inicio" (ngModelChange)="mostrarError('')" />
+            </div>
+            <div class="campo">
+              <label>Hasta <span class="opcional">(opcional)</span></label>
+              <input type="time" [(ngModel)]="nuevaAusencia.hora_fin" (ngModelChange)="mostrarError('')" />
+            </div>
+            <div class="campo">
+              <label>Motivo</label>
+              <input type="text" [(ngModel)]="nuevaAusencia.motivo" placeholder="Ej: vacaciones" />
+            </div>
+          </div>
+          <p class="ayuda-jornada">Sin horas = todo el día. Con las dos = solo esa franja.</p>
+          <div class="acciones">
+            <button class="btn-primario" [disabled]="guardandoAusencia" (click)="agregarAusencia()">
+              {{ guardandoAusencia ? 'Guardando...' : '💾 Guardar ausencia' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="ausencia-lista">
+          <div *ngFor="let a of ausencias" class="ausencia-item">
+            <span class="ausencia-rango">{{ a.desde | date:'dd/MM' }}<span *ngIf="a.hasta"> – {{ a.hasta | date:'dd/MM' }}</span></span>
+            <span class="ausencia-tipo" [ngClass]="'tipo-' + a.tipo">{{ textoAusencia(a) }}</span>
+            <span class="ausencia-motivo" *ngIf="a.motivo">{{ a.motivo }}</span>
+            <button class="btn-icon" (click)="eliminarAusencia(a)" title="Eliminar">🗑️</button>
+          </div>
+          <div *ngIf="ausencias.length === 0" class="vacio-sm">Sin ausencias cargadas</div>
+        </div>
+        </div>
+      </div>
+
+      <!-- TURNOS EN RIESGO -->
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonRiesgo = !acordeonRiesgo">
+          <span>
+            Turnos en riesgo
+            <span *ngIf="turnosEnRiesgoLista.length" class="riesgo-contador">{{ turnosEnRiesgoLista.length }}</span>
+          </span>
+          <span class="chevron" [class.abierto]="acordeonRiesgo">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonRiesgo">
+        <div class="bloque-header">
+          <button class="btn-icon" (click)="cargarTurnosEnRiesgo()" title="Recalcular" [disabled]="cargandoRiesgo">🔄</button>
+        </div>
+        <p class="ayuda-jornada">
+          Turnos ya agendados que la jornada o una ausencia dejó sin cubrir. No se mueven
+          solos: reprogramalos desde la Agenda.
+        </p>
+
+        <div class="riesgo-lista">
+          <div *ngFor="let t of turnosEnRiesgoLista" class="riesgo-item" [ngClass]="'riesgo-' + t._tipoRiesgo">
+            <div class="riesgo-cuando">
+              <span class="riesgo-fecha">{{ t.fecha | date:'dd/MM' }}</span>
+              <span class="riesgo-dia">{{ t.fecha | date:'EEE' }}</span>
+              <span class="riesgo-hora">{{ (t.hora_inicio || t.hora).slice(0,5) }}</span>
+            </div>
+            <div class="riesgo-que">
+              <span class="riesgo-cliente">{{ t.cliente_nombre }}</span>
+              <span class="riesgo-motivo">{{ t._motivoRiesgo }}</span>
+            </div>
+          </div>
+
+          <div *ngIf="cargandoRiesgo" class="vacio-sm">Calculando...</div>
+          <div *ngIf="!cargandoRiesgo && turnosEnRiesgoLista.length === 0" class="vacio-sm">
+            Sin turnos en riesgo ✅
+          </div>
+        </div>
+        </div>
+      </div>
+
+      <!--
+        Inactivar: FUERA de los acordeones a propósito. Es una acción que no
+        puede quedar escondida detrás de un click.
+
+        El botón es gris con marco y va al lado del badge, igual que en
+        Personas > Proveedores. Antes era un botón ROJO de pantalla completa y
+        sin badge: dos acciones que hacen lo mismo pero no se parecían, y el
+        rojo de "borrar" en una acción que tiene vuelta atrás exagera.
+      -->
+      <div class="detalle-acciones" *ngIf="empleadoSeleccionado?.activo !== false">
+        <span class="estado-badge">Activo</span>
+        <button class="btn-secundario-sm" (click)="inactivarEmpleado()">
+          🚫 Inactivar
+        </button>
+      </div>
+
+      <p class="nota-ayuda" *ngIf="empleadoSeleccionado?.activo !== false">
+        Inactivar no borra: el empleado queda tachado en la lista y los turnos y
+        pagos viejos siguen apuntando a él. Podés volver a activarlo desde acá.
+      </p>
+
+    </div>
+
+  </div>
+
+  <!-- POPUP NUEVO EMPLEADO -->
+  <div *ngIf="mostrarModalNuevoEmpleado" class="popup-overlay" (click)="cerrarModalNuevoEmpleado()">
+    <div class="popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <h3>🧑‍🔧 Nuevo empleado</h3>
+        <button class="btn-cerrar" (click)="cerrarModalNuevoEmpleado()">✕</button>
+      </div>
+      <div class="popup-body">
+        <!--
+          Los campos van dentro de `.form-caja`, la cajita gris: es lo mismo
+          que hacen "Nuevo proveedor", "Registrar compra" y "Registrar pago".
+          Sin ella los campos quedan pegados al borde del popup y el formulario
+          se pierde en el blanco de la tarjeta.
+        -->
+        <div class="form-caja">
+          <div class="campo">
+            <label>Nombre</label>
+            <input type="text" [(ngModel)]="nuevoNombre" placeholder="Nombre" class="input" />
+          </div>
+          <div class="campo">
+            <label>Teléfono (opcional)</label>
+            <input type="text" [(ngModel)]="nuevoTelefono" placeholder="Teléfono" class="input" />
+          </div>
+          <div class="campo">
+            <label>Comisión: <strong>{{ nuevaComision }}%</strong></label>
+            <input type="range" [(ngModel)]="nuevaComision" min="0" max="100" step="1" class="slider" />
+          </div>
+          <div class="campo">
+            <label>Jornada</label>
+            <div class="jornada-edicion nueva">
+              <div *ngFor="let dia of diasSemana; let i = index" class="jornada-fila"
+                   [class.inactivo]="!jornadaNueva[i].activo">
+                <label class="dia-chip">
+                  <input type="checkbox"
+                         [ngModel]="jornadaNueva[i].activo"
+                         (ngModelChange)="$event ? activarDiaNueva(i) : desactivarDiaNueva(i)" />
+                  <span>{{ dia }}</span>
+                </label>
+                <div class="jornada-horario" *ngIf="jornadaNueva[i].activo">
+                  <input type="time" [(ngModel)]="jornadaNueva[i].hora_inicio" />
+                  <span class="guion">→</span>
+                  <input type="time" [(ngModel)]="jornadaNueva[i].hora_fin" />
+                  <button class="btn-mini" (click)="limpiarHorarioNueva(i)" title="Jornada completa">∞</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div *ngIf="errorNuevoEmpleado" class="error-msg">{{ errorNuevoEmpleado }}</div>
+      </div>
+      <div class="popup-acciones">
+        <button class="btn-atendido" (click)="agregarEmpleado()" [disabled]="guardandoNuevoEmpleado">
+          {{ guardandoNuevoEmpleado ? 'Guardando...' : '💾 Guardar' }}
+        </button>
+        <button class="btn-cancelado" (click)="cerrarModalNuevoEmpleado()">↩️ Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+</div>

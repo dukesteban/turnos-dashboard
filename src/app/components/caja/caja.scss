@@ -1,0 +1,819 @@
+// El popup entero (fondo, tarjeta, header, ✕ y la cajita de los campos) viene de
+// src/styles/_popup.scss, junto con el pie de botones (.popup-acciones,
+// .btn-atendido, .btn-cancelado, .error-msg). Lo comparte con el Dashboard y con
+// Personas > Proveedores.
+//
+// El `@use` va ARRIBA de todo porque Sass exige que las directivas `@use` precedan
+// a cualquier otra regla, y son TRES `..` para llegar a src/.
+@use '../../../styles/popup';
+@use '../../../styles/buscador-crear';
+@use '../../../styles/tabla';
+@use '../../../styles/tabs';
+@use '../../../styles/acordeon';
+
+.caja-page {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.caja-page .seccion {
+  // `hidden` y no `auto`: la tabla tiene su propio wrapper con scroll
+  // (`.tabla-scroll`). Si la tarjeta scrolleara, haría scroll horizontal la
+  // página entera al arrastrar sobre cualquier lado de la tarjeta.
+  overflow-x: hidden;
+}
+
+.controles {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.vistas {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
+
+  button {
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: #64748b;
+    font-weight: 500;
+    transition: all 0.2s;
+    &.activo {
+      background: white;
+      color: #1e293b;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+  }
+}
+
+.navegacion {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-nav {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 6px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &:hover { background: #f1f5f9; }
+}
+
+.btn-hoy {
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  &:hover { background: #f1f5f9; }
+}
+
+.fecha-titulo {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+// STATS
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+
+  // TODAS LAS FILAS MIDEN LO MISMO, no solo las tarjetas de una misma fila.
+  //
+  // `align-items` (que es `stretch`) iguala las tarjetas DENTRO de una fila, pero
+  // una fila con una sola tarjeta no tiene con qué estirarse y queda con su alto
+  // natural. Passa de verdad: entre 700 y 900px `.stats-ingresos` pasa a dos
+  // columnas, la tercera tarjeta baja sola a la segunda fila y medía 92px al lado
+  // de dos de 99px. Y en móvil, con una columna, CADA tarjeta queda sola en su
+  // fila y todas se miden por separado.
+  //
+  // `grid-auto-rows: 1fr` le dice a la grilla que reparta el alto disponible en
+  // partes iguales entre las filas, así que todas salen con el alto de la más
+  // alta. Es lo que falta para que el set de tarjetas se vea como un set y no
+  // como tres recuadros sueltos.
+  //
+  // OJO: esto NO se puede verificar en los tests. jsdom no calcula layout, así que
+  // `getBoundingClientRect()` devuelve ceros y el SCSS ni se lee. Hay que abrirlo
+  // en el navegador y medir.
+  grid-auto-rows: 1fr;
+
+  @media (max-width: 800px) { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 480px) { grid-template-columns: 1fr; }
+}
+
+/* El resumen de arriba son las MISMAS tarjetas que las de Ingresos, pero son
+ * TRES y no cuatro, así que no puede usar el `repeat(4, 1fr)` de `.stats`: con
+ * cuatro columnas y tres tarjetas queda un hueco vacío al lado que se lee como
+ * que falta algo.
+ *
+ * Se re-declara solo el número de columnas; el resto (fondo, radio, sombra,
+ * ícono) lo sigue trayendo `.stat-card`. */
+.stats-resumen {
+  grid-template-columns: repeat(3, 1fr);
+
+  @media (max-width: 700px) { grid-template-columns: 1fr; }
+}
+
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  &.verde .stat-icon { background: #dcfce7; }
+  &.azul .stat-icon { background: #dbeafe; }
+  &.naranja .stat-icon { background: #ffedd5; }
+  &.violeta .stat-icon { background: #ede9fe; }
+}
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1e293b;
+  &.stat-value-sm { font-size: 0.95rem; }
+}
+
+// GRID INFERIOR
+.grid-inferior {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+
+  @media (max-width: 700px) { grid-template-columns: 1fr; }
+}
+
+// GRAFICO
+.grafico {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 180px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  padding-top: 32px;
+  width: 100%;
+}
+
+.grafico-inner {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 600px;
+  width: 100%;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.barra-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 24px;
+  height: 100%;
+}
+
+.barra-wrap {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+}
+
+.barra-valor {
+  font-size: 0.6rem;
+  color: #64748b;
+  margin-bottom: 10px;
+  white-space: nowrap;
+  transform: rotate(-45deg);
+  transform-origin: center center;
+}
+
+.barra {
+  width: 100%;
+  background: #e2e8f0;
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+  transition: height 0.3s;
+
+  &.tiene-datos { background: #3b82f6; }
+}
+
+.barra-label {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.barra-col.clickeable {
+  cursor: pointer;
+  &:hover .barra { filter: brightness(0.85); }
+}
+
+// POR SERVICIO
+.servicios-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.servicio-fila {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.servicio-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.servicio-nombre {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.servicio-cantidad {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.servicio-barra-wrap {
+  height: 6px;
+  background: #f1f5f9;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.servicio-barra {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 3px;
+  transition: width 0.4s;
+}
+
+.servicio-total {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1e293b;
+  text-align: right;
+}
+
+// ══════════════════════════════════════════════════════════════
+// CAJA — pestañas de Pagos a Empleados y Proveedores
+//
+// Lo que hay arriba de esta línea es la pestaña de Ingresos, sin tocar.
+// ══════════════════════════════════════════════════════════════
+
+// ── PESTAÑAS ─────────────────────────────────────────────────
+// Solo el ESPACIO de la barra. El estilo de la pastita (pill gris, activa
+// blanca con borde azul) viene del partial `_tabs.scss`, el mismo que usa
+// Personas: dos estilos de pastana en la misma app es lo que se acaba de
+// arreglar, no algo que haya que volver a desarmar.
+.tabs-caja {
+  margin-bottom: 16px;
+}
+
+// Las secciones de cada pestaña. El gap va acá y NO en `.seccion`, porque
+// `.grid-inferior` (pestaña de Ingresos) ya tiene su propio `gap: 20px` y
+// antes una margen ahí sumaría espacio de más entre las tarjetas.
+//
+// Sin esto las tarjetas quedaban pegadas: `.seccion` nunca tuvo margin-bottom y
+// en Ingresos no hacía falta porque vivían dentro de un grid con gap.
+.tab-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+// ── FORMULARIOS ──────────────────────────────────────────────
+// Los campos del popup (`.form-caja`, `.campo`, `.fila`) NO estan aca: despues
+// de que el popup de Proveedores se mudara a Personas se vio que la cajita de
+// los campos la dibujan dos pantallas. Esta en `_popup.scss`.
+
+.resumen-prov {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+
+  h4 {
+    margin: 0 0 10px;
+    font-size: 0.9rem;
+    color: #475569;
+  }
+}
+
+// El pie de botones (.popup-acciones, .btn-atendido, .btn-cancelado,
+// .error-msg) viene del partial compartido con el Dashboard: los dos popups
+// tienen que verse igual, y por eso no hay una segunda copia de los valores.
+
+// ── RESPONSIVE ───────────────────────────────────────────────
+@media (max-width: 700px) {
+
+  // La fila no baja del ancho mínimo: si se comprime, los importes se parten en
+  // dos líneas y la tabla deja de poder leerse. El scroll hace el resto.
+  .tabla-caja .tr { min-width: 460px; }
+  .tabla-caja .tr-con-acciones { min-width: 540px; }
+
+  // Menos padding en celular: la tabla tiene que dejar lugar al scroll.
+  .tabla-caja .tr { padding: 10px 12px; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// DETALLE DE COMISIONES (pestaña Empleados)
+//
+// Este bloque venía en la ficha del empleado, en Personas. Las clases se llaman
+// distinto a propósito de las de `.resumen-prov` (que son del desglose por
+// proveedor): así se puede borrar una sin romper la otra.
+// ══════════════════════════════════════════════════════════════
+
+.select-empleado {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  background: white;
+  cursor: pointer;
+  max-width: 220px;
+
+  &:focus { outline: none; border-color: #3b82f6; }
+}
+
+
+// Los cuadros del detalle de comisiones son `.stat-card`, los MISMOS de las tres
+// tarjetas de arriba y de las de la pestaña Ingresos. Se sacaron
+// `.detalle-resumen` y `.detalle-dato` de acá porque la app tenía dos estilos de
+// cuadro informativo conviviendo.
+.stats-detalle {
+  grid-template-columns: repeat(2, 1fr);
+  max-width: 480px;
+
+  @media (max-width: 700px) { grid-template-columns: 1fr; max-width: none; }
+}
+
+// Los tres de la pestaña Ingresos. `minmax(0, 1fr)` y no `1fr`: los dos
+// últimos son texto que puede ser largo ("Lavado completo"), y sin el 0 la
+// columna no baja del ancho de su contenido y la fila no se reparte.
+.stats-ingresos {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+// El `margin-bottom` de `.stats` (20px) queda raro adentro de un acordeón, que ya
+// tiene su padding y su separación.
+.acordeon-body .stats { margin-bottom: 16px; }
+
+// Encabezado de sección usado SOLO para alinear un botón a la derecha dentro
+// del acordeón. Sin esto queda un hueco vacío arriba del botón.
+.seccion-sin-borde {
+  border: none;
+  padding: 0 0 12px;
+  margin: 0;
+}
+
+.saldo-pendiente {
+  padding: 9px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+
+.saldo-vacio {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+// ============================================================
+// LECTURA DE LOS TRES MONTOS
+// ============================================================
+//
+// El criterio de la pantalla es uno solo: si hay que restar dos numeros para
+// saber cuanto se debe, la pantalla esta mal. Por eso los tres montos van
+// SIEMPRE juntos, en el mismo orden, y la diferencia ya viene calculada.
+//
+// El tercer cuadro no es "un dato mas", es LA RESPUESTA: por eso lleva un
+// filete del color en el borde izquierdo. Con solo pintar el icono (que es lo
+// que hacen .verde / .azul / etc.) los tres se ven igual de importantes y no
+// destaca ninguno.
+
+// Tres columnas, no las cuatro de .stats: con tres tarjetas y cuatro columnas
+// queda un hueco vacio al lado que se lee como que falta algo.
+.stats-trio {
+  grid-template-columns: repeat(3, 1fr);
+
+  @media (max-width: 800px) { grid-template-columns: 1fr; }
+}
+
+// Los tres cuadros de Empleados y Gastos van alineados ARRIBA, no centrados.
+//
+// `.stat-card` centra verticalmente su contenido, y con la nota de abajo la
+// tarjeta con mas texto quedaba con el titulo mas arriba que las otras dos:
+// "Falta pagar" flotaba y "Le debo" / "Le pague" no compartian linea. Con
+// `flex-start` las tres arrancan en el mismo lugar y la nota cuelga.
+//
+// `flex-start` y NO `stretch`: estirado, la nota de la tarjeta mas corta se
+// separaria del valor y las tres notas quedarian a distintas alturas.
+.stats-trio .stat-card {
+  align-items: flex-start;
+}
+
+// La nota puede venir VACIA (cuando no hay frase que poner), y sin espacio
+// reservado el valor de esa tarjeta se corre hacia arriba respecto de las otras
+// dos. `min-height` reserva una linea en las tres y los valores comparten linea
+// siempre. Este es el unico `min-height` de la pantalla y esta aca por eso.
+.stat-nota {
+  min-height: 1.15em;
+}
+
+.stat-card.respuesta {
+  // `border-left` y no `border`: cambiar el borde entero corre el box-shadow y
+  // la tarjeta "salta" un pixel al cambiar de estado.
+  border-left: 4px solid transparent;
+  padding-left: 14px;
+
+  &.rojo  { border-left-color: #b91c1c; }
+  &.verde { border-left-color: #15803d; }
+
+  // Y el numero tambien del color. El filete solo no alcanza en una pantalla
+  // chica: el filete son 4px, el numero es lo que se lee.
+  &.rojo  .stat-value { color: #b91c1c; }
+  &.verde .stat-value { color: #15803d; }
+}
+
+// La variante que faltaba en la lista de iconos.
+.stat-card.rojo .stat-icon { background: #fee2e2; }
+
+// La linea de abajo del cuadro: "3 turnos atendidos", "2 pagos registrados".
+//
+// Sin esto el cuadro tiene un numero suelto y no se entiende de donde salio.
+// Con esto el numero viene con su contexto y no hace falta abrir un acordeon
+// para saber si el empleado trabajo o no.
+.stat-nota {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+
+// ============================================================
+// QUIEN MIRAMOS
+//
+// El selector con su etiqueta. La etiqueta es lo que hace obvio que el
+// primer cuadro es de ESTE empleado y no de todos: sin ella, un nombre
+// arriba de tres numeros se lee como un titulo de la pantalla.
+// ============================================================
+.selector-seccion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+}
+
+.selector-bloque {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.selector-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+// El periodo a la derecha. Se muestra el texto y no un control porque el
+// control del periodo ya esta arriba, en la barra: repetirlo aqui seria un
+// segundo lugar del que se puede cambiar el mismo valor.
+.selector-periodo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.selector-valor {
+  font-size: 0.85rem;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+// La fila del empleado o proveedor que se esta mirando, en la tabla de todos.
+// Se resalta con un filete y no con un fondo: un fondo compite con el hover de
+// la tabla y los dos se pisan.
+.tabla tr.fila-actual td {
+  background: #eff6ff;
+  box-shadow: inset 3px 0 0 #1d4ed8;
+}
+
+// Texto terciario: notas, metodos, cosas que estan ahi pero no se leen.
+.celda-tenue {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// EL TOTAL EN EL ENCABEZADO DEL ACORDEÓN
+//
+// Con el acordeón cerrado, el encabezado es todo lo que se ve de esa tabla. Si
+// no dice nada, hay que abrirlo para saber si hay algo adentro. Con el total a la
+// vista, el acordeón se abre solo cuando uno quiere el detalle, no para enterarse
+// del número.
+//
+// Va en el MISMO `<span>` que el chevron, y no en uno aparte, para que hereden
+// los dos el mismo peso y no compitan entre ellos.
+// ══════════════════════════════════════════════════════════════
+.acordeon-total {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  // El `.chevron` tiene su propio color cuando está abierto; sin esto el total
+  // heredaría el azul y parecería un link.
+  white-space: nowrap;
+
+  .chevron { color: #94a3b8; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// DEBE Y HABER: dos columnas, dos colores
+//
+// En la pantalla NUNCA hay un número con signo. La diferencia entre "le debo" y
+// "me deben" la dicen dos columnas: "Debe" en rojo y "Haber" en verde.
+//
+// Cada celda lleva SIEMPRE un número, incluido el `$0` de la columna que no
+// aplica. Con una raya o un hueco, la fila parece incompleta; con `$0` se lee
+// "de este lado no hay nada", que es lo que pasa.
+// ══════════════════════════════════════════════════════════════
+.tabla {
+  .col-debe,
+  .col-haber {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+  }
+
+  // La de "Haber" un poco más ancha: su encabezado es una palabra más larga y
+  // con el mismo `width: 1%` la tabla la angosta y las dos columnas no cierran
+  // alineadas con las de arriba.
+  .col-haber { min-width: 78px; }
+  .col-debe  { min-width: 72px; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// LOS CUADROS EN ROJO, NO SOLO CON EL ICONO ROJO
+//
+// Hasta ahora las variantes `.verde` / `.azul` / `.rojo` de `.stat-card` solo
+// cambiaban el fondo del ÍCONO. Con eso, un cuadro que dice "Debo 12.000" y otro
+// que dice "Entró 12.000" se ven igual de importantes, y el color deja de ser la
+// señal principal — que es justo lo que se pidió: el color es lo que dice de qué
+// lado está el dinero.
+//
+// Se tiñe el fondo entero, suave, más el filete de la izquierda que ya tenía
+// `.respuesta`.
+// ══════════════════════════════════════════════════════════════
+.stat-card.rojo {
+  background: #fef2f2;
+
+  .stat-icon { background: #fee2e2; }
+}
+
+.stat-card.verde {
+  background: #f0fdf4;
+
+  .stat-icon { background: #dcfce7; }
+}
+
+// El valor del cuadro en rojo/verde también, no solo el ícono: el ícono son 20px
+// y el número es lo que se lee.
+.stat-card.rojo .stat-value  { color: #b91c1c; }
+.stat-card.verde .stat-value { color: #15803d; }
+
+
+// El aviso informativo dentro de un popup.
+//
+// Sale en el popup de "Registrar pago a proveedor" cuando el abono es MAYOR que
+// lo que se le debe, o sea cuando va a quedar a su favor. Es un aviso y no un
+// error: la operación es válida y a veces justamente lo que se quiere (se
+// adelanta plata). Por eso es azul y no rojo, y el botón de guardar queda
+// activo: la decisión es de quien está cargando el pago.
+.nota-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+
+// ============================================================
+// EN TELÉFONO: UNA TARJETA POR RENGLÓN, Y MAS FINAS
+// ============================================================
+//
+// El celu es el caso que estaba roto y por dos motivos distintos:
+//
+//  1. `.stats-ingresos` era la única grilla SIN media query: `repeat(3,
+//     minmax(0, 1fr))` en un pantalla de 360px deja tres columnas de 100px, y
+//     "Servicios más vendidos" se partía como "Servi / c más / vendi / dos".
+//     El `minmax(0, ...)` evita que la grilla desborde, pero no que el TEXTO se
+//     rompa a mitad de palabra.
+//
+//  2. Las otras grillas sí bajaban a una columna, pero a una columna GORDA: 18px
+//     de padding, un ícono de 44px y un número de 1.3rem por tarjeta. Tres de
+//     esos renglones se comen media pantalla para decir tres cosas, y el
+//     scroll para llegar al contenido es lo que hace que la pantalla parezca
+//     larga.
+//
+// La regla es una sola para todas: en celular, una tarjeta por renglón y con el
+// padding, el ícono y la letra achicados. El color, el número y la etiqueta se
+// quedan igual, porque son lo que hay que leer; lo que se achica es el marco.
+
+@media (max-width: 700px) {
+  // El ícono era 44px, más que la mitad del alto de la tarjeta. Con 34 entra
+  // la misma información en menos espacio y sigue siendo reconocible.
+  .stat-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+
+  .stat-card {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  // La respuesta que lleva el filete de color tiene el padding-left corriendo
+  // por el `border-left` de 4px: sin bajarlo, la tarjeta "Debe / Haber" queda
+  // con el texto 4px corrida respecto de las otras dos de la fila.
+  .stat-card.respuesta { padding-left: 10px; }
+
+  .stat-value { font-size: 1.1rem; }
+  .stat-label { font-size: 0.74rem; }
+}
+
+// Las grillas de tres: UNA por renglón en teléfono.
+//
+// Para `.stats-ingresos` el `1fr` es la parte que arregla la rotura de palabras:
+// con tres columnas de 100px no hay ancho para "Lavado completo", y partir un
+// nombre de servicio a mitad de palabra lo hace ilegible, que es peor que
+// hacerlo scrollear.
+.stats-ingresos,
+.stats-trio,
+.stats-resumen,
+.stats {
+  @media (max-width: 700px) {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+}
+
+// En tablet (700-900px) tres columnas de tres tarjetas siguen siendo
+// comfortablemente legibles, pero los nombres largos ya rozan el salto de
+// palabra. Dos columnas aísla el problema sin apilar todo.
+@media (max-width: 900px) {
+  .stats-ingresos,
+  .stats-trio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+
+// ============================================================
+// TODAS LAS TARJETAS MIDEN LO MISMO
+// ============================================================
+//
+// Medido: los cuadros de Ingresos y del resumen dan 81px, y los de Empleados y
+// Gastos dan 99px. La diferencia son los 18px de la línea de la nota.
+//
+// La tentación es achicar los de abajo para igualarlos, pero no se puede: en esa
+// línea está el "Debo" / "A favor" del tercer cuadro, que es justamente lo que
+// hace legible el número sin tener que interpretar el color. Si la nota se va,
+// el tercer cuadro vuelve a ser un número suelto con un título que no dice de qué
+// lado está.
+//
+// Así que se iguala por el otro lado: los cuadros SIN nota reservan la línea
+// vacía y miden 99px también. Todas las tarjetas de Caja quedan del mismo alto,
+// que es lo que se ve al pasar de una pestaña a otra.
+//
+// `visibility: hidden` y no `display: none`: es lo que reserva el espacio sin
+// mostrar nada. Un `display: none` no ocuparía nada y el alto volvería a 81px.
+// Y `&nbsp;` en vez de dejar el `<span>` vacío, para que el alto sea el mismo que
+// el de una nota con texto y no uno inventado por el navegador.
+
+.stat-nota-vacia {
+  visibility: hidden;
+}
+
+
+// Ir a una fecha con el calendario.
+//
+// Mismo truco que Dashboard y Agenda: un `<input type="date">` TRANSPARENTE
+// encima de un botón con el ícono, y que sea el navegador el que abra su
+// calendario. Sin `showPicker()` ni JavaScript, que es la única forma de que
+// funcione en todos los navegadores sin preguntar permisos.
+//
+// Va acá y no se copia el de Dashboard porque los botones de esta barra miden
+// 32px y los de allá son más grandes; si mañana se unifican, este bloque se
+// borra y queda el de Dashboard.
+.ir-a-fecha {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+// El ícono es decorativo: el que recibe el clic es el input de arriba, que está
+// en toda la caja. Sin `pointer-events: none` los dos se pelean por el mismo
+// pixel y el input deja de abrir el calendario en la mitad de los casos.
+.btn-calendario {
+  pointer-events: none;
+  font-size: 1rem;
+}
+
+// `opacity: 0` y NO `display: none`: con cualquiera de los otros dos el input no
+// existe para el navegador y el calendario no abre. Y nada de `visibility:
+// hidden`, por la misma razón.
+.input-calendario {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  background: transparent;
+  cursor: pointer;
+}

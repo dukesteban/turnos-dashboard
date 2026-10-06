@@ -1,3 +1,17 @@
+// Las reglas de acordeón (.acordeon, .acordeon-header, .chevron,
+// .acordeon-body) viven en src/styles/_acordeon.scss y las comparte también
+// Empleados, para que las dos copias no se desincronicen.
+//
+// El `@use` tiene que estar ARRIBA de todo: Sass exige que las directivas
+// `@use` precedan a cualquier otra regla. Ponerlo junto a la sección que lo usa
+// compila mal con "rules must be written before any other rules".
+//
+// Son TRES `..` porque desde src/app/components/configuracion hay que subir a
+// src/app/components, después a src/app, y después a src. Con dos `..` el Sass
+// busca en src/app/styles/ y falla con "Can't find stylesheet to import".
+@use '../../../styles/acordeon';
+@use '../../../styles/popup';
+
 .config-page {
   padding: 24px;
   max-width: 800px;
@@ -64,31 +78,6 @@
     }
   }
 }
-
-.btn-primary {
-  padding: 10px 20px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  font-weight: 500;
-  &:hover { background: #2563eb; }
-  &:disabled { opacity: 0.6; cursor: not-allowed; }
-}
-
-.btn-secondary {
-  padding: 8px 16px;
-  background: #f1f5f9;
-  color: #334155;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  &:hover { background: #e2e8f0; }
-}
-
 .form-nuevo-horario {
   background: #f8fafc;
   border-radius: 8px;
@@ -182,32 +171,6 @@
   margin-bottom: 16px;
   h3 { font-size: 1.1rem; color: #334155; margin: 0; }
 }
-
-.btn-primary {
-  padding: 8px 16px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  font-weight: 500;
-  white-space: nowrap;
-  &:hover { background: #2563eb; }
-  &:disabled { opacity: 0.6; cursor: not-allowed; }
-}
-
-.btn-secondary {
-  padding: 8px 16px;
-  background: #f1f5f9;
-  color: #334155;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  &:hover { background: #e2e8f0; }
-}
-
 .form-nuevo {
   background: #f8fafc;
   border-radius: 8px;
@@ -284,7 +247,16 @@
   &:focus { outline: none; border-color: #3b82f6; background: white; }
 }
 
-.input-nombre { width: 100%; min-width: 140px; }
+/* Campo de nombre (Servicios, Días cerrados, Métodos de pago).
+   Ancho FIJO y no porcentaje: dentro de una tabla con width:100%, un width en %
+   crea una dependencia circular que el navegador resuelve distinto según cuántas
+   columnas tenga la tabla y los campos quedaban de tamaños distintos. Con px
+   ambos se ven idénticos en cualquier pantalla. */
+.input-nombre {
+  width: 175px;
+  min-width: 175px;
+  max-width: 175px;
+}
 .input-numero { width: 80px; }
 
 .input-con-prefix, .input-con-suffix {
@@ -306,6 +278,7 @@
   height: 100%;
 }
 
+/* Fila de botones de Ediar/Guardar/Cancelar (Datos del negocio y password) */
 .btn-icon {
   background: none;
   border: none;
@@ -384,45 +357,8 @@
 }
 
 // ── ACORDEONES ──────────────────────────────────────────────
-.acordeon {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-  margin-bottom: 12px;
-  overflow: hidden;
-}
-
-.acordeon-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: #1e293b;
-  user-select: none;
-  transition: background 0.15s;
-
-  &:hover { background: #f8fafc; }
-
-  .chevron {
-    font-size: 1.2rem;
-    color: #94a3b8;
-    transform: rotate(90deg);
-    transition: transform 0.2s;
-    display: inline-block;
-
-    &.abierto { transform: rotate(-90deg); }
-  }
-}
-
-.acordeon-body {
-  display: none;
-  padding: 0 20px 20px;
-
-  &.visible { display: block; }
-}
+// Las reglas vienen del partial compartido (ver el `@use` arriba de este
+// archivo): .acordeon, .acordeon-header, .chevron y .acordeon-body.
 
 .cambios-restantes {
   font-size: 0.85rem;
@@ -432,3 +368,29 @@
   border-radius: 8px;
   margin-bottom: 12px;
 }
+
+/* ── Tabla de Puestos: RETIRADA (migracion 011) ──
+   Se fueron .tabla-puestos, .input-empleado-puesto, .puesto-dup y
+   .alerta.aviso (esta ultima solo la usaba `avisosPuestos`). Los selectores
+   `.celda-empleado` e `.input-nombre` que se comparten con Servicios y con la
+   lista de empleados siguen vivos y NO se tocan. */
+
+/* Texto plano del Empleado (fuera de edición).
+   Debe verse idéntico al <input> en readonly: mismo tamaño, mismo color
+   y sin negrita, así la fila no parece de dos fuentes distintas. */
+.celda-empleado {
+  font-size: 0.88rem;
+  color: inherit;
+  font-weight: inherit;
+}
+
+/* ── Estado "guardando" en las tablas editables ── */
+.guardando-celda {
+  font-size: 0.75rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* .puesto-dup: RETIRADO con la tabla `puestos` (migracion 011).
+   Era el aviso "ya existe otro puesto con ese nombre". El mismo aviso para
+   servicios y metodos de pago usa otras clases. */

@@ -1,7 +1,174 @@
+// El pie de botones de los popups (.popup-acciones, .btn-atendido,
+// .btn-cancelado, .error-msg) vive en src/styles/_popup.scss y lo comparte con
+// Caja. El `@use` va ARRIBA de todo porque Sass exige que las directivas `@use`
+// precedan a cualquier otra regla.
+@use '../../../styles/popup';
+@use '../../../styles/buscador-crear';
+// `.tabla` y `.tabla-wrapper` se mudaron a `src/styles/_tabla.scss` para que Caja
+// pueda usar el MISMO estilo de tabla sin copiarlo. Antes vivían solo acá y
+// "copiar la tabla de Dashboard" era inevitable duplicar el bloque.
+//
+// OJO al mover un bloque: el primer intento de sacar `.tabla` de este archivo
+// casi se lleva por delante `.controles`, `.vistas`, `.navegacion`, `.btn-nav`,
+// `.btn-hoy`, `.fecha-titulo`, `.ir-a-fecha` y `.seccion-header`, que estaban en
+// medio. El Dashboard perdió el input de fecha y los botones se aplastaron. Va
+// el aviso acá a propósito: el `@use` no es lo peligroso de este archivo, lo
+// peligroso es el bloque que se mueve de lugar.
+@use '../../../styles/tabla';
+
 .dashboard-page {
   padding: 24px;
   max-width: 1100px;
   margin: 0 auto;
+}
+
+// ═══ ACCESOS RÁPIDOS A CAJA ═══
+// Los tres "registrar" de Caja, siempre a mano desde la pantalla de turnos.
+//
+// SOLO EL SIGNO. El texto no se ve: lo muestra el tooltip del hover. Y no es
+// capricho de diseño, es una medida. Con el texto siempre a la vista la pill mide
+// 155px de ancho y el grupo arranca en x=813, que es justo donde termina el texto
+// de la tercera tarjeta de arriba ("Turnos pendientes"): le pisaba las últimas
+// letras y el número. Como círculo, el grupo mide 42px y arranca en 927, así que
+// solo pisa el padding de la tarjeta.
+//
+// EL TEXTO SIGUE EN EL DOM, OCULTO. No es decoración: es lo que muestra el tooltip
+// del hover y lo que lee el lector de pantalla. Por eso el botón lleva
+// `aria-label` y NO `title`: con los dos aparecen DOS tooltips, el de CSS al toque
+// y el nativo del sistema un segundo después, y el que se ve es el que no se
+// pidió.
+//
+// LA ALTURA ESTÁ MEDIDA PARA NO TAPAR EL "➕ NUEVO TURNO". El navbar mide 56 y
+// ahora está SIEMPRE en y=0 (por el `margin: 0` del body, que está explicado en
+// styles.scss), así que `top: 64px` da los mismos 8px de aire scrolleando o no. El
+// encabezado de "Turnos de hoy" va de y=245 a y=281 y el grupo termina en 202. Si se
+// le agrega un cuarto botón, o se agrandan los círculos, ese botón empieza a quedar
+// debajo: el alto del grupo es 42*3 + 6*2 = 138, y hay que volver a medir.
+//
+// `top: 64px` y NO `56px`: con el navbar en y=0, a 56 el círculo quedaría pegado
+// abajo de la barra, sin aire, y con el borde de 2px parece que es parte de ella.
+//
+// `position: fixed` y no `sticky` dentro del flujo: si ocuparan lugar, empujarían
+// los cuadros de arriba hacia abajo y cambiarían el alto de la primera pantalla
+// cada vez que se agregara uno. Flotando, la pantalla no se mueve.
+//
+// `z-index: 60`: arriba del contenido (que no lleva z-index) y abajo del navbar
+// (100) y de los popups (1000). Si fuera 100+, al scrollear pasarían por ENCIMA de
+// la barra y quedarían medio cortados al pegarse al borde superior.
+.acciones-rapidas {
+  position: fixed;
+  top: 64px;
+  right: 14px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.accion-rapida {
+  position: relative;
+  display: block;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover .accion-signo { transform: scale(1.1); }
+  &:active .accion-signo { transform: scale(0.94); }
+  // `focus-visible` y no `focus`: al tocar con el mouse no tiene que quedar un
+  // marco azul alrededor del círculo, pero con teclado sí tiene que verse dónde
+  // estás. El tooltip sí sale con el foco (abajo): el teclado no tiene hover.
+  &:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 3px; border-radius: 50%; }
+}
+
+// Círculo con borde del color y `+` del mismo color: el signo se ve teñido (que es
+// lo que distingue una acción de otra de un vistazo) y la pastilla sigue
+// resaltando sobre una fila de tabla o sobre una tarjeta blanca.
+.accion-signo {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--c);
+  color: var(--c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.16);
+  transition: transform 0.15s ease, background 0.15s ease;
+
+  .accion-rapida:hover & { background: var(--fondo); }
+}
+
+// EL TOOLTIP Y CÓMO SALTA. El texto se muestra con el mouse ENCIMA del botón y
+// con el FOCO del botón, pero en cada dispositivo por un motivo distinto, y por eso
+// los dos casos van en media queries y no juntos:
+//
+//   · con mouse (hover: hover) -> `:hover` y `:focus-visible`. Con `:focus` pelado
+//     no, porque al hacer clic con el mouse el botón queda enfocado y el tooltip se
+//     quedaría pegado arriba de todo lo que se tocase después.
+//   · sin mouse (hover: none, o sea el celular) -> `:focus`. Al apretar un botón el
+//     celular le da foco y ahí aparece el nombre; se va al apretar otro. Sin esto el
+//     celular queda con tres círculos de colores que no dicen qué abren.
+//
+// Sale a la IZQUIERDA y no arriba: los botones están pegados al borde derecho, así
+// que hacia la derecha no hay lugar y la etiqueta se saldría de la ventana.
+//
+// `right: calc(100% + 8px)` y no `left: -100%`: el botón tiene ancho de contenido
+// (el texto no ocupa lugar, es `position: absolute`), así que 100% es el ancho del
+// círculo, no el de la etiqueta.
+.accion-texto {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  background: #1e293b;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+  // Sin `transition` de `transform` a propósito: se mueve con el círculo y con el
+  // translate del medio se vería deslizarse de abajo hacia arriba.
+  transition: opacity 0.12s ease;
+}
+
+@media (hover: hover) {
+  .accion-rapida:hover .accion-texto,
+  .accion-rapida:focus-visible .accion-texto { opacity: 1; }
+}
+
+@media (hover: none) {
+  // Celular: apretar muestra el nombre. Ver el bloque de arriba para por qué acá es
+  // `:focus` pelado y no `:focus-visible`.
+  .accion-rapida:focus .accion-texto { opacity: 1; }
+}
+
+// Un color por salida de dinero, y son los mismos de las dos pestañas de Caja:
+//   · naranja  lo que sale para la gente de la casa (pago a empleado)
+//   · rojo     lo que se toma y hay que devolver (deuda)
+//   · verde    lo que se abona (pago a proveedor)
+// Los `--fondo` son tintes del mismo color, no grises: al pasar el mouse el círculo
+// se tiñe y tiene que leerse como el mismo botón, no como uno distinto.
+.accion-naranja { --c: #ea580c; --fondo: #ffedd5; }
+.accion-rojo     { --c: #dc2626; --fondo: #fee2e2; }
+.accion-verde    { --c: #15803d; --fondo: #dcfce7; }
+
+// En celular el círculo baja un poco y se pega más al borde. Ojo: el texto NO se
+// saca acá a la fuerza. Tres etiquetas siempre visibles en una pantalla angosta
+// tapan la columna derecha de la tabla de turnos, que es la que se mira todos los
+// días. Con el `:focus` del media query de arriba el nombre aparece al apretar.
+@media (max-width: 640px) {
+  .acciones-rapidas { top: 62px; right: 10px; }
 }
 
 .stats {
@@ -63,10 +230,6 @@
   padding: 24px;
   margin-bottom: 24px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-}
-
-.tabla-wrapper {
-  overflow-x: auto;
 }
 
 .controles {
@@ -139,6 +302,43 @@
   color: #1e293b;
 }
 
+/* -- IR A UNA FECHA ---------------------------------------------------
+ *
+ * Es el MISMO truco que en la Agenda: un `<input type="date">` transparente
+ * puesto encima de un `<span>` con el ícono, que se ve como un `.btn-nav` más.
+ *
+ * Va duplicado acá y no en un parcial compartido porque los estilos de un
+ * componente Angular llevan su `[_ngcontent-xxx]` y un parcial compartido NO
+ * matchea el template de otro componente: si el selector no calza, el estilo no
+ * se aplica y no hay error que lo delate.
+ *
+ * `opacity: 0` y NO `display: none`: con cualquiera de los otros dos el input no
+ * existe para el navegador y el calendario no abre.
+ */
+.ir-a-fecha {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.btn-calendario {
+  pointer-events: none;
+  font-size: 1rem;
+}
+
+.input-calendario {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
 .seccion-header {
   display: flex;
   justify-content: space-between;
@@ -161,37 +361,6 @@
   font-size: 0.85rem;
   cursor: pointer;
   &:hover { background: #e2e8f0; }
-}
-
-.tabla {
-  width: 100%;
-  border-collapse: collapse;
-
-  th {
-    text-align: left;
-    padding: 10px 12px;
-    font-size: 0.8rem;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid #e2e8f0;
-  }
-
-  td {
-    padding: 12px;
-    border-bottom: 1px solid #f1f5f9;
-    color: #1e293b;
-    font-size: 0.9rem;
-  }
-
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: #f8fafc; }
-
-  .vacio {
-    text-align: center;
-    color: #94a3b8;
-    padding: 32px;
-  }
 }
 
 .badge {
@@ -225,51 +394,6 @@ tr.vencido td { background: #fff7ed; }
   transition: background 0.15s;
   &:hover { background: #f1f5f9; }
 }
-
-.popup-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 16px;
-}
-
-.popup {
-  background: white;
-  border-radius: 16px;
-  width: 100%;
-  max-width: 380px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
-}
-
-.popup-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #f1f5f9;
-  h3 { font-size: 1rem; color: #1e293b; margin: 0; }
-}
-
-.btn-cerrar {
-  background: none;
-  border: none;
-  font-size: 1rem;
-  cursor: pointer;
-  color: #94a3b8;
-  &:hover { color: #1e293b; }
-}
-
-.popup-body {
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
 .detalle-bloque {
   display: flex;
   flex-direction: column;
@@ -299,24 +423,10 @@ tr.vencido td { background: #fff7ed; }
   margin-left: 6px;
 }
 
-.popup-acciones {
-  display: flex;
-  gap: 8px;
-  padding: 12px 20px 20px;
-  button {
-    flex: 1;
-    padding: 10px;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.88rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-}
+// `.popup-acciones`, `.btn-atendido`, `.btn-cancelado` y `.error-msg` viven en
+// src/styles/_popup.scss: los comparte con Caja para que los dos popups tengan
+// exactamente el mismo pie de botones. Ver el `@use` arriba de este archivo.
 
-.btn-atendido { background: #dcfce7; color: #166534; &:hover { background: #bbf7d0; } }
-.btn-cancelado { background: #fee2e2; color: #991b1b; &:hover { background: #fecaca; } }
 .btn-editarTurno { background: #ede9fe; color: #6d28d9; &:hover { background: #ddd6fe; } }
 .btn-editar { background: #fef9c3; color: #334155; &:hover { background: #feefc3; } }
 
@@ -370,105 +480,12 @@ tr.vencido td { background: #fff7ed; }
   }
 }
 
-.error-msg {
-  color: #991b1b;
-  font-size: 0.85rem;
-  background: #fee2e2;
-  padding: 8px 12px;
-  border-radius: 8px;
-  margin-top: 8px;
-}
+// `.error-msg` vive en src/styles/_popup.scss (compartido con Caja).
 
 .popup-grande {
   max-width: 460px;
 }
 
-.dropdown-clientes {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  margin-top: 4px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.dropdown-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 14px;
-  cursor: pointer;
-  font-size: 0.88rem;
-  &:hover { background: #f8fafc; }
-}
-
-.dropdown-nombre { font-weight: 600; color: #1e293b; }
-.dropdown-tel { color: #94a3b8; }
-
-.cliente-seleccionado {
-  margin-top: 8px;
-  font-size: 0.85rem;
-  color: #166534;
-  background: #dcfce7;
-  padding: 6px 12px;
-  border-radius: 6px;
-}
-
-.btn-primary {
-  padding: 8px 16px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  font-weight: 500;
-  &:hover { background: #2563eb; }
-}
-
-.crear-cliente {
-  margin-top: 8px;
-  font-size: 0.85rem;
-  color: #64748b;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.btn-crear-cliente {
-  background: none;
-  border: 1px dashed #3b82f6;
-  color: #3b82f6;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  &:hover { background: #eff6ff; }
-}
-
-.form-nuevo-cliente {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  input {
-    flex: 1;
-    padding: 8px 12px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    font-size: 0.88rem;
-    &:focus { outline: none; border-color: #3b82f6; }
-  }
-}
-
-.btn-secondary-sm {
-  padding: 6px 12px;
-  background: #f1f5f9;
-  color: #334155;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  cursor: pointer;
-  &:hover { background: #e2e8f0; }
-}
 
 .vistas {
   display: flex;
@@ -491,5 +508,83 @@ tr.vencido td { background: #fff7ed; }
       color: #1e293b;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
+  }
+}
+
+.empleados-ocupados {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.empleados-ayuda {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* Aviso cuando el empleado elegido no puede trabajar esa fecha/hora */
+.aviso-empleado {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 6px 8px;
+  line-height: 1.4;
+}
+
+/* Celda de Empleado en las tablas de turnos (la de Puesto se fue con la 011) */
+.celda-empleado {
+  color: #334155;
+  font-weight: 500;
+}
+
+/* .celda-puesto: RETIRADO con la columna Puesto de las tablas (migracion 011).
+   La tabla ahora muestra Empleado en su lugar, con .celda-empleado. */
+
+/* ── RESPONSIVE ──────────────────────────────────────────────
+   En celular las tablas tienen 6-7 columnas y no entran: se ocultan
+   las menos importantes. Para cambiar la prioridad de una columna
+   alcanza con moverle la clase (th y td siempre en la misma posicion):
+     ocultar-movil  -> se oculta hasta 640px
+     ocultar-xs     -> se oculta hasta 480px
+   La columna Puesto ya no existe (migracion 011): ahora la que se
+   oculta primero es Empleado.
+   Los datos ocultos siguen visibles en el popup al tocar el turno. */
+@media (max-width: 768px) {
+  .tabla {
+    font-size: 0.85em;
+
+    th, td { padding: 9px 8px; }
+    th { font-size: 0.7rem; letter-spacing: 0.3px; }
+  }
+
+  .badge { font-size: 0.7rem; padding: 2px 8px; }
+}
+
+@media (max-width: 640px) {
+  .ocultar-movil { display: none !important; }
+
+  .tabla {
+    th, td { padding: 9px 6px; }
+  }
+
+  /* La hora y el precio no deben partirse en dos lineas */
+  .tabla td:first-child { white-space: nowrap; }
+  .celda-empleado { white-space: nowrap; }
+}
+
+@media (max-width: 480px) {
+  .ocultar-xs { display: none !important; }
+
+  .tabla {
+    font-size: 0.8em;
+    th, td { padding: 9px 4px; }
   }
 }

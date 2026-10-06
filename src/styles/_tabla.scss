@@ -1,0 +1,327 @@
+// ============================================================
+// TABLA Y SECCIONES COMPARTIDAS
+// ------------------------------------------------------------
+// Vive acá porque lo usan TRES pantallas: Dashboard, Caja (compras,
+// pagos, saldos y el detalle de comisiones) y Personas > Proveedores. Estaba
+// todo en `caja.scss` y cuando el ABM de proveedores se movió a Personas,
+// duplicarlo habría sido la manera rápida de que las dos tablas se
+// desincronicen solas. Después pasó al revés: `.tabla` vivía solo en
+// `dashboard.scss` y "copiar el estilo de la tabla de Dashboard" para Caja
+// exigía copiar el bloque. Un partial por consumidor y nada de copias.
+//
+// OJO: los estilos de un componente Angular llevan su `[_ngcontent-xxx]`, así
+// que un partial NO matchea el template de otro componente por arte de música.
+// Lo que hace que funcione es que cada componente lo importe con `@use` en SU
+// propio SCSS, y entonces las reglas se compilan dentro de su stylesheet. Si un
+// día una pantalla nueva usa estas clases y no las ve, el primer suspecto es que
+// le falta el `@use`.
+//
+// Uso:  @use '../../../styles/tabla';
+// ============================================================
+
+.seccion {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow-x: auto;
+
+  h3 {
+    font-size: 0.95rem;
+    color: #334155;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+}
+
+.vacio {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  padding: 24px 0;
+}
+
+// ── TABLA DE VERDAD (`<table class="tabla">`) ─────────────────
+//
+// El otro estilo de tabla, el que usa Dashboard y que Caja ahora adoptó para sus
+// cuatro tablas.
+//
+// Antes vivía SOLO en `dashboard.scss`, así que "copiar el estilo de la tabla
+// de Dashboard" significaba inevitably duplicarlo. Va acá para que sea de
+// verdad compartido: `dashboard.scss` y `caja.scss` lo traen por `@use` y no
+// tienen una copia cada uno.
+//
+// Las tablas de rejilla de más abajo (`.tabla-caja`) siguen existiendo para las
+// pantallas que las usan, y son un estilo DISTINTO a propósito: la rejilla
+// permite que cada tabla declare sus columnas sin pelearse por un colspan.
+.tabla-wrapper {
+  overflow-x: auto;
+  // Para que el scroll con el dedo no dispare el scroll de la página en iOS.
+  -webkit-overflow-scrolling: touch;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 0.8rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #e2e8f0;
+    // SIN `white-space: nowrap` a propósito: el `.tabla` del Dashboard nunca lo
+    // tuvo y en pantalla chica los encabezados largos ("EMPLEADO") bajan de
+    // línea antes que empujar la tabla. Quien necesite la columna sin partirla
+    // la pide con `.col-angosta`, que sí lo declara.
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
+    font-size: 0.9rem;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f8fafc; }
+
+  // "No hay turnos para hoy", dentro de la tabla. Es un `.vacio` ANIDADO y no el
+  // `.vacio` suelto de arriba de este archivo (que tiene padding 24px): este
+  // necesita 32px para que la fila vacía tenga aire de fila. El padding del de
+  // arriba no alcanzaba y el texto quedaba pegado al borde.
+  .vacio {
+    text-align: center;
+    color: #94a3b8;
+    padding: 32px;
+  }
+
+  // Fila de Total, en `<tfoot>`: es donde un lector de pantalla la encuentra, y
+  // no en un `<div>` suelto como estaba antes.
+  tfoot td {
+    font-weight: 700;
+    background: #f8fafc;
+    border-top: 2px solid #e2e8f0;
+  }
+
+  /* Columnas angostas: Fecha, Hora, Turnos, Cant.
+   *
+   * `width: 1%` + `white-space: nowrap` hace que la columna tome lo justo y le
+   * devuelva el resto a la que importa. Sin esto la celda reparte en partes
+   * iguales y "Fecha" se come un tercio de la pantalla con un "2026-10-01"
+   * adentro y un montón de blanco al lado. */
+  .col-angosta {
+    width: 1%;
+    white-space: nowrap;
+  }
+
+  .col-acciones {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+  }
+
+  .celda-principal { font-weight: 600; }
+
+  // La comisión es lo que hay que leer de esa tabla, así que negrita y verde.
+  .celda-comision {
+    font-weight: 700;
+    color: #15803d;
+    font-variant-numeric: tabular-nums;
+  }
+
+  // La diferencia y el saldo son lo que hay que mirar al cerrar el mes, así que
+  // van en negrita siempre. El color dice a favor de quién está la cuenta.
+  .celda-diferencia {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  // ===============================================================
+  // ROJO, VERDE Y GRIS: EL COLOR DICE DE QUÉ LADO ESTÁ EL DINERO
+  // ===============================================================
+  //
+  // Tres colores, y el tercero es el que hace que la tabla se pueda leer:
+  //
+  //   · rojo  = le debo plata a este (columna "Debe")
+  //   · verde = me deben plata (columna "Haber")
+  //   · gris  = NO HAY NADA de este lado (el `$0` de la columna que no aplica)
+  //
+  // El gris no es decorativo. Con dos columnas, la mitad de las celdas de cada
+  // fila son `$0`: si esas tomaran el color de su columna, la tabla sería una
+  // lista de rojos y verdes donde el color no dice nada. Con el gris, lo que
+  // brilla es lo que tiene plata.
+  //
+  // OJO: estas reglas viven en el bloque de `.tabla` y NO en el de `.tabla-caja`
+  // de más abajo. Ahí hay un `.verde` y un `.rojo` iguales, pero ese bloque es
+  // para la rejilla vieja; las tablas de Caja son `<table class="tabla">`, y con
+  // las reglas solo en `.tabla-caja` el `ngClass` ponía la clase pero el texto
+  // salía del color por defecto.
+  .rojo  { color: #b91c1c; }
+  .verde { color: #15803d; }
+  .cero  { color: #94a3b8; }
+}
+
+// ── TABLAS DE REJILLA (`.tabla-caja`) ────────────────────────
+// Rejilla y no <table>: cada tabla tiene columnas distintas y así cada una
+// define las suyas sin pelearse por un colspan.
+// ── SCROLL HORIZONTAL DE TABLAS ─────────────────────────────
+// En celular la tabla NO se apila: se scrollea.
+//
+// La primera versión pasaba las filas a 2 columnas en el celu y el resultado
+// era ilegible (los números arriba del nombre, la diferencia suelta). Con scroll
+// la tabla sigue siendo una tabla y los importes quedan alineados, que es lo
+// que hay que leer en una caja.
+//
+// El borde y el radio quedan en el wrapper, no en `.tabla-caja`: si el radio
+// estuviera en la caja, `overflow` la recortaría y el scroll no podría scrollear.
+.tabla-scroll {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow-x: auto;
+  // Para que el scroll con el dedo no dispare el scroll de la página en iOS.
+  -webkit-overflow-scrolling: touch;
+}
+
+.tabla-caja {
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+
+  .tr {
+    display: grid;
+    grid-template-columns: 2.2fr 0.8fr 1fr 1fr 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.9rem;
+
+    &:last-child { border-bottom: none; }
+  }
+
+  // Las tablas con un botón de acción al final necesitan más columnas.
+  //
+  // Antes se detectaban con `:has(> span:nth-child(6))`, que NUNCA matcheaba:
+  // la sexta celda de las compras es un `<button>`, no un `<span>`. Como la
+  // regla no aplicaba, la fila usaba la grilla de 5 columnas con 6 celdas y el
+  // botón se caía a una segunda línea (se veía como un botón suelto abajo).
+  //
+  // Ahora cada tabla que tiene acciones lleva la clase explícita. Más legible
+  // que `:has()` y no depende de qué tag tenga la última celda.
+  .tr-con-acciones {
+    grid-template-columns: 1.8fr 1fr 2fr 0.5fr 0.9fr 34px;
+  }
+
+  .tr-contacto {
+    grid-template-columns: 2.4fr 1.4fr 1.4fr 34px;
+  }
+
+  .tr-pagos {
+    grid-template-columns: 2.2fr 1fr 1fr 1fr 34px;
+  }
+  .tr-cabecera {
+    background: #f8fafc;
+    font-weight: 600;
+    font-size: 0.76rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .tr-total {
+    background: #f8fafc;
+    font-weight: 700;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .celda-principal { font-weight: 600; }
+  .celda-concepto  { color: #475569; overflow: hidden; text-overflow: ellipsis; }
+  .celda-chica     { color: #64748b; font-size: 0.82rem; }
+
+  // La diferencia es lo que hay que mirar al cerrar el mes, así que va en
+  // negrita siempre: el color dice si se pagó de más o de menos, el grosor
+  // dice "esta es la columna que importa".
+  .celda-diferencia { font-weight: 700; }
+
+  // Los botones de acción van juntos en una celda. Si cada `<button>` fuera una
+  // celda por separado, la grilla los cuenta como columnas y se caen de lado.
+  .celda-acciones {
+    display: flex;
+    gap: 2px;
+    justify-content: flex-end;
+  }
+
+  .verde { color: #15803d; }
+  .rojo  { color: #b91c1c; }
+
+  .fila-inactiva {
+    opacity: 0.55;
+
+    .celda-principal { font-weight: 400; }
+  }
+}
+
+.badge-inactivo {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.subtitulo {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.buscador {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+// `.btn-primary` vive en `src/styles/_popup.scss` (partial compartido).
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 4px;
+  border-radius: 6px;
+
+  &:hover { background: #f1f5f9; }
+}
+
+.seccion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+
+  h3 { margin: 0; }
+}
+
+.alerta {
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 0.88rem;
+
+  &.exito { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+  &.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+}

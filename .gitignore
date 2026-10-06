@@ -1,4 +1,4 @@
-# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+﻿# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
 # Compiled output
 /dist
@@ -43,3 +43,10 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 .vercel
+
+# Agent files (local only)
+agent.md
+memory.md
+ENCODING.md
+
+# (el arnes de tests viejo se elimino: ahora son .spec.ts con ng test)

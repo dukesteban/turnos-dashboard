@@ -1,0 +1,36 @@
+// El pie del panel (`.detalle-acciones`: badge + botón de inactivar) y el texto
+// aclaratorio (`.nota-ayuda`) NO están acá: viven en `_detalle.scss`, que los
+// comparte con el detalle de Empleados. Es la misma acción y tiene que verse
+// igual en las dos.
+//
+// Lo que queda aca es solo lo propio de esta pantalla: el ancho de la pagina y
+// el contador de "Total: N" de la header.
+//
+// El `@use` tiene que estar ARRIBA de todo: Sass exige que las directivas `@use`
+// precedan a cualquier otra regla.
+@use '../../../styles/popup';
+@use '../../../styles/tabla';
+@use '../../../styles/lista';
+@use '../../../styles/detalle';
+
+.proveedores-page {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+// El "Total: N" de la cabecera, igual que en Clientes y Empleados. Vive en cada
+// componente y no en un partial porque solo estos tres lo usan y cada uno lo
+// tunea un poco.
+.badge-count {
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.8rem;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 700px) {
+  .proveedores-page { padding: 14px; }
+}
