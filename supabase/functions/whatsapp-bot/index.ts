@@ -38,14 +38,14 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC = Deno.env.get('ANTHROPIC_API_KEY')!;
 const WA_TOKEN = Deno.env.get('WHATSAPP_TOKEN') ?? '';
 const WA_PHONE_ID = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID') ?? '';
 const VERIFY_TOKEN = Deno.env.get('WHATSAPP_VERIFY_TOKEN') ?? '';
 
-const sb = createClient(URL, SERVICE, { auth: { persistSession: false } });
+const sb = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
 
 // ─── Tools, con sus descripciones para el modelo ───
 // El nombre va con guion bajo porque Anthropic no acepta guionesmedios en los nombres
@@ -405,14 +405,18 @@ async function llamarClaude(system: string, historial: any[], tools: any[]): Pro
 Deno.serve(async (req) => {
   // --- Verificacion de Meta (GET /) ---
   if (req.method === 'GET') {
-    const url = new URL(req.url);
-    const mode = url.searchParams.get('hub.mode');
-    const token = url.searchParams.get('hub.verify_token');
-    const challenge = url.searchParams.get('hub.challenge');
-    if (mode === 'subscribe' && token === VERIFY_TOKEN && challenge) {
-      return new Response(challenge, { status: 200 });
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      const mode = url.searchParams.get('hub.mode');
+      const token = url.searchParams.get('hub.verify_token');
+      const challenge = url.searchParams.get('hub.challenge');
+      if (mode === 'subscribe' && token === VERIFY_TOKEN && challenge) {
+        return new Response(challenge, { status: 200 });
+      }
+      return new Response('Forbidden', { status: 403 });
+    } catch (e: any) {
+      return new Response('Error: ' + e?.message, { status: 500 });
     }
-    return new Response('Forbidden', { status: 403 });
   }
 
   if (req.method !== 'POST') return new Response('OK, pero solo POST', { status: 405 });
@@ -492,15 +496,27 @@ async function responderWhatsApp(telefono: string, texto: string) {
     console.error('FALTA WHATSAPP_TOKEN o WHATSAPP_PHONE_NUMBER_ID');
     return;
   }
-  const r = await fetch('https://graph.facebook.com/v21.0/' + WA_PHONE_ID + '/messages', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + WA_TOKEN, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: telefono,
-      type: 'text',
-      text: { body: texto },
-    }),
-  });
-  if (!r.ok) console.error('WA error:', await r.text());
+  // Meta en Argentina: el webhook te entrega el "from" con el 9 (5493815512745),
+  // pero la lista de destinatarios permitidos del caso de uso de prueba suele estar
+  // sin el 9 (543815512745). Si la primera forma falla con 131030, probamos la otra.
+  const alternativas = [telefono];
+  if (telefono.startsWith('549')) alternativas.push('54' + telefono.slice(3));
+
+  for (const to of alternativas) {
+    const r = await fetch('https://graph.facebook.com/v21.0/' + WA_PHONE_ID + '/messages', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + WA_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: to,
+        type: 'text',
+        text: { body: texto },
+      }),
+    });
+    if (r.ok) return;
+    const textoRespuesta = await r.text();
+    console.error(`WA error (to=${to}):`, textoRespuesta.slice(0, 300));
+    // Si no es "no está autorizado", no tiene sentido reintentar con otro número.
+    if (!textoRespuesta.includes('131030')) return;
+  }
 }
