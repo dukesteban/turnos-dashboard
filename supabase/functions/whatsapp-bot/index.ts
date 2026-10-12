@@ -79,17 +79,24 @@ const TOOLS = [
     },
   },
   {
+    name: 'buscar_cliente',
+    description:
+      'Devuelve el cliente ya registrado con el numero desde el que escribe el cliente (id, nombre). Llamala PRIMERO, antes de pedirle el nombre: si ya existe, saludalo por su nombre y no se lo vuelvas a preguntar. Si devuelve null, es un cliente nuevo y hay que pedirle el nombre.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
     name: 'crear_turno',
-    description: 'Crea un turno despues de que el cliente confirmo. Requiere nombre, servicio, fecha y hora. Si no tiene disponible ese horario, devuelve error.',
+    description:
+      'Crea un turno despues de que el cliente confirmo. Si el cliente ya estaba registrado, no hace falta pasarle nombre_cliente (se resuelve solo por el numero). Si no tiene disponible ese horario, devuelve error.',
     input_schema: {
       type: 'object',
       properties: {
-        nombre_cliente: { type: 'string' },
+        nombre_cliente: { type: 'string', description: 'Solo si el cliente es nuevo o quiere corregirse.' },
         servicio_id: { type: 'number' },
         fecha_hora: { type: 'string', description: 'ISO 8601, zona del negocio' },
         empleado_id: { type: 'number' },
       },
-      required: ['nombre_cliente', 'servicio_id', 'fecha_hora'],
+      required: ['servicio_id', 'fecha_hora'],
     },
   },
   {
@@ -149,6 +156,15 @@ async function horasMinCancelar(): Promise<number> {
 // ─── Ejecutar la tool que eligio el modelo ───
 async function ejecutarTool(nombre: string, input: any, telefono: string): Promise<string> {
   switch (nombre) {
+    case 'buscar_cliente': {
+      // El numero de WhatsApp nunca coincide exacto con el guardado: uno tiene el 9 y el
+      // otro no. El RPC `buscar_cliente_por_telefono` compara los ultimos 10 digitos.
+      const { data, error } = await sb.rpc('buscar_cliente_por_telefono', { p_telefono: telefono });
+      if (error) return err('error_buscando_cliente', error.message);
+      const c = (data ?? [])[0];
+      if (!c) return JSON.stringify({ ok: true, encontrado: false, nombre: null });
+      return JSON.stringify({ ok: true, encontrado: true, id: c.id, nombre: c.nombre, telefono: c.telefono });
+    }
     case 'obtener_config_negocio': {
       // Claves que viven en tablas propias, no en `configuracion`.
       if (input.clave === 'horario_atencion') {
@@ -226,6 +242,13 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
     }
     case 'crear_turno': {
       const { nombre_cliente, servicio_id, fecha_hora, empleado_id } = input;
+      // 0. resolver el cliente por numero. Si ya existe se usa su nombre de la base y no
+      //    hace falta que el modelo lo haya preguntado. Si no, se crea con el nombre dado.
+      const { data: yaExiste } = await sb.rpc('buscar_cliente_por_telefono', { p_telefono: telefono });
+      const previo = (yaExiste ?? [])[0];
+      if (!previo && !nombre_cliente) return err('falta_nombre', 'El cliente es nuevo y no dijo su nombre.');
+      const nombreFinal = previo?.nombre ?? nombre_cliente;
+      const clienteId = previo?.id ?? null;
       // 1. fecha y hora coherentes
       const dt = new Date(fecha_hora);
       if (isNaN(dt.getTime())) return err('fecha_invalida', fecha_hora);
@@ -267,8 +290,24 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         ? (await sb.from('empleados').select('id').eq('id', empleado_id).single()).data
         : (await sb.from('empleados').select('id').eq('activo', true).order('nombre').limit(1).single()).data;
 
+      // Cliente nuevo: se crea/recupera el registro en `clientes` para que el turno
+      // quede vinculado y no sea un turno huerfano que no aparece en el panel.
+      let clienteIdFinal = clienteId;
+      if (!clienteIdFinal) {
+        const { data: creado, error: errCli } = await sb.rpc('obtener_o_crear_cliente', {
+          p_telefono: telefono,
+        });
+        if (errCli) return err('error_creando_cliente', errCli.message);
+        clienteIdFinal = (creado ?? [])[0]?.id ?? null;
+        if (clienteIdFinal) {
+          // el nombre que dio el modelo es el real: pisa el "Cliente Nuevo N"
+          await sb.from('clientes').update({ nombre: nombreFinal }).eq('id', clienteIdFinal);
+        }
+      }
+
       const { data: nuevo, error: errIns } = await sb.from('turnos').insert({
-        cliente_nombre: nombre_cliente,
+        cliente_id: clienteIdFinal,
+        cliente_nombre: nombreFinal,
         cliente_telefono: telefono,
         fecha,
         hora: horaInicio,
@@ -282,13 +321,25 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       }).select('id').single();
 
       if (errIns) return err('error_creando_turno', errIns.message);
-      return JSON.stringify({ ok: true, turno_id: nuevo.id, empleado_id: emp?.id ?? null });
+      return JSON.stringify({
+        ok: true,
+        turno_id: nuevo.id,
+        empleado_id: emp?.id ?? null,
+        cliente_id: clienteIdFinal,
+        cliente_nombre: nombreFinal,
+      });
     }
     case 'buscar_turnos_cliente': {
+      // `cliente_telefono` esta desnormalizado y guardado con el formato viejo (549 sin el
+      // 9 a veces, con el 9 otras). Buscar por `cliente_id` es lo unico confiable: el
+      // numero se resuelve una vez contra `clientes`/`telefonos`, que ya normalizan.
+      const { data: cli } = await sb.rpc('buscar_cliente_por_telefono', { p_telefono: telefono });
+      const clienteId = (cli ?? [])[0]?.id ?? null;
+
       const { data } = await sb
         .from('turnos')
         .select('id, fecha, hora, servicio_nombre, estado, empleado_id')
-        .eq('cliente_telefono', telefono)
+        .eq(clienteId ? 'cliente_id' : 'cliente_telefono', clienteId ?? telefono)
         .order('fecha', { ascending: false })
         .limit(20);
       let resultado = data ?? [];
@@ -402,7 +453,7 @@ function sanearHistorial(msgs: any[]): any[] {
 async function responderAlCliente(historial: any[], telefono: string, spec: string): Promise<string> {
   const system = `Sos el asistente por WhatsApp del lavadero. Español rioplatense, corto y amable. Hoy es ${new Date().toISOString().slice(0, 10)}. Tool de verdad antes de afirmar: nunca confirmás turno sin que crear_turno te devuelva ok, y nunca decís que un horario está libre sin antes llamar consultar_horarios_libres. Si una tool devuelve error, le explicás al cliente qué pasó y ofrecés otro camino.
 
-Reglas de UX: cuando consultes los horarios de un día, damos como mucho 3-4 opciones para que el cliente elija, y no listees todas las libres de golpe. Si el día está cerrado, explicalo sin motivo si no lo hay, y ofrecés otro día. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados.
+Reglas de UX: cuando consultes los horarios de un día, damos como mucho 3-4 opciones para que el cliente elija, y no listees todas las libres de golpe. Si el día está cerrado, explicalo sin motivo si no lo hay, y ofrecés otro día. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre.
 
 ${spec}`;
 
@@ -555,10 +606,10 @@ Deno.serve(async (req) => {
 // ─── Spec: se puede cargar de una tabla en el futuro. Por ahora es texto fijo. ───
 async function obtenerSpec(): Promise<string> {
   return `Rotina de atencion:
-1. Si el cliente viene por un turno nuevo, pedile el servicio.
-2. Cuando elija servicio, mostra los horarios libres con consultar_horarios_libres.
-3. Si elige horario, confirmar y pedir nombre.
-4. Crear turno con crear_turno.
+1. Cuando el cliente saluda, o antes de agendar, llama buscar_cliente. Si devuelve un nombre, saludalo por su nombre y NO le pidas el nombre otra vez: crear_turno lo resuelve solo. Si no devuelve nada, es un cliente nuevo y ahi si se lo pides.
+2. Si el cliente viene por un turno nuevo, pedile el servicio.
+3. Cuando elija servicio, mostra los horarios libres con consultar_horarios_libres.
+4. Si elige horario, crealo con crear_turno.
 5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente.
 
 IMPORTANTE sobre las fechas: no le pidas al cliente la fecha en formato yyyy-MM-dd. Entende 'el domingo que viene', 'pasado manana', 'el 11 de octubre' a partir de la fecha de hoy (esta en el system prompt). Si falta el año y el dia ya hay pasado este año, usa el año siguiente. Nunca digas 'hubiera un problema del lado del sistema' si una tool devuelve un error: explicale al cliente qué paso y ofrecele alternativas.`;
