@@ -72,6 +72,12 @@ export class EmpleadosComponent implements OnInit {
     return this.ROLES;
   }
 
+  /** "admin" -> "Admin", para el chipito de la lista. */
+  etiquetaRol(rol: string): string {
+    const r = this.ROLES.find((x: any) => x.valor === rol);
+    return r ? r.etiqueta : rol;
+  }
+
   /**
    * El bloque de rol solo se muestra al admin y al secretario.
    *

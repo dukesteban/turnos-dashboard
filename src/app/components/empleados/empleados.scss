@@ -227,6 +227,30 @@
   min-width: 60px;
 }
 
+// ── "Acceso a la app" ──
+// El bloque del rol reusa `.campo-editable` (flex con label + contenido), pero sin
+// input: el texto del rol y el botón se peleaban el ancho y el botón salía partido
+// en dos líneas. Acá cada pieza toma su parte: la etiqueta es fija, el texto toma lo
+// que sobra y el botón no se encoge nunca.
+.acceso-rol {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  .rol-actual {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.95rem;
+    color: #1e293b;
+  }
+
+  .btn-primary {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
 .dias-display {
   display: flex;
   align-items: center;

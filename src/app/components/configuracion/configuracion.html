@@ -36,10 +36,6 @@
         <label>Teléfono de emergencias</label>
         <input type="text" [(ngModel)]="telefonoEmergencia" [readonly]="!editandoDatos" placeholder="Ej: 3815 55 12 74"/>
       </div>
-      <p class="nota-ayuda">
-        Si el bot de WhatsApp se cae, le pasa este número al cliente para que pueda
-        llamar. Si queda vacío, no lo menciona.
-      </p>
       <div class="botones-edicion">
         <button *ngIf="!editandoDatos" class="btn-primary" (click)="editandoDatos = true">✏️ Editar</button>
         <button *ngIf="editandoDatos" class="btn-primary" (click)="guardarConfiguracion()" [disabled]="guardando">

@@ -30,6 +30,15 @@
           <div class="estado-badge" [class.inactivo]="!empleado.activo">
             {{ empleado.activo ? 'Activo' : 'Inactivo' }}
           </div>
+          <!--
+            El rol al lado del estado: son las dos cosas que uno mira de un empleado
+            para saber "puede trabajar acá y qué puede tocar". El que no tiene rol
+            dice "Sin rol" en gris, no queda un hueco: se ve que le falta y no que
+            la pantalla no lo trajo.
+          -->
+          <span class="rol-badge" [class.sin-rol]="!roles[empleado.id]">
+            {{ roles[empleado.id] ? etiquetaRol(roles[empleado.id]) : 'Sin rol' }}
+          </span>
           <div class="arrow">›</div>
         </div>
         <div *ngIf="empleadosFiltrados.length === 0" class="vacio">No se encontraron empleados</div>
@@ -132,7 +141,7 @@
           <span class="chevron" [class.abierto]="acordeonAcceso">›</span>
         </div>
         <div class="acordeon-body" [class.visible]="acordeonAcceso">
-          <div class="campo-editable">
+          <div class="acceso-rol">
             <span class="label-general">Rol</span>
             <span class="rol-actual">{{ nombreRol }}</span>
             <button *ngIf="!tieneAcceso" class="btn-primary" (click)="abrirModalAcceso()">

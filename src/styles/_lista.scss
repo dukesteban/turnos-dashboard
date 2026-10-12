@@ -99,6 +99,30 @@
   &:hover { opacity: 0.85; }
 }
 
+// Chipito con el rol de acceso, al lado del Activo/Inactivo.
+//
+// Mismo tamaño y forma que `.estado-badge` para que se lean como un par, pero
+// apagado: el rol es información, no un estado que haya que acting. El que no
+// tiene login dice "Sin rol" en gris en vez de no mostrar nada, que se confunde
+// con que la pantalla no lo trajo.
+.rol-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+
+  &.sin-rol {
+    color: #94a3b8;
+    background: transparent;
+    border-color: #e2e8f0;
+    font-weight: 500;
+  }
+}
+
 // Foco visible para navegacion por teclado (el item es un boton de hecho).
 .item:focus-visible {
   outline: 2px solid #1d4ed8;
