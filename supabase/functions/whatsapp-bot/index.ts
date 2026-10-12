@@ -68,12 +68,14 @@ const TOOLS = [
   },
   {
     name: 'consultar_horarios_libres',
-    description: 'Devuelve los horarios libres para un servicio y fecha. Si no hay, incluye motivo (dia_cerrado o sin_disponibilidad).',
+    description:
+      'Devuelve los horarios libres para un servicio y fecha. Si el cliente dijo a que hora queria, pasala en hora_preferida: la lista vuelve ordenada de esa hora hacia atras, y te dice si esa hora exacta se puede. Devuelve tambien el motivo si no se puede.',
     input_schema: {
       type: 'object',
       properties: {
         servicio_id: { type: 'number' },
         fecha: { type: 'string', description: 'YYYY-MM-DD' },
+        hora_preferida: { type: 'string', description: 'HH:MM de lo que pidio el cliente, si dijo una' },
       },
       required: ['servicio_id', 'fecha'],
     },
@@ -154,6 +156,12 @@ async function horasMinCancelar(): Promise<number> {
 }
 
 type Bloque = { inicio: number; fin: number };
+
+// Postgres devuelve las horas como '12:00:00'. Para decírselas a una persona alcanza
+// con '12:00'.
+function sinSeg(h: string): string {
+  return h.slice(0, 5);
+}
 
 function sePisan(a: Bloque, b: Bloque): boolean {
   return a.inicio < b.fin && b.inicio < a.fin;
@@ -277,23 +285,60 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       //    como un bloque, asi que un turno de uno tapaba los horarios de todos.
       const agenda = await estadoDelDia(fecha);
 
-      // 5. slots cada 30 min que entren completos dentro del horario
-      const libres: string[] = [];
+      // 5. slots cada 30 min que entren COMPLETOS dentro del horario. Un servicio de 45 min
+      //    NO puede empezar a las 11:30 si se cierra a las 12:00, asi que el ultimo slot
+      //    posible es (cierre - duracion).
+      const libres: number[] = [];
       let cur = horaAMin(hi);
       const fin = horaAMin(hf);
       while (cur + duracion <= fin) {
-        if (agenda.algunoLibre(cur, cur + duracion)) libres.push(minAHora(cur));
+        if (agenda.algunoLibre(cur, cur + duracion)) libres.push(cur);
         cur += 30;
       }
 
+      // 6. si el cliente dijo a que hora queria, se ordena de mas cerca a mas lejos.
+      //    Sin esto el modelo recibia la lista cronologica y elegia cualquiera al azar.
+      const pref = input.hora_preferida ? horaAMin(String(input.hora_preferida).slice(0, 5)) : null;
+      const ordenada =
+        pref == null
+          ? libres
+          : [...libres].sort((a, b) => Math.abs(a - pref) - Math.abs(b - pref) || a - b);
+
+      // 7. por que el horario pedido no sirve, si no sirve. Sin esto el bot se inventa una
+      //    excusa o dice que esta cerrado cuando en realidad es que no entra el servicio.
+      const cabe = pref != null && pref >= horaAMin(hi) && pref + duracion <= fin;
+      const estaLibre = cabe && agenda.algunoLibre(pref, pref + duracion);
+      let motivo: string | null = null;
+      if (pref != null && !cabe) {
+        // el ultimo horario REAL: la grilla arranca en la hora de apertura y avanza de 30
+        // en 30, asi que el ultimo no siempre es (cierre - duracion). Si el servicio pide
+        // 45 min y se cierra a las 12, el ultimo slot es 11:00, no 11:15.
+        const ultimoReal = libres.length ? libres.reduce((a, b) => (a > b ? a : b)) : null;
+        motivo =
+          pref < horaAMin(hi)
+            ? `Abrimos a las ${sinSeg(hi)}.`
+            : `Ese servicio dura ${duracion} min y cerramos a las ${sinSeg(hf)}, asi que a las ${minAHora(pref)} se pasaria.` +
+              (ultimoReal != null ? ` El ultimo horario posible es las ${minAHora(ultimoReal)}.` : ' Ese dia no entra.');
+      } else if (pref != null && !estaLibre) {
+        motivo = 'A esa hora ya hay un turno.';
+      }
+
+      const ultimoSlot = libres.length ? libres.reduce((a, b) => (a > b ? a : b)) : null;
+
       return JSON.stringify({
         ok: true,
-        libres,
+        libres: ordenada.map(minAHora),
         dia: fecha,
-        inicio: hi,
-        fin: hf,
+        inicio: sinSeg(hi),
+        fin: sinSeg(hf),
         duracion_minutos: duracion,
-        nota: 'Son horarios para el servicio elegido, no para el dia entero.',
+        horario_pedido: pref != null ? minAHora(pref) : null,
+        pedido_disponible: pref == null ? null : estaLibre,
+        motivo_pedido: motivo,
+        ultimo_horario: ultimoSlot != null ? minAHora(ultimoSlot) : null,
+        nota: pref != null
+          ? 'La lista viene ordenada de la hora que pidio el cliente hacia atras. Ofrecele solo las 3 primeras.'
+          : 'Ordenadas por hora de apertura. Ofrecele solo las 3 primeras.',
       });
     }
     case 'crear_turno': {
@@ -510,7 +555,7 @@ function sanearHistorial(msgs: any[]): any[] {
 async function responderAlCliente(historial: any[], telefono: string, spec: string): Promise<string> {
   const system = `Sos el asistente por WhatsApp del lavadero. Español rioplatense, corto y amable. Hoy es ${new Date().toISOString().slice(0, 10)}. Tool de verdad antes de afirmar: nunca confirmás turno sin que crear_turno te devuelva ok, y nunca decís que un horario está libre sin antes llamar consultar_horarios_libres. Si una tool devuelve error, le explicás al cliente qué pasó y ofrecés otro camino.
 
-Reglas de UX: cuando consultes los horarios de un día, damos como mucho 3-4 opciones para que el cliente elija, y no listees todas las libres de golpe. Si el día está cerrado, explicalo sin motivo si no lo hay, y ofrecés otro día. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre. NUNCA menciones los turnos que tiene el cliente salvo que los hayas leído recién con buscar_turnos_cliente en ESTE mensaje: no los recuerdes de mensajes anteriores, pueden haber sido cancelados o borrados. Si el cliente eligió una hora que no estaba entre las que ofreciste, no digas que la reservaste sin llamar crear_turno.
+Reglas de UX: cuando el cliente diga una hora concreta, pasala siempre en hora_preferida de consultar_horarios_libres. La lista te vuelve ordenada de esa hora hacia atras: ofrecele las 2 o 3 primeras, que son las mas parecidas a lo que pidio. Si vuelve pedido_disponible=false, decile el motivo_pedido tal cual (dice si esta tomado o si el servicio no entra antes del cierre) y ofrecele las alternativas de la lista; no te inventes otro motivo. Si el cliente no dijo hora, ofrecé 3 horarios de la lista, tampoco todos. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre. NUNCA menciones los turnos que tiene el cliente salvo que los hayas leído recién con buscar_turnos_cliente en ESTE mensaje: no los recuerdes de mensajes anteriores, pueden haber sido cancelados o borrados. Si el cliente eligió una hora que no estaba entre las que ofreciste, no digas que la reservaste sin llamar crear_turno.
 
 ${spec}`;
 
