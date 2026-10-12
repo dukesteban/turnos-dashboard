@@ -76,6 +76,25 @@
                 [readonly]="!empleadoSeleccionado.editando"
                 class="input-nombre" />
             </div>
+
+            <!--
+              Datos fiscales. Van en la misma edición del nombre y el teléfono: si
+              hicieran falta un botón aparte, el usuario tendría que entrar dos veces
+              a la misma pantalla para llenar cuatro campos.
+            -->
+            <div class="campo-editable">
+              <label class="label-campo">CUIT / CUIL</label>
+              <input type="text" [(ngModel)]="empleadoSeleccionado.cuit_cuil"
+                [readonly]="!empleadoSeleccionado.editando"
+                placeholder="Opcional" class="input-nombre" />
+            </div>
+
+            <div class="campo-editable">
+              <label class="label-campo">Dirección</label>
+              <input type="text" [(ngModel)]="empleadoSeleccionado.direccion"
+                [readonly]="!empleadoSeleccionado.editando"
+                placeholder="Opcional" class="input-nombre" />
+            </div>
           </div>
 
           <div class="botones-edicion">
@@ -98,6 +117,34 @@
           </div>
 
           <span *ngIf="empleadoSeleccionado.guardando" class="guardando-celda">⏳ Guardando…</span>
+        </div>
+      </div>
+
+      <!-- ACCESO A LA APP
+           Solo el admin y el secretario ven esto. El rol de cada persona vive en
+           `usuarios.rol` (la fila de su login), no acá: es el mismo rol que viaja
+           en el JWT y el que la RLS mira cuando decide qué puede ver cada uno.
+           Dejarlo en la pantalla de Empleados evita tener que ir a Configuración
+           a buscar en qué parte de una lista de usuarios está cada uno. -->
+      <div class="acordeon" *ngIf="puedeVerRoles">
+        <div class="acordeon-header" (click)="acordeonAcceso = !acordeonAcceso">
+          <span>Acceso a la app</span>
+          <span class="chevron" [class.abierto]="acordeonAcceso">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonAcceso">
+          <div class="campo-editable">
+            <span class="label-general">Rol</span>
+            <span class="rol-actual">{{ nombreRol }}</span>
+            <button *ngIf="!tieneAcceso" class="btn-primary" (click)="abrirModalAcceso()">
+              🔑 Dar acceso
+            </button>
+          </div>
+          <p class="texto-ayuda" *ngIf="tieneAcceso">
+            Para cambiarle el rol o resetearle la clave, andá a Configuración.
+          </p>
+          <p class="texto-ayuda" *ngIf="!tieneAcceso">
+            Este empleado todavía no puede entrar a la app.
+          </p>
         </div>
       </div>
 
@@ -369,6 +416,14 @@
             <input type="text" [(ngModel)]="nuevoTelefono" placeholder="Teléfono" class="input" />
           </div>
           <div class="campo">
+            <label>CUIT / CUIL (opcional)</label>
+            <input type="text" [(ngModel)]="nuevoCuit" placeholder="Sin guion ni espacio" class="input" />
+          </div>
+          <div class="campo">
+            <label>Dirección (opcional)</label>
+            <input type="text" [(ngModel)]="nuevaDireccion" placeholder="Dirección" class="input" />
+          </div>
+          <div class="campo">
             <label>Comisión: <strong>{{ nuevaComision }}%</strong></label>
             <input type="range" [(ngModel)]="nuevaComision" min="0" max="100" step="1" class="slider" />
           </div>
@@ -400,6 +455,48 @@
           {{ guardandoNuevoEmpleado ? 'Guardando...' : '💾 Guardar' }}
         </button>
         <button class="btn-cancelado" (click)="cerrarModalNuevoEmpleado()">↩️ Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP DAR ACCESO
+       El alta del login va por la función de borde `admin-usuarios` (tiene la clave
+       de servicio para crear el usuario en Supabase Auth), no por la tabla: la clave
+       de servicio no puede estar en el bundle. -->
+  <div *ngIf="modalAcceso" class="popup-overlay" (click)="cerrarModalAcceso()">
+    <div class="popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <h3>🔑 Acceso de {{ empleadoSeleccionado?.nombre }}</h3>
+        <button class="btn-cerrar" (click)="cerrarModalAcceso()">✕</button>
+      </div>
+      <div class="popup-body">
+        <div class="form-caja">
+          <div class="campo">
+            <label>Usuario</label>
+            <input type="text" [(ngModel)]="accesoUsuario" placeholder="usuario" class="input" />
+          </div>
+          <div class="campo">
+            <label>Clave</label>
+            <input type="password" [(ngModel)]="accesoClave" placeholder="Mínimo 6 caracteres" class="input" />
+          </div>
+          <div class="campo">
+            <label>Rol</label>
+            <select [(ngModel)]="accesoRol" class="input">
+              <option *ngFor="let r of rolesDisponibles" [value]="r.valor">{{ r.etiqueta }}</option>
+            </select>
+          </div>
+        </div>
+        <p class="nota-ayuda">
+          El rol define qué puede ver: el administrador ve y modifica todo, el secretario
+          ve todo pero no escribe en Caja, y el empleado solo trabaja sus turnos.
+        </p>
+        <div *ngIf="accesoError" class="error-msg">{{ accesoError }}</div>
+      </div>
+      <div class="popup-acciones">
+        <button class="btn-atendido" (click)="guardarAcceso()" [disabled]="accesoGuardando">
+          {{ accesoGuardando ? 'Creando...' : '🔑 Crear acceso' }}
+        </button>
+        <button class="btn-cancelado" (click)="cerrarModalAcceso()">↩️ Cancelar</button>
       </div>
     </div>
   </div>

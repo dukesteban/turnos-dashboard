@@ -25,12 +25,88 @@ export class ClientesComponent implements OnInit {
   busquedaFusionar = '';
   clienteParaFusionar: any = null;
 
+  // ─── Nuevo cliente ───
+  // Los campos del alta usan prefijo `alta` porque `nuevoTelefono` ya existe: es el
+  // del input "agregar teléfono" de un cliente YA guardado. Con un solo campo, abrir
+  // el modal de alta borraba el teléfono que el usuario estaba por agregar.
+  mostrarModalNuevo = false;
+  guardandoNuevo = false;
+  errorNuevo = '';
+  altaNombre = '';
+  altaTelefono = '';
+  altaCuit = '';
+  altaDireccion = '';
+
   diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
   constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
 
   async ngOnInit() {
     await this.cargarClientes();
+    this.cdr.detectChanges();
+  }
+
+  // ─── Nuevo cliente ───
+  // Mismo camino que "Nuevo empleado" y "Nuevo proveedor": un popup con la cajita
+  // gris de los formularios. Se abre desde el encabezado de la lista.
+  abrirModalNuevo() {
+    this.mostrarModalNuevo = true;
+    this.altaNombre = '';
+    this.altaTelefono = '';
+    this.altaCuit = '';
+    this.altaDireccion = '';
+    this.errorNuevo = '';
+    this.cdr.detectChanges();
+  }
+
+  cerrarModalNuevo() {
+    this.mostrarModalNuevo = false;
+    this.cdr.detectChanges();
+  }
+
+  async agregarCliente() {
+    if (!this.altaNombre.trim()) {
+      this.errorNuevo = '❌ Ingresá un nombre.';
+      this.cdr.detectChanges();
+      return;
+    }
+    // El teléfono es opcional, pero si se escribe tiene que parecer un teléfono.
+    if (this.altaTelefono.trim()) {
+      const problema = problemaTelefono(this.altaTelefono);
+      if (problema) {
+        this.errorNuevo = problema;
+        this.cdr.detectChanges();
+        return;
+      }
+    }
+
+    this.guardandoNuevo = true;
+    this.errorNuevo = '';
+    try {
+      const nombre = this.supabase.normalizarNombre(this.altaNombre);
+      const duplicado = await this.supabase.verificarNombreDuplicado(nombre);
+      if (duplicado) {
+        this.errorNuevo = '❌ Ya existe un cliente con ese nombre.';
+        this.guardandoNuevo = false;
+        this.cdr.detectChanges();
+        return;
+      }
+
+      await this.supabase.crearCliente({
+        nombre,
+        telefono: this.altaTelefono.trim(),
+        cuit_cuil: this.altaCuit,
+        direccion: this.altaDireccion,
+      });
+
+      await this.cargarClientes();
+      this.cerrarModalNuevo();
+      this.mostrarMensaje('✅ Cliente agregado.');
+    } catch (e) {
+      console.error('Error al agregar cliente:', e);
+      this.errorNuevo = '❌ Error al guardar el cliente. Puede que el teléfono ya exista.';
+    }
+    this.guardandoNuevo = false;
     this.cdr.detectChanges();
   }
 
@@ -54,11 +130,48 @@ export class ClientesComponent implements OnInit {
   }
 
   async seleccionarCliente(cliente: any) {
-    this.clienteSeleccionado = { ...cliente, editando: false, nombreOriginal: cliente.nombre };
+    this.clienteSeleccionado = { ...cliente, editando: false, editandoFicha: false, nombreOriginal: cliente.nombre };
     this.nuevoTelefono = '';
     this.cargandoTurnos = true;
     this.turnosCliente = await this.supabase.getTurnosCliente(cliente.id);
     this.cargandoTurnos = false;
+    this.cdr.detectChanges();
+  }
+
+  // ─── Datos fiscales ───
+  // En readonly se muestra lo cargado o "Sin dato". Se edita inline, como el nombre.
+  get cuitTexto(): string {
+    return this.clienteSeleccionado?.cuit_cuil?.trim() || 'Sin CUIT/CUIL';
+  }
+
+  get direccionTexto(): string {
+    return this.clienteSeleccionado?.direccion?.trim() || 'Sin dirección';
+  }
+
+  async guardarFicha() {
+    if (!this.clienteSeleccionado) return this.mostrarError('❌ No hay ningún cliente seleccionado.');
+    try {
+      await this.supabase.updateClienteFicha(this.clienteSeleccionado.id, {
+        cuit_cuil: this.clienteSeleccionado.cuit_cuil ?? '',
+        direccion: this.clienteSeleccionado.direccion ?? '',
+      });
+      // Se guarda "" como null en la base: el getter lo vuelve a mostrar como "Sin dato".
+      this.clienteSeleccionado.editandoFicha = false;
+      this.mostrarMensaje('✅ Datos actualizados.');
+    } catch (e) {
+      this.mostrarError('❌ Error al actualizar los datos.');
+    }
+  }
+
+  cancelarEdicionFicha() {
+    if (!this.clienteSeleccionado) return;
+    // Vuelve a lo que tenía: se recargan desde la lista, que es la fuente.
+    const original = this.clientes.find(c => c.id === this.clienteSeleccionado.id);
+    if (original) {
+      this.clienteSeleccionado.cuit_cuil = original.cuit_cuil;
+      this.clienteSeleccionado.direccion = original.direccion;
+    }
+    this.clienteSeleccionado.editandoFicha = false;
     this.cdr.detectChanges();
   }
 

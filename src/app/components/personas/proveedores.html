@@ -212,6 +212,11 @@
           </div>
         </div>
         <div class="campo">
+          <label>CUIT / CUIL <span class="opcional">(opcional)</span></label>
+          <input type="text" [(ngModel)]="nuevoProveedor.cuit_cuil"
+                 placeholder="Sin guion ni espacio" (ngModelChange)="mensajeError = ''" />
+        </div>
+        <div class="campo">
           <label>Domicilio</label>
           <input type="text" [(ngModel)]="nuevoProveedor.domicilio"
                  placeholder="Ej: Av. Corrientes 1234" (ngModelChange)="mensajeError = ''" />

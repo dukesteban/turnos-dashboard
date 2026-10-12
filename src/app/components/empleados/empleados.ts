@@ -2,6 +2,7 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
+import { AuthService } from '../../services/auth';
 import { problemaTelefono } from '../../utils/telefono';
 import {
   normalizarJornada, DIAS, SlotJornada, fechaConAnio,
@@ -45,6 +46,55 @@ export class EmpleadosComponent implements OnInit {
   acordeonAusencias = false;
   acordeonRiesgo = false;
   acordeonComisiones = false;
+  acordeonAcceso = false;
+
+  // ── Rol de acceso ──
+  // Solo lo ven el admin y el secretario (la política de RLS de `usuarios` no le
+  // deja leer la tabla al empleado, así que `roles` llega vacío y el bloque se
+  // oculta). El rol no se edita desde acá: se da de alta el acceso, que es lo que
+  // hace falta, y cambiar un rol después sigue siendo cosa de Configuración.
+  roles: Record<number, string> = {};
+  rolesCargados = false;
+  modalAcceso = false;
+  accesoUsuario = '';
+  accesoClave = '';
+  accesoRol = 'empleado';
+  accesoError = '';
+  accesoGuardando = false;
+
+  private readonly ROLES = [
+    { valor: 'admin', etiqueta: 'Administrador' },
+    { valor: 'secretario', etiqueta: 'Secretario' },
+    { valor: 'empleado', etiqueta: 'Empleado' },
+  ];
+
+  get rolesDisponibles(): Array<{ valor: string; etiqueta: string }> {
+    return this.ROLES;
+  }
+
+  /**
+   * El bloque de rol solo se muestra al admin y al secretario.
+   *
+   * No alcanza con que la RLS no le devuelva nada al empleado: si la pantalla
+   * mostrara el bloque igual, el empleado vería que hay un rol y que no tiene
+   * acceso. Se oculta entero.
+   */
+  get puedeVerRoles(): boolean {
+    return this.rolActual === 'admin' || this.rolActual === 'secretario';
+  }
+
+  get nombreRol(): string {
+    const e: any = this.empleadoSeleccionado;
+    if (!e) return '';
+    const r = this.roles[e.id];
+    if (!r) return 'Sin acceso a la app';
+    return this.ROLES.find(x => x.valor === r)?.etiqueta ?? r;
+  }
+
+  get tieneAcceso(): boolean {
+    const e: any = this.empleadoSeleccionado;
+    return !!e && !!this.roles[e.id];
+  }
 
   /** Estado de acordeón limpio: solo "Datos" abierto. Se llama al seleccionar. */
   private abrirSoloDatos() {
@@ -53,6 +103,7 @@ export class EmpleadosComponent implements OnInit {
     this.acordeonAusencias = false;
     this.acordeonRiesgo = false;
     this.acordeonComisiones = false;
+    this.acordeonAcceso = false;
   }
 
   empleados: any[] = [];
@@ -64,6 +115,8 @@ export class EmpleadosComponent implements OnInit {
   // Formulario
   nuevoNombre = '';
   nuevoTelefono = '';
+  nuevoCuit = '';
+  nuevaDireccion = '';
   nuevaComision = 10;
   /** Jornada por defecto: L-V. Un dia con horas vacias = jornada completa. */
   jornadaDefault: SlotJornada[] = jornadaVaciaPorDefecto();
@@ -75,11 +128,88 @@ export class EmpleadosComponent implements OnInit {
   diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   diasCompletos = DIAS;
 
-  constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
+  /** Rol del que está usando la app, para decidir si el bloque de roles se muestra. */
+  rolActual = 'empleado';
+
+  constructor(private supabase: SupabaseService, private auth: AuthService, private cdr: ChangeDetectorRef) {}
 
   async ngOnInit() {
+    // El rol sale del JWT, no de la base: es lo mismo que la RLS mira.
+    this.rolActual = this.auth.getRol();
     await this.cargarEmpleados();
+    await this.cargarRoles();
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Los roles de acceso. Si el usuario no tiene permiso (es empleado), el servicio
+   * devuelve un mapa vacío en vez de tirar: acá no hay nada que mostrar y la
+   * pantalla sigue funcionando.
+   */
+  private async cargarRoles() {
+    this.roles = await this.supabase.getRolesEmpleados();
+    this.rolesCargados = true;
+    this.cdr.detectChanges();
+  }
+
+  // ── Dar acceso ──
+  abrirModalAcceso() {
+    const e: any = this.empleadoSeleccionado;
+    this.accesoUsuario = this.nombreComoUsuario(e?.nombre);
+    this.accesoClave = '';
+    this.accesoRol = 'empleado';
+    this.accesoError = '';
+    this.modalAcceso = true;
+    this.cdr.detectChanges();
+  }
+
+  cerrarModalAcceso() {
+    this.modalAcceso = false;
+    this.cdr.detectChanges();
+  }
+
+  async guardarAcceso() {
+    const e: any = this.empleadoSeleccionado;
+    if (!e) return;
+    if (!this.accesoUsuario.trim()) {
+      this.accesoError = '❌ Ingresá un nombre de usuario.';
+      this.cdr.detectChanges();
+      return;
+    }
+    // Sin clave no se puede crear: el usuario no tendria como entrar nunca.
+    if (this.accesoClave.trim().length < 6) {
+      this.accesoError = '❌ La clave necesita al menos 6 caracteres.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    this.accesoGuardando = true;
+    this.accesoError = '';
+    try {
+      await this.supabase.crearUsuario({
+        usuario: this.accesoUsuario.trim(),
+        clave: this.accesoClave.trim(),
+        rol: this.accesoRol,
+        empleado_id: e.id,
+      });
+      await this.cargarRoles();
+      this.modalAcceso = false;
+      this.mostrarMensaje(`✅ Acceso creado para ${e.nombre}.`);
+    } catch (err: any) {
+      this.accesoError = `❌ ${err?.message || 'No se pudo crear el acceso'}`;
+    }
+    this.accesoGuardando = false;
+    this.cdr.detectChanges();
+  }
+
+  /** "Esteban Aguero" -> "esteban.aguero": un usuario sin espacios ni acentos. */
+  private nombreComoUsuario(nombre: string): string {
+    return (nombre ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '.')
+      .replace(/^\.+|\.+$/g, '');
   }
 
   async cargarEmpleados() {
@@ -107,6 +237,8 @@ export class EmpleadosComponent implements OnInit {
     this.mostrarModalNuevoEmpleado = true;
     this.nuevoNombre = '';
     this.nuevoTelefono = '';
+    this.nuevoCuit = '';
+    this.nuevaDireccion = '';
     this.nuevaComision = 10;
     this.jornadaNueva = jornadaVaciaPorDefecto();
     this.errorNuevoEmpleado = '';
@@ -140,6 +272,8 @@ export class EmpleadosComponent implements OnInit {
       const empleado = await this.supabase.crearEmpleado({
         nombre: this.nuevoNombre.trim(),
         telefono: this.nuevoTelefono.trim() || null,
+        cuit_cuil: this.nuevoCuit.replace(/[\s-]/g, '').trim() || null,
+        direccion: this.nuevaDireccion.trim() || null,
         comision_porcentaje: this.nuevaComision,
         jornada: this.jornadaNueva
       });
@@ -301,11 +435,17 @@ export class EmpleadosComponent implements OnInit {
     emp.guardando = true;
     this.cdr.detectChanges();
     try {
+      // CUIT/CUIL: solo números, sin guiones ni espacios. Si no se limpió, se guarda
+      // tal cual vino y después es un quilombo compararlo con el de otro lado.
+      const cuit = (emp.cuit_cuil ?? '').replace(/[\s-]/g, '').trim();
+
       const datos = {
         nombre,
         // Vacío -> null, no cadena vacía: en la base la columna es nullable y
         // "" es un valor distinto de "no cargado".
         telefono: (emp.telefono ?? '').trim() || null,
+        cuit_cuil: cuit || null,
+        direccion: (emp.direccion ?? '').trim() || null,
       };
       await this.supabase.updateEmpleado(emp.id, datos);
 
@@ -313,9 +453,13 @@ export class EmpleadosComponent implements OnInit {
       if (idx >= 0) {
         this.empleados[idx].nombre = datos.nombre;
         this.empleados[idx].telefono = datos.telefono;
+        this.empleados[idx].cuit_cuil = datos.cuit_cuil;
+        this.empleados[idx].direccion = datos.direccion;
       }
       emp.nombre = datos.nombre;
       emp.telefono = datos.telefono || '';
+      emp.cuit_cuil = datos.cuit_cuil || '';
+      emp.direccion = datos.direccion || '';
       emp._datosOrig = { nombre: emp.nombre, telefono: emp.telefono };
       emp.editando = false;
       this.mostrarMensaje('✅ Datos actualizados.');

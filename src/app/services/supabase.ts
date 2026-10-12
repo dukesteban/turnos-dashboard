@@ -692,6 +692,57 @@ export class SupabaseService {
     if (error2) throw error2;
   }
 
+  /**
+   * Alta de cliente. Acepta un string (como la llama el dashboard) o el objeto con
+   * teléfono y datos fiscales (la pantalla de Personas).
+   *
+   * El teléfono va a la tabla `telefonos`, no a `clientes`: es lo que ya hace
+   * `getClientes` cuando lee `clientes(*, telefonos(*))`. Si el insert del teléfono
+   * falla se deshace el del cliente, para no dejar fichas que el bot no encuentra.
+   */
+  async crearCliente(datos: string | { nombre: string; telefono?: string; cuit_cuil?: string; direccion?: string }) {
+    const d = typeof datos === 'string' ? { nombre: datos } : datos;
+    const nombre = this.normalizarNombre(d.nombre);
+
+    const { data: cliente, error } = await this.supabase
+      .from('clientes')
+      .insert({
+        nombre,
+        cuit_cuil: d.cuit_cuil?.trim() || null,
+        direccion: d.direccion?.trim() || null,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+
+    const telefono = d.telefono?.trim();
+    if (!telefono) return { ...cliente, telefonos: [] };
+
+    const { data: tel, error: errTel } = await this.supabase
+      .from('telefonos')
+      .insert({ cliente_id: cliente.id, telefono, principal: true })
+      .select()
+      .single();
+
+    if (errTel) {
+      await this.supabase.from('clientes').delete().eq('id', cliente.id);
+      throw errTel;
+    }
+    return { ...cliente, telefonos: [tel] };
+  }
+
+  /** Guarda solo los campos de ficha (CUIT/CUIL, dirección), sin tocar el nombre. */
+  async updateClienteFicha(id: number, datos: { cuit_cuil?: string | null; direccion?: string | null }) {
+    const { error } = await this.supabase
+      .from('clientes')
+      .update({
+        cuit_cuil: datos.cuit_cuil?.trim() || null,
+        direccion: datos.direccion?.trim() || null,
+      })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
   async fusionarClientes(principalId: number, duplicadoId: number) {
     // 1. Obtener teléfonos del principal para evitar duplicados
     const { data: telsPrincipal } = await this.supabase
@@ -822,16 +873,6 @@ export class SupabaseService {
     if (error) throw error;
   }
 
-  async crearCliente(nombre: string) {
-    const { data, error } = await this.supabase
-      .from('clientes')
-      .insert({ nombre })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  }
-
   async verificarNombreDuplicado(nombre: string, excludeId?: number): Promise<boolean> {
     let query = this.supabase
       .from('clientes')
@@ -902,6 +943,61 @@ export class SupabaseService {
       .update(datos)
       .eq('id', id);
     if (error) throw error;
+  }
+
+  /** Guarda solo los datos de ficha, sin tocar el resto del empleado. */
+  async updateEmpleadoFicha(id: number, datos: { cuit_cuil?: string | null; direccion?: string | null }) {
+    const { error } = await this.supabase
+      .from('empleados')
+      .update({
+        cuit_cuil: datos.cuit_cuil?.trim() || null,
+        direccion: datos.direccion?.trim() || null,
+      })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  async updateProveedorFicha(id: number, datos: { cuit_cuil?: string | null; domicilio?: string | null }) {
+    const { error } = await this.supabase
+      .from('proveedores')
+      .update({
+        cuit_cuil: datos.cuit_cuil?.trim() || null,
+        domicilio: datos.domicilio?.trim() || null,
+      })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  /**
+   * Rol de acceso de cada empleado.
+   *
+   * El rol NO está en `empleados`: vive en `usuarios.rol`, que es la fila del login
+   * de la app y la que firma el JWT. Por eso la pantalla de Empleados tiene que
+   * cruzar ambas tablas. Un empleado que todavía no tiene login no aparece acá, que
+   * es justo lo que la pantalla usa para ofrecerle "dar acceso".
+   *
+   * Solo la devuelve el admin y el secretario: la política de RLS de `usuarios` los
+   * deja leer, al empleado no.
+   */
+  async getRolesEmpleados(): Promise<Record<number, string>> {
+    const { data, error } = await this.supabase
+      .from('usuarios')
+      .select('empleado_id, rol')
+      .not('empleado_id', 'is', null);
+    if (error) {
+      // El rol puede faltar permiso (empleado): no es un error que rompa la pantalla.
+      if (this.esSinPermiso(error)) return {};
+      throw error;
+    }
+    const mapa: Record<number, string> = {};
+    for (const u of data ?? []) mapa[u.empleado_id] = u.rol;
+    return mapa;
+  }
+
+  /** Sin permiso de lectura: la politica de RLS lo corta con un 42501. */
+  private esSinPermiso(error: any): boolean {
+    const txt = JSON.stringify(error ?? {});
+    return txt.includes('42501') || /row-level security/i.test(txt);
   }
 
   async deleteEmpleado(id: number) {

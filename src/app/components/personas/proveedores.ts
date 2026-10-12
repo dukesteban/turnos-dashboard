@@ -63,6 +63,7 @@ export class ProveedoresComponent implements OnInit {
     { clave: 'nombre', label: 'Nombre', placeholder: 'Ej: Químicas del Sur' },
     { clave: 'contacto', label: 'Contacto', placeholder: 'Quién atiende' },
     { clave: 'telefono', label: 'Teléfono', placeholder: '' },
+    { clave: 'cuit_cuil', label: 'CUIT / CUIL', placeholder: 'Sin guion ni espacio' },
     { clave: 'domicilio', label: 'Domicilio', placeholder: 'Ej: Av. Corrientes 1234' },
     { clave: 'notas', label: 'Notas', placeholder: '' },
   ];
@@ -107,6 +108,7 @@ export class ProveedoresComponent implements OnInit {
       nombre: p.nombre || '',
       contacto: p.contacto || '',
       telefono: p.telefono || '',
+      cuit_cuil: p.cuit_cuil || '',
       domicilio: p.domicilio || '',
       notas: p.notas || '',
     };
@@ -202,6 +204,9 @@ export class ProveedoresComponent implements OnInit {
         nombre,
         contacto: (sel.contacto ?? '').trim() || null,
         telefono: (sel.telefono ?? '').trim() || null,
+        // Sin guiones ni espacios: se compara contra el CUIT de otra persona y no
+        // sirve que uno lo haya cargado "20-12345678-9" y el otro "20123456789".
+        cuit_cuil: (sel.cuit_cuil ?? '').replace(/[\s-]/g, '').trim() || null,
         domicilio: (sel.domicilio ?? '').trim() || null,
         notas: (sel.notas ?? '').trim() || null,
       };
@@ -209,8 +214,22 @@ export class ProveedoresComponent implements OnInit {
 
       const idx = this.proveedores.findIndex((p: any) => p.id === sel.id);
       if (idx >= 0) Object.assign(this.proveedores[idx], datos);
-      Object.assign(sel, { ...datos, notas: datos.notas || '', contacto: datos.contacto || '', telefono: datos.telefono || '', domicilio: datos.domicilio || '' });
-      sel._original = { nombre, contacto: sel.contacto, telefono: sel.telefono, domicilio: sel.domicilio, notas: sel.notas };
+      Object.assign(sel, {
+        ...datos,
+        notas: datos.notas || '',
+        contacto: datos.contacto || '',
+        telefono: datos.telefono || '',
+        cuit_cuil: datos.cuit_cuil || '',
+        domicilio: datos.domicilio || '',
+      });
+      sel._original = {
+        nombre,
+        contacto: sel.contacto,
+        telefono: sel.telefono,
+        cuit_cuil: sel.cuit_cuil,
+        domicilio: sel.domicilio,
+        notas: sel.notas,
+      };
       sel.editando = false;
       this.mostrarMensaje('✅ Proveedor actualizado.');
     } catch (e) {
@@ -239,7 +258,7 @@ export class ProveedoresComponent implements OnInit {
     this.mensajeError = '';
     // Siempre arranca limpio: si se abrio, se cerro sin guardar y se volvio a
     // abrir, tiene que venir vacio y no con el intento anterior a medias.
-    this.nuevoProveedor = { nombre: '', contacto: '', telefono: '', domicilio: '', notas: '' };
+    this.nuevoProveedor = { nombre: '', contacto: '', telefono: '', cuit_cuil: '', domicilio: '', notas: '' };
     this.mostrarFormProveedor = true;
     this.cdr.detectChanges();
   }
@@ -273,6 +292,7 @@ export class ProveedoresComponent implements OnInit {
       nombre: this.nuevoProveedor.nombre.trim(),
       contacto: this.nuevoProveedor.contacto.trim() || null,
       telefono: this.nuevoProveedor.telefono.trim() || null,
+      cuit_cuil: this.nuevoProveedor.cuit_cuil.replace(/[\s-]/g, '').trim() || null,
       domicilio: this.nuevoProveedor.domicilio.trim() || null,
       notas: this.nuevoProveedor.notas.trim() || null,
     };

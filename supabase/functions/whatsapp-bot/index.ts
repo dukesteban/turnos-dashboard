@@ -759,7 +759,9 @@ Deno.serve(async (req) => {
     respuesta = await responderAlCliente(historialSano, telefono, spec);
   } catch (e: any) {
     console.error(e);
-    respuesta = 'Hubo un problema del lado del sistema. Probá en unos minutos.';
+    // Si algo falla, al menos que el cliente tenga por donde pedir ayuda en vez de
+    // quedarse mirando un "probá en unos minutos" sin salida.
+    respuesta = await mensajeDeFalla();
   }
 
   historialSano.push({ role: 'assistant', content: respuesta });
@@ -776,6 +778,19 @@ Deno.serve(async (req) => {
   return new Response('OK', { status: 200 });
 });
 
+
+// ─── Mensaje cuando algo se rompe ───
+// El teléfono de emergencia se saca de `configuracion` (clave telefono_emergencia), así
+// se cambia desde Configuración sin tocar código ni volver a desplegar la función.
+async function mensajeDeFalla(): Promise<string> {
+  const { data } = await sb.from('configuracion').select('valor').eq('clave', 'telefono_emergencia').maybeSingle();
+  const tel = (data?.valor ?? '').trim();
+  const base =
+    'Uy, se me cayó la conexión y no pude terminar de responderte. Disculpá la molestia.';
+  return tel
+    ? `${base} Para no hacerte esperar, llamanos al ${tel} y te atendemos al toque.`
+    : `${base} Probá en unos minutos.`;
+}
 
 // ─── Spec: se puede cargar de una tabla en el futuro. Por ahora es texto fijo. ───
 async function obtenerSpec(): Promise<string> {

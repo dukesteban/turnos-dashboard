@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { EmpleadosComponent } from './empleados';
 import { SupabaseService } from '../../services/supabase';
+import { AuthService } from '../../services/auth';
 import { crearSupabaseMock, EMP_JUAN, EMP_ESTEBAN, cloneEmpleado, turno } from '../../testing/supabase-mock';
 
 /**
@@ -16,9 +17,17 @@ import { crearSupabaseMock, EMP_JUAN, EMP_ESTEBAN, cloneEmpleado, turno } from '
  */
 
 function montar(over: Record<string, any> = {}) {
-  const mock = crearSupabaseMock(over);
+  const { __rol: rol, ...mockOver } = over;
+  const mock = crearSupabaseMock(mockOver);
+  // El componente ahora lee el rol para decidir si muestra el bloque de acceso, así
+  // que necesita el AuthService. Por defecto es admin: con otro rol el bloque queda
+  // oculto y no se vería nada de lo que hay alrededor.
+  const auth = { getRol: () => rol ?? 'admin' } as any;
   TestBed.configureTestingModule({
-    providers: [{ provide: SupabaseService, useValue: mock }],
+    providers: [
+      { provide: SupabaseService, useValue: mock },
+      { provide: AuthService, useValue: auth },
+    ],
   });
   const cmp = TestBed.createComponent(EmpleadosComponent).componentInstance;
   return { cmp, mock };

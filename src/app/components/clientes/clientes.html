@@ -6,6 +6,7 @@
     <div class="seccion lista-seccion">
       <div class="seccion-header">
         <span class="badge-count">Total: {{ clientesFiltrados.length }}</span>
+        <button class="btn-primary" (click)="abrirModalNuevo()">+ Nuevo</button>
       </div>
       <input type="text" class="buscador" [(ngModel)]="busqueda" placeholder="🔍 Buscar por nombre o teléfono..." />
       <div class="lista-clientes">
@@ -43,6 +44,25 @@
           <button *ngIf="!clienteSeleccionado.editando" class="btn-icon" (click)="clienteSeleccionado.editando = true">✏️</button>
           <button *ngIf="clienteSeleccionado.editando" class="btn-icon" (click)="guardarNombre()">💾</button>
           <button *ngIf="clienteSeleccionado.editando" class="btn-icon" (click)="cancelarEdicionNombre()">↩️</button>
+        </div>
+      </div>
+
+      <!-- Datos fiscales -->
+      <div class="detalle-bloque">
+        <h4>Datos fiscales</h4>
+        <div class="campo-editable">
+          <input type="text" [(ngModel)]="clienteSeleccionado.cuit_cuil"
+            [readonly]="!clienteSeleccionado.editandoFicha"
+            placeholder="CUIT / CUIL (opcional)" class="input-nombre" />
+          <input type="text" [(ngModel)]="clienteSeleccionado.direccion"
+            [readonly]="!clienteSeleccionado.editandoFicha"
+            placeholder="Dirección (opcional)" class="input-nombre" />
+          <button *ngIf="!clienteSeleccionado.editandoFicha" class="btn-icon"
+            (click)="clienteSeleccionado.editandoFicha = true">✏️</button>
+          <button *ngIf="clienteSeleccionado.editandoFicha" class="btn-icon"
+            (click)="guardarFicha()">💾</button>
+          <button *ngIf="clienteSeleccionado.editandoFicha" class="btn-icon"
+            (click)="cancelarEdicionFicha()">↩️</button>
         </div>
       </div>
 
@@ -151,6 +171,43 @@
 
     </div>
 
+  </div>
+
+  <!-- POPUP NUEVO CLIENTE -->
+  <div *ngIf="mostrarModalNuevo" class="popup-overlay" (click)="cerrarModalNuevo()">
+    <div class="popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <h3>👤 Nuevo cliente</h3>
+        <button class="btn-cerrar" (click)="cerrarModalNuevo()">✕</button>
+      </div>
+      <div class="popup-body">
+        <div class="form-caja">
+          <div class="campo">
+            <label>Nombre</label>
+            <input type="text" [(ngModel)]="altaNombre" placeholder="Nombre" class="input" />
+          </div>
+          <div class="campo">
+            <label>Teléfono (opcional)</label>
+            <input type="text" [(ngModel)]="altaTelefono" placeholder="Teléfono" class="input" />
+          </div>
+          <div class="campo">
+            <label>CUIT / CUIL (opcional)</label>
+            <input type="text" [(ngModel)]="altaCuit" placeholder="Sin guion ni espacio" class="input" />
+          </div>
+          <div class="campo">
+            <label>Dirección (opcional)</label>
+            <input type="text" [(ngModel)]="altaDireccion" placeholder="Dirección" class="input" />
+          </div>
+        </div>
+        <div *ngIf="errorNuevo" class="error-msg">{{ errorNuevo }}</div>
+      </div>
+      <div class="popup-acciones">
+        <button class="btn-atendido" (click)="agregarCliente()" [disabled]="guardandoNuevo">
+          {{ guardandoNuevo ? 'Guardando...' : '💾 Guardar' }}
+        </button>
+        <button class="btn-cancelado" (click)="cerrarModalNuevo()">↩️ Cancelar</button>
+      </div>
+    </div>
   </div>
 
 </div>

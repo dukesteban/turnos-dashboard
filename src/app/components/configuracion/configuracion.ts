@@ -115,6 +115,14 @@ export class ConfiguracionComponent implements OnInit {
   horasLimiteCancelacion = 12;
   recordatorioCuando = 'dia_anterior';
   recordatorioHora = '08:00';
+  /**
+   * Teléfono que el bot de WhatsApp le pasa al cliente cuando algo se rompe.
+   *
+   * Vive en `configuracion` y no en el código de la función de borde a propósito:
+   * si se cambia el número de contacto hay que poder hacerlo desde la pantalla,
+   * sin pedir un deploy. Vacío = el bot dice "probá en unos minutos" y nada más.
+   */
+  telefonoEmergencia = '';
 
   // Días cerrados
   acordeonDiasCerrados = false;
@@ -174,6 +182,7 @@ export class ConfiguracionComponent implements OnInit {
     this.horasLimiteCancelacion = parseInt(config.find((c: any) => c.clave === 'horas_limite_cancelacion')?.valor) || 12;
     this.recordatorioCuando = config.find((c: any) => c.clave === 'recordatorio_cuando')?.valor || 'dia_anterior';
     this.recordatorioHora = config.find((c: any) => c.clave === 'recordatorio_hora')?.valor || '08:00';
+    this.telefonoEmergencia = config.find((c: any) => c.clave === 'telefono_emergencia')?.valor || '';
     this.diasCerrados = await this.supabase.getDiasCerrados();
     const horariosDB = await this.supabase.getHorarios();
     this.horarios = (horariosDB || []).map((h: any) => ({
@@ -340,6 +349,7 @@ export class ConfiguracionComponent implements OnInit {
       await this.supabase.upsertConfiguracion('horas_limite_cancelacion', String(this.horasLimiteCancelacion));
       await this.supabase.upsertConfiguracion('recordatorio_cuando', this.recordatorioCuando);
       await this.supabase.upsertConfiguracion('recordatorio_hora', this.recordatorioHora);
+      await this.supabase.upsertConfiguracion('telefono_emergencia', this.telefonoEmergencia.trim());
       this.editandoDatos = false;
       this.mostrarMensaje('✅ Configuración guardada.', 'datos');
     } catch (e) {
