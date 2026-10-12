@@ -790,6 +790,8 @@ IMPORTANTE sobre las fechas: no le pidas al cliente la fecha en formato yyyy-MM-
 }
 
 // ─── Enviar un mensaje de texto por la Cloud API de WhatsApp ───
+const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function responderWhatsApp(telefono: string, texto: string) {
   if (!WA_TOKEN || !WA_PHONE_ID) {
     console.error('FALTA WHATSAPP_TOKEN o WHATSAPP_PHONE_NUMBER_ID');
@@ -802,20 +804,47 @@ async function responderWhatsApp(telefono: string, texto: string) {
   if (telefono.startsWith('549')) alternativas.push('54' + telefono.slice(3));
 
   for (const to of alternativas) {
-    const r = await fetch('https://graph.facebook.com/v21.0/' + WA_PHONE_ID + '/messages', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + WA_TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: to,
-        type: 'text',
-        text: { body: texto },
-      }),
-    });
-    if (r.ok) return;
-    const textoRespuesta = await r.text();
-    console.error(`WA error (to=${to}):`, textoRespuesta.slice(0, 300));
-    // Si no es "no está autorizado", no tiene sentido reintentar con otro número.
-    if (!textoRespuesta.includes('131030')) return;
+    // Meta tira 131005 "Access denied" de forma momentanea aunque el token este bien
+    // (le pasa al token recien generado, mientras los permisos se propagan). Antes el
+    // bot se rendia al primer error y el cliente se quedaba sin respuesta, asi que
+    // ahora se reintenta con espera.
+    for (let intento = 1; intento <= 3; intento++) {
+      try {
+        const r = await fetch('https://graph.facebook.com/v21.0/' + WA_PHONE_ID + '/messages', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + WA_TOKEN, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: to,
+            type: 'text',
+            text: { body: texto },
+          }),
+        });
+
+        if (r.ok) {
+          if (intento > 1) console.log(`WA ok a ${to} en el intento ${intento}`);
+          return;
+        }
+
+        const cuerpo = await r.text();
+        console.error(`WA error (to=${to}, intento ${intento}):`, cuerpo.slice(0, 300));
+
+        // Numero no autorizado: probar la otra variante, no tiene sentido insistir.
+        if (cuerpo.includes('131030')) break;
+
+        // Token vencido o revocado: reintentar es perder el tiempo.
+        if (cuerpo.includes('"code":190') || cuerpo.includes('invalid_token')) {
+          console.error('El token de Meta no sirve. Hay que generar uno nuevo.');
+          return;
+        }
+
+        if (intento < 3) await dormir(1000 * intento);
+      } catch (e: any) {
+        // Caida de red: vale la pena reintentar.
+        console.error(`WA exception (to=${to}, intento ${intento}):`, e?.message ?? e);
+        if (intento < 3) await dormir(1000 * intento);
+      }
+    }
   }
+  console.error('No se pudo entregar la respuesta por WhatsApp.');
 }
