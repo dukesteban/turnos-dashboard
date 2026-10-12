@@ -128,13 +128,17 @@ function err(codigo: string, detalle = '') {
   return JSON.stringify({ ok: false, error: codigo, detalle });
 }
 
-async function esDiaCerrado(fecha: string): Promise<boolean> {
-  const { data } = await sb
-    .from('dias_cerrados')
-    .select('id')
-    .lte('fecha', fecha)
-    .or(`fecha_hasta.gte.${fecha},fecha_hasta.is.null`);
-  return (data ?? []).length > 0;
+function diaCerrado(cerrados: Array<{ fecha: string; fecha_hasta?: string | null }>, fecha: string): boolean {
+  // Un día cerrado sin fecha_hasta aplica SOLO ese día. Con fecha_hasta, aplica todo el
+  // rango. La condición anterior (`lte(fecha) + or(fecha_hasta >= x, is null)`) contaba
+  // COMO CERRADOS POR SIEMPRE los que tenían fecha_hasta NULL, porque esa cláusula
+  // matchea cualquier fecha posterior a la del cierre.
+  const D = new Date(fecha + 'T00:00:00').getTime();
+  return (cerrados ?? []).some((c: any) => {
+    const desde = new Date(c.fecha + 'T00:00:00').getTime();
+    const hasta = c.fecha_hasta ? new Date(c.fecha_hasta + 'T00:00:00').getTime() : desde;
+    return desde <= D && D <= hasta;
+  });
 }
 
 async function horasMinCancelar(): Promise<number> {
@@ -146,6 +150,19 @@ async function horasMinCancelar(): Promise<number> {
 async function ejecutarTool(nombre: string, input: any, telefono: string): Promise<string> {
   switch (nombre) {
     case 'obtener_config_negocio': {
+      // Claves que viven en tablas propias, no en `configuracion`.
+      if (input.clave === 'horario_atencion') {
+        const { data } = await sb
+          .from('horarios_atencion')
+          .select('dia_semana, hora_inicio, hora_fin, activo')
+          .eq('activo', true)
+          .order('dia_semana', { ascending: true });
+        return JSON.stringify({ ok: true, valor: data ?? [] });
+      }
+      if (input.clave === 'dias_cerrados') {
+        const { data } = await sb.from('dias_cerrados').select('fecha, motivo, fecha_hasta').order('fecha', { ascending: true });
+        return JSON.stringify({ ok: true, valor: data ?? [] });
+      }
       const { data } = await sb.from('configuracion').select('valor').eq('clave', input.clave).single();
       return JSON.stringify({ ok: true, valor: data?.valor ?? null });
     }
@@ -160,8 +177,8 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
     case 'consultar_horarios_libres': {
       const fecha = input.fecha;
       // 1. cerrado? (`fecha` es el inicio, `fecha_hasta` el final; si no hay, fue un día solo)
-      const { data: cerrados } = await sb.from('dias_cerrados').select('id').lte('fecha', fecha).or(`fecha_hasta.gte.${fecha},fecha_hasta.is.null`);
-      if ((cerrados ?? []).length > 0) return JSON.stringify({ ok: false, error: 'dia_cerrado' });
+      const { data: cerrados } = await sb.from('dias_cerrados').select('fecha, fecha_hasta');
+      if (diaCerrado(cerrados ?? [], fecha)) return JSON.stringify({ ok: false, error: 'dia_cerrado' });
 
       // 2. dia de la semana
       const d = new Date(fecha + 'T00:00:00');
@@ -217,8 +234,8 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       const [fecha, hora] = fecha_hora.split('T');
 
       // 2. cerrado?
-      const { data: cerrados } = await sb.from('dias_cerrados').select('id').lte('fecha', fecha).or(`fecha_hasta.gte.${fecha},fecha_hasta.is.null`);
-      if ((cerrados ?? []).length > 0) return err('fuera_de_horario', 'Ese día el negocio no atiende.');
+      const { data: cerradosCr } = await sb.from('dias_cerrados').select('fecha, fecha_hasta');
+      if (diaCerrado(cerradosCr ?? [], fecha)) return err('fuera_de_horario', 'Ese día el negocio no atiende.');
 
       // 3. servicio existe
       const { data: serv } = await sb.from('servicios').select('id, nombre, duracion_minutos, precio').eq('id', servicio_id).single();
@@ -342,9 +359,50 @@ function minAHora(m: number): string {
   return `${h}:${min}`;
 }
 
+// El historial que guardamos en `conversaciones` a veces queda con un par roto:
+// una respuesta del asistente pidiendo tools, y abajo no tiene los `tool_result`
+// que la spec de Claude exige que vayan immediatamente después. Cuando pasa eso,
+// Claude devuelve 400 "tool_use ids were found without tool_result blocks" y el
+// cliente nunca recibe contestación. Para no arrancar una conversación nueva con
+// ese error ya adentro, se poda el historial antes de guardarlo: si hay un par
+// roto, todo lo que venga después de él se borra.
+function sanearHistorial(msgs: any[]): any[] {
+  const out: any[] = [];
+  for (let i = 0; i < msgs.length; i++) {
+    const m = msgs[i];
+    out.push(m);
+    // asistente con tool_use: el siguiente mensaje tiene que ser user con tool_result
+    if (m.role === 'assistant' && Array.isArray(m.content)) {
+      const ids = (m.content as any[])
+        .filter((b) => b && b.type === 'tool_use')
+        .map((b) => b.id);
+      if (ids.length > 0) {
+        const siguiente = msgs[i + 1];
+        const cumple =
+          siguiente &&
+          siguiente.role === 'user' &&
+          Array.isArray(siguiente.content) &&
+          ids.every((id) =>
+            (siguiente.content as any[]).some(
+              (b) => b && b.type === 'tool_result' && b.tool_use_id === id,
+            ),
+          );
+        if (!cumple) {
+          // sacamos el asistente roto y terminamos acá
+          out.pop();
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
 // ─── Llamar a Claude con el historial y las tools ───
 async function responderAlCliente(historial: any[], telefono: string, spec: string): Promise<string> {
-  const system = `Sos el asistente por WhatsApp del lavadero. Hablás en español rioplatense, corto y amable. Nunca confirmás un turno sin haber llamado a crear_turno y que haya devuelto ok. Si una tool devuelve un error, explicateselo al cliente y ofrecé alternativas.
+  const system = `Sos el asistente por WhatsApp del lavadero. Español rioplatense, corto y amable. Hoy es ${new Date().toISOString().slice(0, 10)}. Tool de verdad antes de afirmar: nunca confirmás turno sin que crear_turno te devuelva ok, y nunca decís que un horario está libre sin antes llamar consultar_horarios_libres. Si una tool devuelve error, le explicás al cliente qué pasó y ofrecés otro camino.
+
+Reglas de UX: cuando consultes los horarios de un día, damos como mucho 3-4 opciones para que el cliente elija, y no listees todas las libres de golpe. Si el día está cerrado, explicalo sin motivo si no lo hay, y ofrecés otro día. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados.
 
 ${spec}`;
 
@@ -358,14 +416,23 @@ ${spec}`;
   let response = await llamarClaude(system, historial, tools);
   let guard = 0;
   while (response.stop_reason === 'tool_use' && guard++ < 5) {
-    const toolUse = response.content.find((b: any) => b.type === 'tool_use');
-    if (!toolUse) break;
+    // Claude puede pedir VARIAS tools en el mismo mensaje. Cada `tool_use` que llegó
+    // tiene que tener su `tool_result` en el siguiente mensaje de usuario,
+    // o Claude rompe con "tool_use ids were found without tool_result blocks".
+    const toolUses = (response.content ?? []).filter((b: any) => b.type === 'tool_use');
+    if (toolUses.length === 0) break;
 
     // El telefono lo pone el backend, NO el modelo
-    const resultado = await ejecutarTool(toolUse.name, toolUse.input, telefono);
+    const resultados = await Promise.all(
+      toolUses.map(async (tu: any) => ({
+        type: 'tool_result',
+        tool_use_id: tu.id,
+        content: await ejecutarTool(tu.name, tu.input, telefono),
+      })),
+    );
 
     historial.push({ role: 'assistant', content: response.content } as any);
-    historial.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: resultado }] } as any);
+    historial.push({ role: 'user', content: resultados } as any);
 
     response = await llamarClaude(system, historial, tools);
   }
@@ -452,24 +519,29 @@ Deno.serve(async (req) => {
     ? (() => { try { return JSON.parse(convo.historial_claude); } catch { return []; } })()
     : [];
 
-  historial.push({ role: 'user', content: texto });
+  // Si el historial quedó roto de una prueba vieja (una tool_use sin su tool_result
+  // inmediatamente después), Claude rechaza el pedido con 400 y el cliente se queda
+  // sin respuesta. Se limpia acá, antes de enviárselo a Claude.
+  const historialSano = sanearHistorial(historial);
+
+  historialSano.push({ role: 'user', content: texto });
 
   // ─── Spec embebido. Se puede cambiar sin tocar el codigo. ───
   const spec = await obtenerSpec();
 
   let respuesta = '';
   try {
-    respuesta = await responderAlCliente(historial, telefono, spec);
+    respuesta = await responderAlCliente(historialSano, telefono, spec);
   } catch (e: any) {
     console.error(e);
     respuesta = 'Hubo un problema del lado del sistema. Probá en unos minutos.';
   }
 
-  historial.push({ role: 'assistant', content: respuesta });
+  historialSano.push({ role: 'assistant', content: respuesta });
 
   // ─── Guardar el historial en conversations. `historial_claude` es el espacio que
   // preparaste para esto. Si la fila no existe, se crea. ───
-  const payload = { telefono, historial_claude: JSON.stringify(historial) };
+  const payload = { telefono, historial_claude: JSON.stringify(sanearHistorial(historialSano)) };
   const { error: errUpsert } = await sb
     .from('conversaciones')
     .upsert(payload, { onConflict: 'telefono' });
@@ -487,7 +559,9 @@ async function obtenerSpec(): Promise<string> {
 2. Cuando elija servicio, mostra los horarios libres con consultar_horarios_libres.
 3. Si elige horario, confirmar y pedir nombre.
 4. Crear turno con crear_turno.
-5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente.`;
+5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente.
+
+IMPORTANTE sobre las fechas: no le pidas al cliente la fecha en formato yyyy-MM-dd. Entende 'el domingo que viene', 'pasado manana', 'el 11 de octubre' a partir de la fecha de hoy (esta en el system prompt). Si falta el año y el dia ya hay pasado este año, usa el año siguiente. Nunca digas 'hubiera un problema del lado del sistema' si una tool devuelve un error: explicale al cliente qué paso y ofrecele alternativas.`;
 }
 
 // ─── Enviar un mensaje de texto por la Cloud API de WhatsApp ───
