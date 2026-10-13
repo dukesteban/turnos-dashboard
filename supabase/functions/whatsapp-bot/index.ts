@@ -104,11 +104,13 @@ const TOOLS = [
   },
   {
     name: 'buscar_turnos_cliente',
-    description: 'Busca los turnos de el cliente (por su telefono de WhatsApp). solo_futuros=true para que solo devuelva lo que viene.',
+    description: 'Busca los turnos del cliente por su numero de WhatsApp. Devuelve SOLO los de hoy en adelante y sin cancelados. Pon incluir_pasados=true solo si el cliente pidio explicitamente ver el historico.',
     input_schema: {
       type: 'object',
-      properties: { solo_futuros: { type: 'boolean' } },
-      required: ['solo_futuros'],
+      properties: {
+        incluir_pasados: { type: 'boolean', description: 'true solo si el cliente pidio el historico. Por omision no.' },
+      },
+      required: [],
     },
   },
   {
@@ -212,9 +214,15 @@ function sePisan(a: Bloque, b: Bloque): boolean {
 // ─── Como esta el dia empleado por empleado ───
 // Devuelve, para cada franja, quien puede tomar el turno. Si nadie esta libre en una
 // franja, el horario no se ofrece: asi el bot nunca agenda a alguien que ya esta ocupado.
+//
+// OJO con la jornada: un empleado ACTIVO puede igual no labrar un dia concreto, y a
+// veces con un tope de horas (Esteban, por ejemplo, no trabaja los miercoles y los
+// sabados corta a las 13). Antes solo se miraba `activo`, asi que el bot le agendo
+// un miercoles a las 19 y le dijo que lo atendia Esteban, que no estaba ese dia.
 async function estadoDelDia(fecha: string) {
+  const diaSemana = new Date(fecha + 'T00:00:00').getDay();
   const [{ data: empleados }, { data: turnos }, { data: ausencias }] = await Promise.all([
-    sb.from('empleados').select('id, nombre').eq('activo', true).order('nombre'),
+    sb.from('empleados').select('id, nombre, jornada').eq('activo', true).order('nombre'),
     sb.from('turnos')
       .select('hora_inicio, hora_fin, duracion_minutos, empleado_id')
       .eq('fecha', fecha)
@@ -227,6 +235,28 @@ async function estadoDelDia(fecha: string) {
   ]);
 
   const todos = empleados ?? [];
+
+  // ─── Quien labra ese dia, y hasta que hora ───
+  // `jornada` es un array de 7 en orden domingo..sabado. Si no tiene jornada
+  // cargada se lo trata como que labra todos los dias a todo horario, que es como
+  // viene el empleado desde antes de que exista la jornada.
+  const labora = new Map<number, { desde: number; hasta: number } | null>();
+  for (const e of todos as Array<{ id: number; jornada?: any }>) {
+    const j = Array.isArray(e.jornada) ? e.jornada[diaSemana] : null;
+    if (j === null || j === undefined) {
+      labora.set(e.id, null); // sin dato: disponible todo el dia
+      continue;
+    }
+    if (!j.activo) {
+      labora.set(e.id, false as any); // ese dia no trabaja
+      continue;
+    }
+    labora.set(e.id, {
+      desde: j.hora_inicio ? horaAMin(j.hora_inicio) : 0,
+      hasta: j.hora_fin ? horaAMin(j.hora_fin) : 24 * 60,
+    });
+  }
+  const disponibles = todos.filter((e: any) => labora.get(e.id) !== false);
 
   // Un turno sin hora_fin (los viejos del bot) cae a hora_inicio + duracion.
   const agenda = new Map<number, Bloque[]>();
@@ -251,17 +281,24 @@ async function estadoDelDia(fecha: string) {
     agenda.set(a.empleado_id, lista);
   }
 
-  const libres = (empleadoId: number, desde: number, hasta: number): boolean =>
-    !(agenda.get(empleadoId) ?? []).some((b) => sePisan({ inicio: desde, fin: hasta }, b));
+  // Que este libre ademas de la jornada: si el empleado no labra ese dia, o corta
+  // antes de que termine el turno, no puede tomarlo.
+  const libres = (empleadoId: number, desde: number, hasta: number): boolean => {
+    const j = labora.get(empleadoId);
+    if (j === false) return false;
+    if (j && (desde < j.desde || hasta > j.hasta)) return false;
+    return !(agenda.get(empleadoId) ?? []).some((b) => sePisan({ inicio: desde, fin: hasta }, b));
+  };
 
   return {
-    empleados: todos,
+    empleados: disponibles,
+    todos,
     libres,
-    algunoLibre: (desde: number, hasta: number) => todos.some((e: any) => libres(e.id, desde, hasta)),
+    algunoLibre: (desde: number, hasta: number) => disponibles.some((e: any) => libres(e.id, desde, hasta)),
     // el primero que puede tomar ese horario, o null si esta todo lleno
     quienPuede: (desde: number, hasta: number, preferido?: number | null) => {
-      if (preferido != null && libres(preferido, desde, hasta)) return preferido;
-      const otro = todos.find((e: any) => libres(e.id, desde, hasta));
+      if (preferido != null) return libres(preferido, desde, hasta) ? preferido : null;
+      const otro = disponibles.find((e: any) => libres(e.id, desde, hasta));
       return otro ? otro.id : null;
     },
   };
@@ -540,18 +577,34 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       const { data: cli } = await sb.rpc('buscar_cliente_por_telefono', { p_telefono: telefono });
       const clienteId = (cli ?? [])[0]?.id ?? null;
 
-      const { data } = await sb
+      // SOLO FUTUROS, por omision. El flag del modelo no es una garantia: si lo
+      // olvida o lo manda en false, el bot le lista trece turnos de marzo y el
+      // cliente cree que tiene una agenda llena. Para ver el historico hay que
+      // pedirlo explicitamente con incluir_pasados.
+      const incluirPasados = input.incluir_pasados === true;
+      const hoy = new Date().toISOString().slice(0, 10);
+
+      let consulta = sb
         .from('turnos')
         .select('id, fecha, hora, servicio_nombre, estado, empleado_id')
-        .eq(clienteId ? 'cliente_id' : 'cliente_telefono', clienteId ?? telefono)
-        .order('fecha', { ascending: false })
-        .limit(20);
-      let resultado = data ?? [];
-      if (input.solo_futuros) {
-        const hoy = new Date().toISOString().slice(0, 10);
-        resultado = resultado.filter((t: any) => t.fecha >= hoy && t.estado !== 'cancelado');
+        .eq(clienteId ? 'cliente_id' : 'cliente_telefono', clienteId ?? telefono);
+
+      // Un turno de hoy que ya paso no le sirve para nada: el cliente quiere lo que
+      // tiene por delante, no lo que ya se le fue.
+      if (!incluirPasados) {
+        consulta = consulta.gte('fecha', hoy).neq('estado', 'cancelado');
       }
-      return JSON.stringify({ ok: true, turnos: resultado });
+
+      const { data } = await consulta.order('fecha', { ascending: false }).limit(20);
+      const resultado = data ?? [];
+      return JSON.stringify({
+        ok: true,
+        turnos: resultado,
+        total: resultado.length,
+        nota: incluirPasados
+          ? 'Incluye el historico completo.'
+          : 'Solo turnos de hoy en adelante, sin cancelados.',
+      });
     }
     case 'cancelar_turno': {
       const { turno_id } = input;
@@ -569,9 +622,16 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
     }
     case 'reprogramar_turno': {
       const { turno_id, nueva_fecha_hora } = input;
-      const { data: turno } = await sb.from('turnos').select('fecha, hora_inicio, estado, servicio_id, duracion_minutos').eq('id', turno_id).single();
+      const { data: turno } = await sb.from('turnos').select('fecha, hora_inicio, hora_fin, estado, servicio_id, duracion_minutos, servicio_nombre').eq('id', turno_id).single();
       if (!turno) return err('turno_no_encontrado');
       if (turno.estado === 'cancelado') return err('turno_cancelado');
+
+      // Un turno YA pasado no se reprograma: no da "falta menos de 12 horas" sino
+      // "ese turno ya fue", que es lo unico cierto y lo que el cliente entiende.
+      const hoy = new Date().toISOString().slice(0, 10);
+      if (turno.fecha < hoy) {
+        return err('turno_ya_pasado', `El turno del ${turno.fecha} ya fue. Para algo de hoy en adelante, mejor agendá uno nuevo.`);
+      }
 
       const minsFaltan = (new Date(turno.fecha + 'T' + turno.hora_inicio).getTime() - Date.now()) / 60000;
       const minsMin = (await horasMinCancelar()) * 60;
@@ -584,20 +644,55 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       const nuevaFecha = nueva_fecha_hora.split('T')[0];
       const nuevaHora = nueva_fecha_hora.split('T')[1].slice(0, 5);
 
-      // choque con otro turno?
-      const { data: choque } = await sb
-        .from('turnos')
-        .select('id')
-        .eq('fecha', nuevaFecha)
-        .eq('hora_inicio', nuevaHora)
-        .neq('id', turno_id)
-        .neq('estado', 'cancelado')
-        .maybeSingle();
-      if (choque) return err('horario_no_disponible');
+      // Mismas validaciones que crear_turno: si el turno nuevo no se puede agendar,
+      // reprogramar tampoco.
+      const { data: cerradosRe } = await sb.from('dias_cerrados').select('fecha, fecha_hasta');
+      if (diaCerrado(cerradosRe ?? [], nuevaFecha)) return err('fuera_de_horario', 'Ese dia el negocio no atiende.');
 
-      const { error } = await sb.from('turnos').update({ fecha: nuevaFecha, hora: nuevaHora + ':00', hora_inicio: nuevaHora + ':00' }).eq('id', turno_id);
+      const diaSemana = new Date(nuevaFecha + 'T00:00:00').getDay();
+      const { data: horariosRe } = await sb
+        .from('horarios_atencion')
+        .select('hora_inicio, hora_fin')
+        .eq('dia_semana', diaSemana)
+        .eq('activo', true)
+        .order('hora_inicio', { ascending: true });
+      if (!horariosRe || horariosRe.length === 0) return err('fuera_de_horario', 'Ese dia no atienden.');
+
+      const duracion = turno.duracion_minutos || 30;
+      const desde = horaAMin(nuevaHora);
+      const hasta = desde + duracion;
+      const entra = (horariosRe as Array<{ hora_inicio: string; hora_fin: string }>).some(
+        (h) => desde >= horaAMin(h.hora_inicio) && hasta <= horaAMin(h.hora_fin)
+      );
+      if (!entra) {
+        const texto = horariosRe.map((h: any) => `${sinSeg(h.hora_inicio)} a ${sinSeg(h.hora_fin)}`).join(' y ');
+        return err('fuera_de_horario', `Ese dia atendemos de ${texto} y el servicio dura ${duracion} min.`);
+      }
+
+      // Que haya alguien libre (respetando la jornada de cada uno). El turno que se
+      // esta moviendo sigue ocupando su lugar viejo mientras tanto, asi que se lo
+      // ignora para no_contarse a si mismo como ocupado.
+      const agendaRe = await estadoDelDia(nuevaFecha);
+      if (!agendaRe.algunoLibre(desde, hasta)) return err('horario_no_disponible', 'A esa hora no hay nadie libre.');
+
+      const { error } = await sb
+        .from('turnos')
+        .update({
+          fecha: nuevaFecha,
+          hora: nuevaHora + ':00',
+          hora_inicio: nuevaHora + ':00',
+          hora_fin: minAHora(hasta) + ':00',
+        })
+        .eq('id', turno_id);
       if (error) return err('error_reprogramando', error.message);
-      return JSON.stringify({ ok: true });
+      return JSON.stringify({
+        ok: true,
+        turno_id,
+        fecha: nuevaFecha,
+        hora: nuevaHora,
+        hora_fin: minAHora(hasta),
+        servicio: turno.servicio_nombre,
+      });
     }
     default:
       return err('tool_desconocida', nombre);
@@ -931,7 +1026,7 @@ async function obtenerSpec(): Promise<string> {
 2. Si el cliente viene por un turno nuevo, pedile el servicio.
 3. Cuando elija servicio, mostra los horarios libres con consultar_horarios_libres.
 4. Si elige horario, crealo con crear_turno.
-5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente.
+5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente. Si quiere cambiar la fecha o la hora de un turno que ya tiene, se reprograma con reprogramar_turno (primero le decis a que turno se refiere, con buscar_turnos_cliente, y le mostras el horario nuevo antes de llamar a la tool). Si el turno que quiere tocar ya paso, no se reprograma: se agenda uno nuevo.
 
 IMPORTANTE sobre las fechas: no le pidas al cliente la fecha en formato yyyy-MM-dd. Entende 'el domingo que viene', 'pasado manana', 'el 11 de octubre' a partir de la fecha de hoy (esta en el system prompt). Si falta el año y el dia ya hay pasado este año, usa el año siguiente. Nunca digas 'hubiera un problema del lado del sistema' si una tool devuelve un error: explicale al cliente qué paso y ofrecele alternativas.`;
 }
