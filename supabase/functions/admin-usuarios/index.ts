@@ -85,16 +85,41 @@ async function rolDelLlamador(req: Request): Promise<Rol | null> {
   return ROLES.includes(deLaBase) ? deLaBase : null;
 }
 
+/**
+ * CORS en TODAS las respuestas, no solo en el preflight.
+ *
+ * El gateway de Supabase responde el OPTIONS con `Access-Control-Allow-Origin`, asi
+ * que el navegador passes el preflight y manda el POST... y despues descarta la
+ * respuesta real porque esta no trae la cabecera. Supabase JS no distingue los dos
+ * casos y muestra siempre "Failed to send a request to the Edge Function", que no
+ * dice ni que paso ni donde.
+ *
+ * Con esto se arregla sin tocar la app: es la funcion la que tiene que contestar.
+ */
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
+};
+
 function fallo(mensaje: string, codigo = 400) {
   return new Response(JSON.stringify({ ok: false, error: mensaje }), {
     status: codigo,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS },
+  });
+}
+
+function bien(cuerpo: unknown) {
+  return new Response(JSON.stringify(cuerpo), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json', ...CORS },
   });
 }
 
 Deno.serve(async (req: Request) => {
   // La app siempre manda POST. Se acepta OPTIONS para que el navegador no lo bloquee.
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return fallo('Se esperaba POST.', 405);
 
   const rol = await rolDelLlamador(req);
@@ -172,7 +197,7 @@ Deno.serve(async (req: Request) => {
         return fallo('No se pudo guardar el usuario: ' + errFila.message, 400);
       }
 
-      return Response.json({ ok: true, usuario: fila });
+      return bien({ ok: true, usuario: fila });
     }
 
     // ─── ACTUALIZAR NOMBRE, ROL O EMPLEADO VINCULADO ─────────────────────────
@@ -238,7 +263,7 @@ Deno.serve(async (req: Request) => {
         await admin.auth.admin.updateUserById(authUser.id, cambiosAuth);
       }
 
-      return Response.json({ ok: true, usuario: fila });
+      return bien({ ok: true, usuario: fila });
     }
 
     // ─── RESETEAR LA CLAVE DE OTRO ────────────────────────────────────────────
@@ -267,7 +292,7 @@ Deno.serve(async (req: Request) => {
       const { error: errAuth } = await admin.auth.admin.updateUserById(authUser.id, { password: clave });
       if (errAuth) return fallo(errAuth.message, 400);
 
-      return Response.json({ ok: true });
+      return bien({ ok: true });
     }
 
     // ─── BORRAR ───────────────────────────────────────────────────────────────
@@ -292,7 +317,7 @@ Deno.serve(async (req: Request) => {
       const { error: errDel } = await admin.from('usuarios').delete().eq('id', id);
       if (errDel) return fallo(errDel.message, 400);
 
-      return Response.json({ ok: true });
+      return bien({ ok: true });
     }
 
     return fallo('No se que pedir: la accion "' + String(accion) + '" no existe.');
