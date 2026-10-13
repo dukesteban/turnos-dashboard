@@ -194,6 +194,11 @@ async function contextoNegocio(): Promise<{ nombre: string; cierres: string | nu
 
 type Bloque = { inicio: number; fin: number };
 
+/** Últimos 10 dígitos: con o sin el 9 y el 54 de adelante, el número es el mismo. */
+function ultimosDigitos(t: string): string {
+  return (t ?? '').replace(/\D/g, '').slice(-10);
+}
+
 // Postgres devuelve las horas como '12:00:00'. Para decírselas a una persona alcanza
 // con '12:00'.
 function sinSeg(h: string): string {
@@ -842,6 +847,17 @@ Deno.serve(async (req) => {
   const telefono = message.from;
   const tipo = message.type;
   const texto = message.text?.body?.trim() ?? '';
+
+  // ─── El bot no se contesta a sí mismo ───
+  // `display_phone_number` es el número desde el que envía el negocio. Cuando el
+  // emisor es ese mismo número, lo que llegó es el mensaje que el bot mandó hace un
+  // segundo, devuelto por Meta como entrante. Sin esto se guardaba en el historial
+  // como si lo hubiera escrito el cliente y el bot respondía a su propia respuesta,
+  // en bucle.
+  const propio = value?.metadata?.display_phone_number;
+  if (propio && ultimosDigitos(propio) === ultimosDigitos(telefono)) {
+    return new Response('Mensaje propio, ignorado', { status: 200 });
+  }
 
   // Meta manda mensajes que no son texto (imagen, audio, etc). Se responde con un guion.
   if (tipo !== 'text' || !texto) {
