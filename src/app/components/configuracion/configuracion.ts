@@ -116,6 +116,13 @@ export class ConfiguracionComponent implements OnInit {
   recordatorioCuando = 'dia_anterior';
   recordatorioHora = '08:00';
   /**
+   * Tono del bot de WhatsApp.
+   *
+   * Vive acá y no en el código de la función de borde para que cambiar la voz del
+   * bot no requiera un deploy: es una decisión del negocio, no del software.
+   */
+  tono = 'informal';
+  /**
    * Teléfono que el bot de WhatsApp le pasa al cliente cuando algo se rompe.
    *
    * Vive en `configuracion` y no en el código de la función de borde a propósito:
@@ -183,6 +190,7 @@ export class ConfiguracionComponent implements OnInit {
     this.recordatorioCuando = config.find((c: any) => c.clave === 'recordatorio_cuando')?.valor || 'dia_anterior';
     this.recordatorioHora = config.find((c: any) => c.clave === 'recordatorio_hora')?.valor || '08:00';
     this.telefonoEmergencia = config.find((c: any) => c.clave === 'telefono_emergencia')?.valor || '';
+    this.tono = config.find((c: any) => c.clave === 'tono')?.valor || 'informal';
     this.diasCerrados = await this.supabase.getDiasCerrados();
     const horariosDB = await this.supabase.getHorarios();
     this.horarios = (horariosDB || []).map((h: any) => ({
@@ -350,6 +358,7 @@ export class ConfiguracionComponent implements OnInit {
       await this.supabase.upsertConfiguracion('recordatorio_cuando', this.recordatorioCuando);
       await this.supabase.upsertConfiguracion('recordatorio_hora', this.recordatorioHora);
       await this.supabase.upsertConfiguracion('telefono_emergencia', this.telefonoEmergencia.trim());
+      await this.supabase.upsertConfiguracion('tono', this.tono);
       this.editandoDatos = false;
       this.mostrarMensaje('✅ Configuración guardada.', 'datos');
     } catch (e) {

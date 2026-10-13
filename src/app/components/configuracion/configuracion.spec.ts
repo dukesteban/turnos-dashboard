@@ -329,7 +329,7 @@ describe('Configuración — datos del negocio', () => {
     expect(cmp.mensajeErrorDatos).toBe('');
     expect(guardadas).toEqual([
       'nombre_negocio', 'descripcion', 'horas_limite_cancelacion',
-      'recordatorio_cuando', 'recordatorio_hora', 'telefono_emergencia',
+      'recordatorio_cuando', 'recordatorio_hora', 'telefono_emergencia', 'tono',
     ]);
   });
 

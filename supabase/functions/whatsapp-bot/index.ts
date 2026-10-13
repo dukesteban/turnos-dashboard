@@ -57,6 +57,26 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { clave: { type: 'string' } }, required: ['clave'] },
   },
   {
+    name: 'empleados_del_dia',
+    description:
+      'Devuelve quienes labran en una fecha, con el horario de cada uno. Usala cuando el cliente pregunte quien trabaja un dia, sin pedirle un servicio: es una pregunta de gente, no de turnos.',
+    input_schema: {
+      type: 'object',
+      properties: { fecha: { type: 'string', description: 'YYYY-MM-DD' } },
+      required: ['fecha'],
+    },
+  },
+  {
+    name: 'asociar_numero',
+    description:
+      'Agrega el numero desde el que esta escribiendo el cliente a una ficha que ya existe. Usala SOLO cuando el cliente confirmo que es la misma persona que ya tenemos con otro numero.',
+    input_schema: {
+      type: 'object',
+      properties: { cliente_id: { type: 'number' } },
+      required: ['cliente_id'],
+    },
+  },
+  {
     name: 'listar_servicios',
     description: 'Devuelve la lista de servicios disponibles con id, nombre, duracion en minutos y precio.',
     input_schema: { type: 'object', properties: {}, required: [] },
@@ -167,10 +187,20 @@ const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto'
 // ─── Nombre del negocio y proximos cierres, para la presentacion ───
 // El cierre se lee de `dias_cerrados`: si el lavadero carga un feriado ahi, el bot lo
 // dice solo, sin que nadie se lo recuerde en cada mensaje.
-async function contextoNegocio(): Promise<{ nombre: string; cierres: string | null }> {
-  const [{ data: conf }, { data: cerrados }] = await Promise.all([
+const TONOS: Record<string, string> = {
+  informal: 'Hablás como en un chat: voseo, frases cortas, sin tratar a nadie de "estimado". Que parezca una persona, no un formulario.',
+  profesional: 'Profesional pero humano: voseo, claro y respetuoso, sin vulgaridades ni exageraciones de "esto es un bot".',
+  formal: 'Formal: trato de "usted", ustedes, más cuidado en las frases, sin apuro. Para un cliente que se queja o consulta un reclamo.',
+};
+
+async function contextoNegocio(): Promise<{ nombre: string; cierres: string | null; tono: string }> {
+  // El orden de la desestructuracion tiene que CALCAR con el del arreglo. Antes
+  // quedaron cruzados y `cerrados` recibia el tono: `(cerrados ?? []).filter` tiraba
+  // TypeError y TODOS los mensajes del bot caian en el mensaje de falla.
+  const [{ data: conf }, { data: cerrados }, { data: tonoConf }] = await Promise.all([
     sb.from('configuracion').select('valor').eq('clave', 'nombre_negocio').maybeSingle(),
     sb.from('dias_cerrados').select('fecha, fecha_hasta, motivo').gte('fecha', new Date().toISOString().slice(0, 10)),
+    sb.from('configuracion').select('valor').eq('clave', 'tono').maybeSingle(),
   ]);
 
   const nombre = conf?.valor || 'el lavadero';
@@ -179,7 +209,9 @@ async function contextoNegocio(): Promise<{ nombre: string; cierres: string | nu
     .filter((c: any) => new Date(c.fecha + 'T00:00:00').getTime() <= Date.now() + 1000 * 60 * 60 * 24 * 30)
     .sort((a: any, b: any) => a.fecha.localeCompare(b.fecha));
 
-  if (proximos.length === 0) return { nombre, cierres: null };
+  const tono = TONOS[(tonoConf?.valor ?? '').trim()] || TONOS.informal;
+
+  if (proximos.length === 0) return { nombre, cierres: null, tono };
 
   const frases = proximos.slice(0, 2).map((c: any) => {
     const d = new Date(c.fecha + 'T00:00:00');
@@ -194,6 +226,7 @@ async function contextoNegocio(): Promise<{ nombre: string; cierres: string | nu
 
   return {
     nombre,
+    tono,
     cierres: `recordale que ${frases.join(' y ')}`,
   };
 }
@@ -358,6 +391,98 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       const { data } = await sb.from('empleados').select('id, nombre').eq('activo', true).order('nombre');
       return JSON.stringify({ ok: true, empleados: data ?? [] });
     }
+    case 'empleados_del_dia': {
+      // "quien trabaja el jueves" es una pregunta de gente, no de turnos. Antes el
+      // bot reconducía todo a "¿que servicio?" y el clienteGBA loop hasta que
+      // aceptaba elegir uno, cuando la pregunta no tiene nada que ver con servicios.
+      const fecha = input.fecha;
+      const { data: cerrados } = await sb.from('dias_cerrados').select('fecha, fecha_hasta');
+      if (diaCerrado(cerrados ?? [], fecha)) {
+        return JSON.stringify({ ok: false, error: 'dia_cerrado', detalle: 'Ese dia el negocio esta cerrado.' });
+      }
+
+      const diaSemana = new Date(fecha + 'T00:00:00').getDay();
+      const { data: horarios } = await sb
+        .from('horarios_atencion')
+        .select('hora_inicio, hora_fin')
+        .eq('dia_semana', diaSemana)
+        .eq('activo', true)
+        .order('hora_inicio', { ascending: true });
+      if (!horarios || horarios.length === 0) {
+        return JSON.stringify({ ok: false, error: 'no_atiende', detalle: 'Ese dia el negocio no atiende.' });
+      }
+
+      const { data: empleados } = await sb
+        .from('empleados')
+        .select('id, nombre, jornada')
+        .eq('activo', true)
+        .order('nombre');
+
+      const { data: ausencias } = await sb
+        .from('ausencias')
+        .select('empleado_id, motivo')
+        .lte('desde', fecha)
+        .gte('hasta', fecha);
+
+      const fuera = new Map<number, string>();
+      for (const a of ausencias ?? []) {
+        if (a.empleado_id) fuera.set(a.empleado_id, a.motivo ?? 'ausente');
+      }
+
+      const lista = [];
+      const ausentes = [];
+      for (const e of empleados ?? []) {
+        const j = Array.isArray(e.jornada) ? e.jornada[diaSemana] : null;
+        if (j === null || j === undefined || !j.activo) {
+          ausentes.push(e.nombre);
+          continue;
+        }
+        if (fuera.has(e.id)) {
+          ausentes.push(e.nombre);
+          continue;
+        }
+        // El tope de la jornada recorta el horario del negocio: si labra hasta las 13
+        // y el negocio cierra a las 20, a este empleado lo ven hasta las 13.
+        const tramo = (horarios as Array<{ hora_inicio: string; hora_fin: string }>)
+          .map((h) => ({
+            desde: Math.max(horaAMin(h.hora_inicio), j.hora_inicio ? horaAMin(j.hora_inicio) : 0),
+            hasta: Math.min(horaAMin(h.hora_fin), j.hora_fin ? horaAMin(j.hora_fin) : 24 * 60),
+          }))
+          .filter((t) => t.hasta > t.desde)
+          .map((t) => `${minAHora(t.desde)} a ${minAHora(t.hasta)}`);
+
+        lista.push({ id: e.id, nombre: e.nombre, horario: tramo.join(' y ') || 'sin horario' });
+      }
+
+      return JSON.stringify({
+        ok: true,
+        fecha,
+        dia: ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][diaSemana],
+        Atencion: (horarios as any[]).map((h) => `${sinSeg(h.hora_inicio)} a ${sinSeg(h.hora_fin)}`).join(' y '),
+        empleados: lista,
+        ausentes,
+      });
+    }
+    case 'asociar_numero': {
+      // El cliente confirmo que es la misma persona que ya esta con otro numero.
+      const clienteId = Number(input.cliente_id);
+      const { data: cliente } = await sb.from('clientes').select('id, nombre').eq('id', clienteId).maybeSingle();
+      if (!cliente) return err('cliente_no_encontrado');
+      const { data: existe } = await sb
+        .from('telefonos')
+        .select('id')
+        .eq('telefono', telefono)
+        .maybeSingle();
+      if (existe) {
+        await sb.from('telefonos').update({ cliente_id: clienteId, principal: false }).eq('id', existe.id);
+        return JSON.stringify({ ok: true, cliente_id: clienteId, nombre: cliente.nombre });
+      }
+      const { error } = await sb
+        .from('telefonos')
+        .insert({ cliente_id: clienteId, telefono, principal: false });
+      if (error) return err('error_asociando_numero', error.message);
+      return JSON.stringify({ ok: true, cliente_id: clienteId, nombre: cliente.nombre });
+    }
     case 'consultar_horarios_libres': {
       const fecha = input.fecha;
       // 1. cerrado? (`fecha` es el inicio, `fecha_hasta` el final; si no hay, fue un día solo)
@@ -484,6 +609,39 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       if (!previo && !nombre_cliente) return err('falta_nombre', 'El cliente es nuevo y no dijo su nombre.');
       const nombreFinal = previo?.nombre ?? nombre_cliente;
       const clienteId = previo?.id ?? null;
+
+      // ─── Nombre repetido ───
+      // `clientes.nombre` tiene indice UNIQUE. Si el numero es nuevo pero el nombre ya
+      // existe con OTRO numero, el UPDATE del nombre revienta contra el indice y, si
+      // no se mira el error, el turno queda diciendo el nombre del cliente pero
+      // apuntando a una ficha "Cliente Nuevo N": el panel nunca lo encuentra y el
+      // nombre queda existiendo en dos lugares. Se corta aca y se le pregunta a la
+      // persona, que es la unica que sabe si es la misma.
+      if (!previo && nombreFinal) {
+        // Sin acentos: el cliente escribe "Hernan Garcia" y en la base esta
+        // "Hernán Garcia". Con la comparacion literal no se cruzaban y el indice
+        // unico (que SI distingue mayusculas pero no acentos) terminaba de decides.
+        const limpio = (s: string) =>
+          (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+        const { data: conEseNombre } = await sb
+          .from('clientes')
+          .select('id, nombre');
+        const mismo = (conEseNombre ?? []).find((h: any) => limpio(h.nombre) === limpio(nombreFinal));
+        if (mismo) {
+          const { data: tels } = await sb.from('telefonos').select('telefono').eq('cliente_id', mismo.id);
+          const finales = (tels ?? []).map((t: any) => String(t.telefono).slice(-4)).join(', ');
+          return JSON.stringify({
+            ok: false,
+            error: 'nombre_ya_existe',
+            cliente_id: mismo.id,
+            nombre_existente: mismo.nombre,
+            detalle:
+              `Ya tenemos a "${mismo.nombre}" con otro numero${finales ? ` (terminado en ${finales})` : ''}. ` +
+              `Preguntale al cliente si es la misma persona: si dice que si, llamá asociar_numero con ese cliente_id ` +
+              `y segui. Si dice que no, pedile el nombre como lo escribe en el DNI.`,
+          });
+        }
+      }
       // 1. fecha y hora coherentes
       const dt = new Date(fecha_hora);
       if (isNaN(dt.getTime())) return err('fecha_invalida', fecha_hora);
@@ -832,7 +990,11 @@ async function responderAlCliente(historial: any[], telefono: string, spec: stri
   const hoy = new Date();
   const hoyIso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
 
-  const system = `Sos el asistente por WhatsApp de ${negocio.nombre}. Español rioplatense, corto y amable. Escribí SIEMPRE en español: nunca una palabra en inglés (ni "let me", ni "one moment"), ni aunque sea un comentario mientras trabajás.
+  const system = `Sos el asistente por WhatsApp de ${negocio.nombre}.
+
+COMO HABLAS: ${negocio.tono}
+
+Este tono lo define el negocio desde Configuración. Si te piden un cambio de tono en la conversación ("sos formal conmigo", "hablame más formal"), no lo cambies vos: decile que lo ajusta el responsable desde Configuración y seguí con el tono actual.
 
 Fechas: hoy es ${hoyIso} (${DIAS_SEMANA[hoy.getDay()]}). Esta es la tabla de los próximos días, con el nombre de cada uno: ${tablaDeDias()}. Cuando el cliente diga un día ("el lunes", "el domingo que viene", "mañana", "el 20"), buscá la fecha en esta tabla y pasala así a las tools. NO la calcules vos: antes te equivocabas el día de la semana y el cliente recibía un horario del día equivocado. Tool de verdad antes de afirmar: nunca confirmás turno sin que crear_turno te devuelva ok, y nunca decís que un horario está libre sin antes llamar consultar_horarios_libres. Si una tool devuelve error, le explicás al cliente qué pasó y ofrecés otro camino.
 
@@ -1077,7 +1239,7 @@ async function mensajeDeFalla(): Promise<string> {
 async function obtenerSpec(): Promise<string> {
   return `Rotina de atencion:
 1. Cuando el cliente saluda, o antes de agendar, llama buscar_cliente. Si devuelve un nombre, saludalo por su nombre y NO le pidas el nombre otra vez: crear_turno lo resuelve solo. Si no devuelve nada, es un cliente nuevo y ahi si se lo pides.
-2. Si el cliente viene por un turno nuevo, pedile el servicio.
+2. Si el cliente viene por un turno nuevo, pedile el servicio. PERO si la pregunta es de GENTE ("quien trabaja mañana", "quien esta el jueves"), no le pidas servicio: llamá empleados_del_dia con la fecha y respondé quién labra y en qué horario. Son preguntas distintas y reconducir la segunda a la primera hace que el cliente se enrede.
 3. Cuando elija servicio, mostra los horarios libres con consultar_horarios_libres.
 4. Si elige horario, crealo con crear_turno.
 5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente. Si quiere cambiar la fecha o la hora de un turno que ya tiene, se reprograma con reprogramar_turno (primero le decis a que turno se refiere, con buscar_turnos_cliente, y le mostras el horario nuevo antes de llamar a la tool). Si el turno que quiere tocar ya paso, no se reprograma: se agenda uno nuevo.

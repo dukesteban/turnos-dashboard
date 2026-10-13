@@ -36,6 +36,14 @@
         <label>Teléfono de emergencias</label>
         <input type="text" [(ngModel)]="telefonoEmergencia" [readonly]="!editandoDatos" placeholder="Ej: 3815 55 12 74"/>
       </div>
+      <div class="campo">
+        <label>Tono del bot de WhatsApp</label>
+        <select [(ngModel)]="tono" [disabled]="!editandoDatos">
+          <option value="informal">Informal — como un chat</option>
+          <option value="profesional">Profesional — claro y respetuoso</option>
+          <option value="formal">Formal — trato de "usted"</option>
+        </select>
+      </div>
       <div class="botones-edicion">
         <button *ngIf="!editandoDatos" class="btn-primary" (click)="editandoDatos = true">✏️ Editar</button>
         <button *ngIf="editandoDatos" class="btn-primary" (click)="guardarConfiguracion()" [disabled]="guardando">
