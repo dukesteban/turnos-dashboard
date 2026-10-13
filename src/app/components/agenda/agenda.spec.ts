@@ -247,38 +247,30 @@ describe('Agenda - la semana: cada dia con SU gente y SU ancho', () => {
     }
   });
 
-  it('cada dia mide lo que necesita su gente, no el maximo de la semana', async () => {
+  it('cada dia crece en proporcion a su gente, no en pixeles fijos', async () => {
     const { cmp } = await listo();
     const miercoles = new Date(2026, 11, 2);
     const lunes = new Date(2026, 11, 7);
 
-    const anchoMiercoles = cmp.columnasDe(miercoles).length;
-    const anchoLunes = cmp.columnasDe(lunes).length;
-    expect(anchoMiercoles).toBeLessThan(anchoLunes);
+    const colsMiercoles = cmp.columnasDe(miercoles).length;
+    const colsLunes = cmp.columnasDe(lunes).length;
+    expect(colsMiercoles).toBeLessThan(colsLunes);
 
-    const px = (n: number) => `${n * (cmp.anchoColEmpleado + cmp.gapColumna)}px`;
-    expect(cmp.anchoDeDia(miercoles)).toBe(px(anchoMiercoles));
-    expect(cmp.anchoDeDia(lunes)).toBe(px(anchoLunes));
+    // El reparto lo hace `flex-grow`: un dia con mas gente pide mas espacio. Los
+    // pixeles fijos dejaban las columnas angostas pegadas a la izquierda con media
+    // pantalla en blanco, que era justo lo que se quejaba el usuario.
+    expect(cmp.anchoDeDia(miercoles)['flex']).toBe(`${colsMiercoles} 1 0`);
+    expect(cmp.anchoDeDia(lunes)['flex']).toBe(`${colsLunes} 1 0`);
+    // El min-width sigue siendo el piso de legibilidad de una columna.
+    expect(cmp.anchoDeDia(miercoles)['min-width'])
+      .toBe(`${colsMiercoles * (cmp.anchoColEmpleado + cmp.gapColumna)}px`);
   });
 
-  it('NO hay ancho reservado: el total es la SUMA de los dias', async () => {
-    // El bug del hueco: el ancho total se multiplicaba por el maximo de columnas
-    // de la semana. Un dia con menos gente dejaba columnas en blanco al final.
+  it('la grilla toma todo el ancho disponible', async () => {
+    // Con ancho fijo en pixeles la suma de las columnas no llenaba la pantalla.
+    // Ahora es 100% y el reparto lo hace el flex de cada dia.
     const { cmp } = await listo();
-    // Un dia SIN NINGUNA columna igual mide una columna, no cero: si no, el
-    // nombre del dia (SAB 12/12) quedaria con ancho cero y no se podria ni
-    // leer ni tocar. Es un piso de legibilidad, no un ancho reservado.
-    const suma = cmp.diasDeSemana.reduce((s: number, d: Date) => {
-      const n = Math.max(cmp.columnasDe(d).length, 1);
-      return s + n * (cmp.anchoColEmpleado + cmp.gapColumna);
-    }, 0);
-    expect(cmp.anchoGrillaSemana).toBe(`${40 + suma}px`);
-
-    // Y da MENOS que el maximo por todos los dias: si no, sigue reservando de
-    // mas y vuelven las columnas en blanco.
-    const maximo = Math.max(...cmp.diasDeSemana.map((d: Date) => cmp.columnasDe(d).length));
-    const porElMaximo = 40 + cmp.diasDeSemana.length * maximo * (cmp.anchoColEmpleado + cmp.gapColumna);
-    expect(parseInt(cmp.anchoGrillaSemana, 10)).toBeLessThan(porElMaximo);
+    expect(cmp.anchoGrillaSemana).toBe('100%');
   });
 
   it('un dia sin nadie tiene ancho de UNA columna, no de cero', async () => {
@@ -286,17 +278,19 @@ describe('Agenda - la semana: cada dia con SU gente y SU ancho', () => {
     const { cmp } = await listo();
     const sabado = new Date(2026, 11, 12);
     expect(cmp.columnasDe(sabado).length).toBe(0);
-    expect(cmp.anchoDeDia(sabado)).toBe(`${1 * (cmp.anchoColEmpleado + cmp.gapColumna)}px`);
+    expect(cmp.anchoDeDia(sabado)['flex']).toBe('1 1 0');
+    expect(cmp.anchoDeDia(sabado)['min-width'])
+      .toBe(`${1 * (cmp.anchoColEmpleado + cmp.gapColumna)}px`);
   });
 
   it('el ancho no cambia al moverse de dia, solo al cambiar la gente', async () => {
     const { cmp } = await listo();
     const conDos = cmp.anchoDeDia(new Date(2026, 11, 2));   // 1 empleado
     const conTodos = cmp.anchoDeDia(new Date(2026, 11, 7));  // 2 empleados
-    expect(conDos).not.toBe(conTodos);
+    expect(conDos['flex']).not.toBe(conTodos['flex']);
 
     // Dos días con la misma gente miden igual.
-    expect(cmp.anchoDeDia(new Date(2026, 11, 7))).toBe(cmp.anchoDeDia(new Date(2026, 11, 3)));
+    expect(cmp.anchoDeDia(new Date(2026, 11, 7))['flex']).toBe(cmp.anchoDeDia(new Date(2026, 11, 3))['flex']);
   });
 
   it('el turno de la vista semanal usa las columnas de SU dia', async () => {
@@ -556,29 +550,26 @@ describe('Agenda - el ancho de columna segun la pantalla', () => {
         const n = Math.max(cmp.columnasDe(dia).length, 1);
         // Sin `withContext` (no existe en esta version de Jasmine): se afirma
         // el array completo de anchos, que muestra igual que dia se desvio.
-        anchos.push(cmp.anchoDeDia(dia));
-        esperado.push(`${n * (cmp.anchoColEmpleado + cmp.gapColumna)}px`);
+        anchos.push(cmp.anchoDeDia(dia)['flex']);
+        esperado.push(`${n} 1 0`);
       }
       expect(anchos).toEqual(esperado);
     }
   });
 
-  it('la suma de los dias es el ancho de la grilla semanal', () => {
+  it('el ancho no depende del tamano de la ventana en la vista semanal', () => {
+    // La grilla semanal se reparte sola con `flex-grow`, asi que el ancho de
+    // columna es siempre el mismo: antes habia un corte por tamano de pantalla que
+    // solo servia para el ancho fijo en pixeles que ya no existe aca.
     const cmp = nuevo();
     cmp.diaInicio = 1;
     cmp.diaFin = 6;
     cmp.vista = 'semana';
 
-    for (const ancho of [360, 1280]) {
-      (cmp as any).anchoVentana = ancho;
-      const suma = cmp.diasDeSemana.reduce(
-        // El `Math.max(..., 1)` es el MISMO que usa `anchoGrillaSemana`: un dia
-        // sin columnas igual reserva el ancho de una, asi que tiene que estar
-        // aca tambien o el dia vacio no cuenta y la cuenta no cierra.
-        (acc: number, d: Date) => acc + Math.max(cmp.columnasDe(d).length, 1) * (cmp.anchoColEmpleado + cmp.gapColumna),
-        0);
-      expect(cmp.anchoGrillaSemana).toBe(`${40 + suma}px`);
-    }
+    const enChico = cmp.diasDeSemana.map((d: Date) => cmp.anchoDeDia(d)['flex']);
+    (cmp as any).anchoVentana = 360;
+    const enGrande = cmp.diasDeSemana.map((d: Date) => cmp.anchoDeDia(d)['flex']);
+    expect(enChico).toEqual(enGrande);
   });
 
   it('el ancho se sincroniza con la ventana al redimensionar', () => {

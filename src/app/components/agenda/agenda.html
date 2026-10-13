@@ -115,7 +115,7 @@
         <div class="col-horas-header"></div>
         <div *ngFor="let dia of diasDeSemana"
           class="col-dia-header"
-          [style.width]="anchoDeDia(dia)"
+          [ngStyle]="anchoDeDia(dia)"
           [class.hoy]="esHoy(dia)"
           [class.dia-cerrado]="esDiaCerrado(dia)">
           <div class="dia-nombre">{{ diasSemana[dia.getDay()] }}</div>
@@ -144,7 +144,7 @@
              Cada día mide lo que necesita (`anchoDeDia`). Antes todos reservaban
              el ancho del día más lleno y los que labran menos dejaban columnas
              en blanco al final; esa era la franja que se veía como un hueco. -->
-        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [style.width]="anchoDeDia(dia)" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
+        <div *ngFor="let dia of diasDeSemana" class="col-dia-cuerpo" [ngStyle]="anchoDeDia(dia)" [style.height.px]="alturaTotal + offsetHeader + 24" [class.dia-cerrado]="esDiaCerrado(dia)">
           <!-- Mini header con los empleados de ESE día -->
           <!--
             FONDO de columnas, alternado. Una banda por empleado de ESE dia.

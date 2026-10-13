@@ -401,6 +401,9 @@
   min-width: 500px;
   display: flex;
   flex-direction: column;
+  // La grilla toma todo el ancho disponible: el reparto entre días lo hace el
+  // `flex-grow` de cada columna (ver `anchoDeDia` en agenda.ts).
+  width: 100%;
 }
 
 /* Alto del header de DÍAS de la vista Semana.
@@ -430,7 +433,10 @@ $h-header-semana: 72px;
   top: 0;
   background: white;
   z-index: 10;
-  min-width: fit-content;
+  // Sin `min-width: fit-content`: eso hacía que el header midiese lo justo para sus
+  // hijos en lugar de acompañar al flex del cuerpo, y las columnas del header no
+  // caían arriba de las del cuerpo. Ahora los dos son flex con el mismo reparto.
+  width: 100%;
 }
 
 /* La celda vacía que corona la columna de horas en el header de la vista Semana.

@@ -617,26 +617,29 @@ claseBloque(turno: any, mini: boolean): string {
    * los que labran menos dejaban columnas en blanco al final. Cada dia mide lo
    * que necesita y se termina el espacio de reserva.
    */
-  anchoDeDia(dia: Date): string {
+  anchoDeDia(dia: Date): { [k: string]: string } {
     const n = Math.max(this.columnasDe(dia).length, 1);
-    return `${n * (this.anchoColEmpleado + this.gapColumna)}px`;
+    // Proporcional, no píxeles: `flex-grow = n` reparte el ancho disponible entre
+    // los días en la misma proporción que sus columnas de empleado. Un día con un
+    // solo empleado se lleva 1/7 de la pantalla y los de 3 se llevan 3/7, que es lo
+    // que el ojo espera. Con ancho fijo quedaban seis columnas angostas pegadas a
+    // la izquierda y media pantalla en blanco a la derecha.
+    //
+    // Se devuelve un objeto y no un string porque `[ngStyle]` con "a: b; c: d" no
+    // aplica nada: el atributo queda vacío y la columna vuelve al ancho de la clase.
+    // `min-width` sigue fijando el piso (una columna legible).
+    return {
+      flex: `${n} 1 0`,
+      'min-width': `${n * (this.anchoColEmpleado + this.gapColumna)}px`,
+    };
   }
 
   /**
-   * Ancho total de la grilla semanal. Se fija explicitamente para que el header
-   * y el cuerpo midan EXACTAMENTE lo mismo (si no, los turnos se salen del dia).
+   * Ancho total de la grilla semanal: ahora es el 100% del contenedor, porque el
+   * reparto lo hace el flex de cada dia (ver `anchoDeDia`).
    */
   get anchoGrillaSemana(): string {
-    // 40 = la columna de horas. El resto es la SUMA de los anchos de cada dia,
-    // no el maximo por 7: asi el contenedor no reserva de mas.
-    const dias = this.diasDeSemana.length
-      ? this.diasDeSemana
-      : [this.fechaActual];
-    const total = dias.reduce((sum: number, d: Date) => {
-      const n = Math.max(this.columnasDe(d).length, 1);
-      return sum + n * (this.anchoColEmpleado + this.gapColumna);
-    }, 0);
-    return `${40 + total}px`;
+    return '100%';
   }
 
 
