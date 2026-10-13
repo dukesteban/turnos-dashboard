@@ -455,6 +455,151 @@ describe('Dashboard — popup y marcar atendido', () => {
   });
 });
 
+describe('Dashboard — filtro por empleado', () => {
+  // 2026-12-01 es martes, y la semana va del 30/11 al 06/12.
+  const HOY = '2026-12-01';
+  const deHoy = (extra: Record<string, any>) =>
+    turno({ fecha: HOY, hora: '10:00', hora_inicio: '10:00', estado: 'pendiente', ...extra });
+
+  /** Juan atendido (cuenta en las tres cuentas) + un pendiente de Esteban. */
+  const TURNOS_HOY = [
+    deHoy({ id: 1, empleado_id: EMP_JUAN.id, estado: 'atendido', precio: 10000, precio_final: 10000 }),
+    deHoy({ id: 2, empleado_id: EMP_JUAN.id, hora: '12:00', hora_inicio: '12:00', estado: 'atendido', precio: 20000, precio_final: 20000 }),
+    deHoy({ id: 3, empleado_id: EMP_ESTEBAN.id, hora: '16:00', hora_inicio: '16:00' }),
+  ];
+
+  /** Los mismos, más uno de la semana siguiente, que el filtro de período no debe ver. */
+  const TURNOS = [
+    ...TURNOS_HOY,
+    turno({ id: 4, fecha: '2026-12-03', hora: '09:00', hora_inicio: '09:00',
+            estado: 'atendido', precio: 5000, precio_final: 5000, empleado_id: EMP_JUAN.id }),
+  ];
+
+  /**
+   * Monta con los turnos y ademas deja `fechaTurnos` en el 01/12/2026.
+   *
+   * Sin esto la tabla de la semana y la del mes buscan la semana y el mes del
+   * `new Date()` de HOY, que no tienen nada que ver con el fixture: `turnosFiltrados`
+   * venia vacío y los tests de filtro daban 0 sin que hubiera filtro de por medio.
+   */
+  const montarConTurnos = async () => {
+    const r = await montarCargado({
+      getTurnosHoy: () => Promise.resolve(TURNOS_HOY),
+      getTurnos: () => Promise.resolve(TURNOS),
+    });
+    r.cmp.fechaTurnos = new Date(2026, 11, 1);   // martes 01/12/2026
+    return r;
+  };
+
+  it('arranca en "Todos": se ve la lista completa', async () => {
+    const { cmp } = await montarConTurnos();
+    expect(cmp.filtroEmpleadoHoy).toBe(cmp.SIN_FILTRO);
+    expect(cmp.turnosHoyVisibles.length).toBe(3);
+    expect(cmp.totalClientes).toBe(2);
+  });
+
+  it('filtra la tabla de hoy por empleado', async () => {
+    const { cmp } = await montarConTurnos();
+
+    cmp.onFiltroHoyChange('' + EMP_JUAN.id);
+
+    expect(cmp.turnosHoyVisibles.length).toBe(2);
+    expect(cmp.turnosHoyVisibles.every((t: any) => t.empleado_id === EMP_JUAN.id)).toBe(true);
+  });
+
+  it('las tres cuentas de arriba cuentan lo MISMO que la tabla filtrada', async () => {
+    // Sin esto se ven 2 filas de Juan con "2 atendidos / $30.000" que son los de
+    // todo el mundo, y el cuadro contradice a la tabla.
+    const { cmp } = await montarConTurnos();
+    cmp.onFiltroHoyChange('' + EMP_JUAN.id);
+
+    expect(cmp.totalClientes).toBe(2);
+    expect(cmp.totalIngresos).toBe(30000);
+    expect(cmp.turnosPendientes).toBe(0);
+  });
+
+  it('volviendo a "Todos" restaura la lista y las cuentas completas', async () => {
+    const { cmp } = await montarConTurnos();
+    cmp.onFiltroHoyChange('' + EMP_JUAN.id);
+    expect(cmp.turnosHoyVisibles.length).toBe(2);
+
+    cmp.onFiltroHoyChange(cmp.SIN_FILTRO);
+
+    expect(cmp.turnosHoyVisibles.length).toBe(3);
+    expect(cmp.totalClientes).toBe(2);
+    expect(cmp.turnosPendientes).toBe(1);
+  });
+
+  it('NO borra la lista sin filtrar: `turnosHoy` sigue siendo la base entera', async () => {
+    // `turnosHoy` es la fuente de las cuentas y de la recarga. Si el filtro la
+    // escribiera encima, al volver a "Todos" no quedaría nada que mostrar.
+    const { cmp } = await montarConTurnos();
+    cmp.onFiltroHoyChange('' + EMP_JUAN.id);
+    expect(cmp.turnosHoy.length).toBe(3);
+  });
+
+  it('el filtro de la semana es INDEPENDIENTE del de hoy', async () => {
+    const { cmp } = await montarConTurnos();
+    cmp.onFiltroHoyChange('' + EMP_ESTEBAN.id);
+    cmp.onFiltroPeriodoChange('' + EMP_JUAN.id);
+
+    expect(cmp.turnosHoyVisibles.length).toBe(1);          // solo Esteban hoy
+    expect(cmp.turnosFiltrados.length).toBe(3);            // solo Juan en la semana
+    expect(cmp.turnosFiltrados.every((t: any) => t.empleado_id === EMP_JUAN.id)).toBe(true);
+  });
+
+  it('el filtro del período no se pierde al cambiar de semana a mes', async () => {
+    // `cambiarVistaTurnos` resetea la fecha, no el empleado: elegir a Juan y después
+    // mirar el mes es la forma normal de revisar el mes.
+    const { cmp } = await montarConTurnos();
+    cmp.onFiltroPeriodoChange('' + EMP_JUAN.id);
+    cmp.cambiarVistaTurnos('mes');
+
+    expect(cmp.filtroEmpleadoPeriodo).toBe('' + EMP_JUAN.id);
+    expect(cmp.turnosFiltrados.every((t: any) => t.empleado_id === EMP_JUAN.id)).toBe(true);
+  });
+
+  it('el filtro del empleado no pisa el recorte de fechas', async () => {
+    // Los 4 turnos son de la semana del 30/11 al 06/12, así que filtrando a Esteban
+    // (que solo tiene un turno) tiene que quedar UNO, no cero.
+    const { cmp } = await montarConTurnos();
+    cmp.onFiltroPeriodoChange('' + EMP_ESTEBAN.id);
+    expect(cmp.turnosFiltrados.length).toBe(1);
+  });
+
+  it('"Todos" es un texto, no null: un option con [ngValue]="null" no se marca', async () => {
+    // El bug que motiva `SIN_FILTRO`: con `[ngValue]="null"` el `<select>` de Angular
+    // no marca la primera opción y el combo se ve en blanco, sin error en ninguna
+    // parte. El texto no puede colisionar con un id de empleado.
+    const { cmp } = await montarConTurnos();
+    expect(cmp.SIN_FILTRO).toBe('todos');
+    expect(String(EMP_JUAN.id)).not.toBe(cmp.SIN_FILTRO);
+    // Y el valor por defecto del combo tiene que ser ese texto, para que arranque
+    // en "Todos" y no sin nada marcado.
+    expect(cmp.filtroEmpleadoPeriodo).toBe(cmp.SIN_FILTRO);
+  });
+
+  it('el nombre del empleado filtrado sale del combo, para el mensaje de vacío', async () => {
+    const { cmp } = await montarConTurnos();
+    expect(cmp.nombreFiltroHoy).toBeNull();
+    expect(cmp.nombreFiltroPeriodo).toBeNull();
+
+    cmp.onFiltroHoyChange('' + EMP_ESTEBAN.id);
+    expect(cmp.nombreFiltroHoy).toBe(EMP_ESTEBAN.nombre);
+  });
+
+  it('el rol empleado NO ve el combo', async () => {
+    // Ya ve solo sus turnos: un combo con todos los nombres le daría una tabla vacía
+    // al elegir cualquiera que no fuera el suyo, sin explicación.
+    const { cmp } = await montarConTurnos();
+    expect(cmp.puedeFiltrarPorEmpleado).toBe(true);
+
+    const spy = vi.spyOn(cmp['auth'], 'soloSusTurnos').mockReturnValue(true);
+    expect(cmp.puedeFiltrarPorEmpleado).toBe(false);
+    spy.mockRestore();
+  });
+});
+
 describe('Dashboard — no consulta lo retirado', () => {
   it('nunca toca la tabla `puestos` ni el doble booking por puesto', async () => {
     const { cmp, mock } = await montarCargado();

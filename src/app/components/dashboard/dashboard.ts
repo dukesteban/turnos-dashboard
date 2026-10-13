@@ -8,6 +8,16 @@ import { nombreMes, fechaDesdeISO } from '../../utils/fechas';
 import { soloLosTurnosDe } from '../../utils/turnos';
 import { contiene } from '../../utils/texto';
 
+/**
+ * Valor del combo de empleado cuando NO se está filtrando.
+ *
+ * Es un string y no `null` a propósito. Con `<option [ngValue]="null">` el
+ * `<select>` no marca la primera opción y el combo aparece en blanco, sin que
+ * haya error en ninguna parte: el filtro funciona, pero parece roto. Un texto
+ * que no puede ser un id no tiene esa ambigüedad.
+ */
+export const SIN_FILTRO = 'todos';
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -23,6 +33,63 @@ export class DashboardComponent implements OnInit, OnDestroy {
   totalClientes = 0;
   turnosPendientes = 0;
   vistasTurnos: 'semana' | 'mes' = 'semana';
+
+  /**
+   * Filtro por empleado de cada tabla. Son DOS, y no uno compartido, porque son dos
+   * tablas distintas: "Turnos de hoy" mira un día y la de abajo mira la semana o el
+   * mes. Si compartieran el filtro, elegir Hernán arriba dejaría la de abajo con la
+   * tabla de Hernán y el título de la semana, que es una mezcla rara.
+   *
+   * Guardan el `id` como texto (o `SIN_FILTRO`), que es lo que devuelve un `<select>`
+   * con `[value]`. A `empleadoId()` se lo convierte.
+   */
+  filtroEmpleadoHoy: string = SIN_FILTRO;
+  filtroEmpleadoPeriodo: string = SIN_FILTRO;
+
+  /**
+   * El mismo `SIN_FILTRO`, expuesto como propiedad para que el template lo use en
+   * `[value]="SIN_FILTRO"`. En un componente standalone el template solo ve campos
+   * del componente, no las constantes del módulo.
+   */
+  readonly SIN_FILTRO = SIN_FILTRO;
+
+  /** El id que eligió el combo, o `null` si está en "Todos". */
+  private empleadoId(filtro: string): number | null {
+    return filtro === SIN_FILTRO ? null : Number(filtro);
+  }
+
+  /**
+   * Los turnos de hoy que se están viendo, ya filtrados por empleado.
+   *
+   * `turnosHoy` guarda la lista SIN filtrar: es la que se pasa a las cuentas de
+   * arriba y también la fuente de la tabla, para no tener dos copias de lo mismo.
+   */
+  get turnosHoyVisibles(): any[] {
+    return soloLosTurnosDe(this.turnosHoy, this.empleadoId(this.filtroEmpleadoHoy));
+  }
+
+  /** Nombre del empleado elegido, para el mensaje de "no hay turnos". */
+  get nombreFiltroHoy(): string | null {
+    const id = this.empleadoId(this.filtroEmpleadoHoy);
+    return id == null ? null : this.empleados.find((e: any) => e.id === id)?.nombre ?? null;
+  }
+
+  get nombreFiltroPeriodo(): string | null {
+    const id = this.empleadoId(this.filtroEmpleadoPeriodo);
+    return id == null ? null : this.empleados.find((e: any) => e.id === id)?.nombre ?? null;
+  }
+
+  /**
+   * ¿Tiene sentido ofrecer el combo?
+   *
+   * El rol empleado ve SOLO sus turnos (`empleadoParaFiltrarTurnos`). Si le
+   * apareciera el combo con todos los nombres, elegir cualquiera que no fuera el
+   * suyo le daría una tabla vacía, sin explicación: parecería que la app se
+   * rompió. Para ese rol el combo no aporta nada, así que no se muestra.
+   */
+  get puedeFiltrarPorEmpleado(): boolean {
+    return !this.auth.soloSusTurnos();
+  }
   mostrarIngresos = JSON.parse(sessionStorage.getItem('mostrarIngresos') ?? 'true');
   fechaTurnos: Date = new Date();
   metodosPago: any[] = [];
@@ -182,16 +249,45 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.turnosHoy = soloLosTurnosDe(await this.supabase.getTurnosHoy(), miId);
     this.todosTurnos = soloLosTurnosDe(await this.supabase.getTurnos(), miId);
 
-    this.totalIngresos = this.turnosHoy
+    this.recalcularResumenDeHoy();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Los tres cuadros de arriba: ingresos, atendidos y pendientes.
+   *
+   * Sale de `turnosHoyVisibles`, o sea de la lista YA filtrada por el combo. Por qué:
+   * si el cuadro saliera de `turnosHoy` sin filtrar, al elegir Hernán en el combo se
+   * verían sus 4 turnos en la tabla y "12 atendidos" arriba, que se contradicen. Los
+   * tres cuadros cuentan la fila que se está mirando, no la base entera.
+   *
+   * Es un método aparte y no está dentro de `cargarTurnos()` porque el combo cambia el
+   * filtro sin volver a pedir nada a la base: las cuentas tienen que moverse igual.
+   */
+  recalcularResumenDeHoy() {
+    const hoy = this.turnosHoyVisibles;
+
+    this.totalIngresos = hoy
       .filter((t: any) => t.estado === 'atendido')
       .reduce((sum: number, t: any) => sum + (Number(t.precio_final || t.precio) || 0), 0);
 
-    this.totalClientes = this.turnosHoy
+    this.totalClientes = hoy
       .filter((t: any) => t.estado === 'atendido').length;
 
-    this.turnosPendientes = this.turnosHoy
+    this.turnosPendientes = hoy
       .filter((t: any) => t.estado === 'pendiente' && !this.esVencido(t)).length;
+  }
 
+  /** Se llama cuando el combo de "Turnos de hoy" cambia. */
+  onFiltroHoyChange(valor: string) {
+    this.filtroEmpleadoHoy = valor;
+    this.recalcularResumenDeHoy();
+    this.cdr.detectChanges();
+  }
+
+  /** Se llama cuando el combo de la semana/mes cambia. */
+  onFiltroPeriodoChange(valor: string) {
+    this.filtroEmpleadoPeriodo = valor;
     this.cdr.detectChanges();
   }
 
@@ -204,17 +300,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return `${y}-${m}-${day}`;
     };
 
+    let delPeriodo: any[];
     if (this.vistasTurnos === 'semana') {
       const lunes = new Date(base);
       lunes.setDate(base.getDate() - (base.getDay() === 0 ? 6 : base.getDay() - 1));
       const domingo = new Date(lunes);
       domingo.setDate(lunes.getDate() + 6);
-      return this.todosTurnos.filter(t => t.fecha >= formatLocal(lunes) && t.fecha <= formatLocal(domingo));
+      delPeriodo = this.todosTurnos.filter(t => t.fecha >= formatLocal(lunes) && t.fecha <= formatLocal(domingo));
     } else {
       const y = base.getFullYear();
       const m = String(base.getMonth() + 1).padStart(2, '0');
-      return this.todosTurnos.filter(t => t.fecha.startsWith(`${y}-${m}`));
+      delPeriodo = this.todosTurnos.filter(t => t.fecha.startsWith(`${y}-${m}`));
     }
+
+    // El combo de empleado se aplica DESPUÉS del período, y no antes: así el recorte
+    // por fechas no tiene que volver a correr cuando cambia el empleado, que es lo
+    // que se cambia más seguido. El orden inverso también funciona, pero no hay
+    // razón para pagar las dos filtraciones.
+    return soloLosTurnosDe(delPeriodo, this.empleadoId(this.filtroEmpleadoPeriodo));
   }
 
   cambiarVistaTurnos(v: 'semana' | 'mes') {

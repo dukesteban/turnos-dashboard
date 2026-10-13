@@ -344,12 +344,50 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  gap: 12px;
+  // En el celular el título y el botón "+ Nuevo turno" no entran juntos en una línea.
+  // Con `wrap` el combo baja a su propia línea en vez de que el título se corte a la
+  // mitad de una palabra.
+  flex-wrap: wrap;
 
   h3 {
     font-size: 1.1rem;
     color: #334155;
     margin: 0;
   }
+}
+
+/* El combo y el botón "Nuevo turno", juntos a la derecha del encabezado. */
+.acciones-seccion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* -- FILTRO POR EMPLEADO -----------------------------------------------
+ *
+ * Mismo tamaño que `.btn-nav` / `.btn-hoy` de los controles de la semana, para
+ * que el combo no se vea más importante que la navegación de fechas.
+ *
+ * El ancho lo manda `min-width` y NO `width`: con nombres largos ("Hernán Garcia")
+ * un ancho fijo los cortaba con puntos suspensivos, que es peor que un combo un
+ * poco más angosto. `max-width` evita que un nombre disparatado estire la fila.
+ */
+.filtro-empleado {
+  padding: 7px 10px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #334155;
+  cursor: pointer;
+  min-width: 170px;
+  max-width: 220px;
+  height: 32px;
+
+  &:hover { background: #f1f5f9; }
+  &:focus-visible { outline: 2px solid #3b82f6; outline-offset: 1px; }
 }
 
 .btn-secondary {

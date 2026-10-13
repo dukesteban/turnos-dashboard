@@ -81,7 +81,24 @@
   <div class="seccion">
     <div class="seccion-header">
       <h4>Turnos de hoy</h4>
-      <div style="display:flex; gap:8px">
+      <div class="acciones-seccion">
+        <!--
+          Filtro por empleado. `[value]` con texto y NO `[ngValue]`: lo que importa acá
+          es que la opción elegida se vea marcada, y con `[ngValue]` el `<select>` de
+          Angular no marca la primera ("Todos") cuando el valor es `null`. Por eso el
+          "sin filtro" es el texto `SIN_FILTRO` y no `null`.
+
+          Filtra la tabla Y los tres cuadros de arriba: si no, se verían 4 filas de
+          Hernán con "12 atendidos" arriba, que se contradicen.
+        -->
+        <select class="filtro-empleado"
+                *ngIf="puedeFiltrarPorEmpleado"
+                [ngModel]="filtroEmpleadoHoy"
+                (ngModelChange)="onFiltroHoyChange($event)"
+                aria-label="Filtrar los turnos de hoy por empleado">
+          <option [value]="SIN_FILTRO">Todos los empleados</option>
+          <option *ngFor="let e of empleados" [value]="'' + e.id">{{ e.nombre }}</option>
+        </select>
         <button class="btn-primary" (click)="abrirModalNuevoTurno()">➕ Nuevo turno</button>
       </div>
     </div>
@@ -98,7 +115,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let turno of turnosHoy" [class.vencido]="esVencido(turno)" (click)="abrirPopup(turno)" style="cursor:pointer">
+          <tr *ngFor="let turno of turnosHoyVisibles" [class.vencido]="esVencido(turno)" (click)="abrirPopup(turno)" style="cursor:pointer">
             <td>{{ turno.hora?.slice(0,5) }}</td>
             <td [style.color]="!telefonoDe(turno) ? '#dc2626' : ''" >{{ turno.cliente_nombre }}</td>
             <td class="ocultar-movil">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</td>
@@ -110,8 +127,10 @@
               </span>
             </td>
           </tr>
-          <tr *ngIf="turnosHoy.length === 0">
-            <td colspan="7" class="vacio">No hay turnos para hoy</td>
+          <tr *ngIf="turnosHoyVisibles.length === 0">
+            <td colspan="7" class="vacio">
+              {{ nombreFiltroHoy ? 'No hay turnos de ' + nombreFiltroHoy + ' para hoy' : 'No hay turnos para hoy' }}
+            </td>
           </tr>
         </tbody>
       </table>
@@ -130,6 +149,22 @@
         <button [class.activo]="vistasTurnos === 'semana'" (click)="cambiarVistaTurnos('semana')">📅 Semana</button>
         <button [class.activo]="vistasTurnos === 'mes'" (click)="cambiarVistaTurnos('mes')">📅 Mes</button>
       </div>
+      <!--
+        Mismo combo que el de "Turnos de hoy", pero con estado propio: si compartieran
+        el filtro, elegir un empleado arriba dejaría esta tabla con los turnos de ese
+        empleado y el título de la semana, que es una mezcla que nadie pidió.
+
+        Va entre los botones de vista y las flechas: en el medio de la fila de
+        controles, que es donde el ojo ya está.
+      -->
+      <select class="filtro-empleado"
+              *ngIf="puedeFiltrarPorEmpleado"
+              [ngModel]="filtroEmpleadoPeriodo"
+              (ngModelChange)="onFiltroPeriodoChange($event)"
+              aria-label="Filtrar los turnos del período por empleado">
+        <option [value]="SIN_FILTRO">Todos los empleados</option>
+        <option *ngFor="let e of empleados" [value]="'' + e.id">{{ e.nombre }}</option>
+      </select>
       <div class="navegacion">
           <button class="btn-nav" (click)="navegarTurnos(-1)">‹</button>
           <button class="btn-hoy" (click)="irHoyTurnos()">Actual</button>
@@ -180,7 +215,9 @@
             </td>
           </tr>
           <tr *ngIf="turnosFiltrados.length === 0">
-            <td colspan="8" class="vacio">No hay turnos para este período</td>
+            <td colspan="8" class="vacio">
+              {{ nombreFiltroPeriodo ? 'No hay turnos de ' + nombreFiltroPeriodo + ' en este período' : 'No hay turnos para este período' }}
+            </td>
           </tr>
         </tbody>
       </table>
