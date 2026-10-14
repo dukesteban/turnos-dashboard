@@ -947,6 +947,49 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       // el exacto. Sin esto el bot dice "listo, 10:00" y el turno quedo a las 10:15.
       const seCorrio = horaElegida !== desde;
 
+      // ─── El MISMO cliente no puede estar en dos lugares ───
+      // El chequeo del empleado no cubre esto: dos clientes distintos pueden estar en
+      // el salon a la vez, eso es normal, pero la misma persona en dos turnos que se
+      // pisan es un turno imposible.
+      //
+      // El caso que lo dispara: "quiero un corte de pelo Y un lavado y alisado". Son
+      // dos servicios y por lo tanto dos turnos, pero NO pueden empezar los dos a las
+      // 14:00. El bot tiene que ofrecer el segundo despues del primero.
+      //
+      // Va DESPUES de elegir la hora, porque el aviso tiene que decir a que hora
+      // choca para que el bot pueda ofrecer otra, y no un "no se puede" seco.
+      if (clienteId != null) {
+        const { data: suyos } = await sb
+          .from('turnos')
+          .select('id, hora_inicio, hora_fin, servicio_nombre')
+          .eq('cliente_id', clienteId)
+          .eq('fecha', fecha)
+          .neq('estado', 'cancelado');
+
+        const choca = (suyos ?? []).find((t: any) => {
+          const a = horaAMin(String(t.hora_inicio ?? '00:00').slice(0, 5));
+          const b = horaAMin(String(t.hora_fin ?? '00:00').slice(0, 5));
+          return a < hastaElegida && horaElegida! < b;
+        });
+
+        if (choca) {
+          return JSON.stringify({
+            ok: false,
+            error: 'cliente_ya_tiene_turno',
+            cliente_ya_tiene_turno: {
+              hora_inicio: sinSeg(String(choca.hora_inicio)),
+              hora_fin: sinSeg(String(choca.hora_fin)),
+              servicio: choca.servicio_nombre,
+            },
+            detalle:
+              `El cliente ya tiene un turno el ${fecha} de ${sinSeg(String(choca.hora_inicio))} a ` +
+              `${sinSeg(String(choca.hora_fin))} (${choca.servicio_nombre}), y este se superpondria. ` +
+              `Ofrecele una hora DESPUES de que termine el anterior, no la misma. Si el cliente quiere los ` +
+              `dos servicios juntos en una sola visita, es UN turno con el servicio mas largo.`,
+          });
+        }
+      }
+
       // 6. falta poco para el turno?
       // (este numero lo reusa cancelar_turno, no crear)
 
@@ -1299,13 +1342,32 @@ ${spec}`;
     if (toolUses.length === 0) break;
 
     // El telefono lo pone el backend, NO el modelo
-    const resultados = await Promise.all(
-      toolUses.map(async (tu: any) => ({
+    //
+    // ─── UNA POR UNA, EN ORDEN. NO EN PARALELO ───
+    //
+    // Esto era un `Promise.all` y por eso el bot pudo agendar dos servicios a la
+    // misma hora con el mismo empleado: el cliente pidió "un corte de pelo y un
+    // lavado y alisado", el modelo pidió las dos `crear_turno` en el mismo mensaje,
+    // y las dos LEYERON la agenda antes de que ninguna ESCRIBIERA. Cada una vio las
+    // 14:00 como libres y las dos reservaron.
+    //
+    // Un `Promise.all` no tiene nada de raro en un chat, donde casi siempre hay una
+    // sola tool. Es acá donde muerde: las tools que escriben se pisan entre ellas
+    // porque el chequeo de disponibilidad y el guardado no son atómicos.
+    //
+    // Consecuencia de hacerlo en serie: la segunda `crear_turno` vuelve a leer la
+    // agenda, ahora con el turno recien creado, y da `horario_no_disponible`. El bot
+    // recien uno y ofrece otra hora para el segundo servicio. Que es lo correcto.
+    //
+    // Cuesta unos cientos de milisegundos por tool de mas. Se paga.
+    const resultados = [];
+    for (const tu of toolUses) {
+      resultados.push({
         type: 'tool_result',
         tool_use_id: tu.id,
         content: await ejecutarTool(tu.name, tu.input, telefono),
-      })),
-    );
+      });
+    }
 
     historial.push({ role: 'assistant', content: response.content } as any);
     historial.push({ role: 'user', content: resultados } as any);
