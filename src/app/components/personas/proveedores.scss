@@ -16,6 +16,9 @@
 // padding, mientras el de Clientes y el de Empleados salían grises. Tres pestañas
 // del mismo menú con tres búsquedas distintas.
 @use '../../../styles/buscador';
+// Y la cabecera con 14px de margen abajo, como las otras dos. Venía del 10px de
+// `_tabla.scss` y el buscador quedaba más pegado al borde de la caja.
+@use '../../../styles/seccion-header';
 
 .proveedores-page {
   padding: 24px;

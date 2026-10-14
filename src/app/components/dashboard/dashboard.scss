@@ -240,6 +240,21 @@
   flex-wrap: wrap;
 }
 
+/* El filtro de la semana/mes va al FINAL de la fila, pegado al calendarito.
+ *
+ * `margin-left: auto` lo empuja al borde derecho. Sin esto queda pegado a los
+ * botones Semana|Mes y el resto de la fila se amontona a la izquierda, con un hueco
+ * raro entre el combo y las flechas.
+ *
+ * `order: 10` lo pone DESPUÉS de las flechas aunque en el HTML esté escrito antes:
+ * el `auto` del `margin-left` solo funciona si el combo es el último flex item, y en
+ * una pantalla angosta los items bajan de línea y el orden natural manda.
+ */
+.controles > .filtro-empleado {
+  margin-left: auto;
+  order: 10;
+}
+
 .vistas {
   display: flex;
   background: #f1f5f9;
@@ -361,12 +376,17 @@
   }
 }
 
-/* El combo y el botón "Nuevo turno", juntos a la derecha del encabezado. */
-.acciones-seccion {
+/* La fila propia del filtro de "Turnos de hoy", entre el encabezado y la tabla.
+ *
+ * Sin esto el combo iba pegado al botón y se leía como otra acción; ahora es una
+ * fila sola, alineada a la izquierda con el título, con el mismo aire que la
+ * `.seccion-header` deja abajo (16px) para que la tabla no quede pegada al combo.
+ */
+.fila-filtro {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
 /* -- FILTRO POR EMPLEADO -----------------------------------------------

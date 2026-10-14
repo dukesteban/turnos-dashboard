@@ -1,0 +1,31 @@
+// ============================================================
+// LA CABECERA DE LAS LISTAS DE PERSONAS
+// ------------------------------------------------------------
+// El `<div class="seccion-header">` de las tres pestañas de Personas: el
+// "Total: N" a la izquierda y el botón "➕ Nuevo" a la derecha.
+//
+// ESTABA COPIADO en `clientes.scss` y `empleados.scss` con 14px, y el de
+// Proveedores se quedó con el 10px de `_tabla.scss`. Cuatro píxeles que no se ven
+// en ninguna parte pero hacen que el buscador de Proveedores quede más pegado al
+// borde de la caja que el de las otras dos pestañas. Es el mismo forgetting que
+// `.buscador`: regla duplicada, y la tercera pestaña al final es la que se queda
+// afuera.
+//
+// Que lo use `_tabla.scss` no sirve: esa es global y la comparten Caja, Dashboard y
+// Configuración, que tienen sus propias separaciones. Esta es la versión de
+// Personas y no se toca la de los demás.
+//
+// OJO con el costo: `@use` NO deduplica entre componentes. Acá son 8 líneas, da
+// igual; con `_popup.scss` (2,5 kB) sí rompía el budget de `empleados.scss`.
+//
+// Uso:  @use '../../../styles/seccion-header';
+// ============================================================
+
+.seccion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+
+  h3 { margin: 0; }
+}

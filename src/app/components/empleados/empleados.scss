@@ -9,6 +9,7 @@
 @use '../../../styles/detalle';
 @use '../../../styles/lista';
 @use '../../../styles/buscador';
+@use '../../../styles/seccion-header';
 
 .empleados-page {
   padding: 24px;
@@ -35,14 +36,10 @@
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
-.seccion-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-  h3 { font-size: 1.05rem; color: #334155; margin: 0; font-weight: 700; }
-}
-
+// El `.seccion-header` no está acá: vive en `styles/_seccion-header.scss` y lo
+// comparten las tres pestañas de Personas. Estaba copiado en Clientes y Empleados, y
+// el de Proveedores se quedó con el valor de `_tabla.scss`, que es justo cómo se
+// produjo la diferencia de 4px en el margen.
 .badge-count {
   background: #f1f5f9;
   color: #64748b;

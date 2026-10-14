@@ -81,30 +81,32 @@
   <div class="seccion">
     <div class="seccion-header">
       <h4>Turnos de hoy</h4>
-      <div class="acciones-seccion">
-        <!--
-          El botón va PRIMERO y el combo a su derecha: el combo es un filtro de la
-          tabla, no una acción, y al lado del botón se leía como otra acción más.
-
-          Filtra por empleado. `[value]` con texto y NO `[ngValue]`: importa que
-          es que la opción elegida se vea marcada, y con `[ngValue]` el `<select>` de
-          Angular no marca la primera ("Todos") cuando el valor es `null`. Por eso el
-          "sin filtro" es el texto `SIN_FILTRO` y no `null`.
-
-          Filtra la tabla Y los tres cuadros de arriba: si no, se verían 4 filas de
-          Hernán con "12 atendidos" arriba, que se contradicen.
-        -->
-        <button class="btn-primary" (click)="abrirModalNuevoTurno()">➕ Nuevo turno</button>
-        <select class="filtro-empleado"
-                *ngIf="puedeFiltrarPorEmpleado"
-                [ngModel]="filtroEmpleadoHoy"
-                (ngModelChange)="onFiltroHoyChange($event)"
-                aria-label="Filtrar los turnos de hoy por empleado">
-          <option [value]="SIN_FILTRO">Todos los empleados</option>
-          <option *ngFor="let e of empleados" [value]="'' + e.id">{{ e.nombre }}</option>
-        </select>
-      </div>
+      <button class="btn-primary" (click)="abrirModalNuevoTurno()">➕ Nuevo turno</button>
     </div>
+
+    <!--
+      El filtro va en su PROPIA fila, ABAJO del encabezado. Antes estaba al lado del
+      botón "Nuevo turno" y se leía como otra acción más: el combo no agrega nada,
+      filtra lo que ya está.
+
+      Filtra la tabla Y los tres cuadros de arriba: si no, se verían 4 filas de
+      Hernán con "12 atendidos" y $38.000 de todo el mundo, y los cuadros
+      contradirían a la tabla.
+
+      `[value]` con texto y NO `[ngValue]`: con `[ngValue]` el `<select>` de Angular
+      no marca la primera opción ("Todos") cuando el valor es `null`. Por eso el
+      "sin filtro" es el texto `SIN_FILTRO`.
+    -->
+    <div class="fila-filtro" *ngIf="puedeFiltrarPorEmpleado">
+      <select class="filtro-empleado"
+              [ngModel]="filtroEmpleadoHoy"
+              (ngModelChange)="onFiltroHoyChange($event)"
+              aria-label="Filtrar los turnos de hoy por empleado">
+        <option [value]="SIN_FILTRO">Todos los empleados</option>
+        <option *ngFor="let e of empleados" [value]="'' + e.id">{{ e.nombre }}</option>
+      </select>
+    </div>
+
     <div class="tabla-wrapper">
       <table class="tabla">
         <thead>
@@ -152,22 +154,6 @@
         <button [class.activo]="vistasTurnos === 'semana'" (click)="cambiarVistaTurnos('semana')">📅 Semana</button>
         <button [class.activo]="vistasTurnos === 'mes'" (click)="cambiarVistaTurnos('mes')">📅 Mes</button>
       </div>
-      <!--
-        Mismo combo que el de "Turnos de hoy", pero con estado propio: si compartieran
-        el filtro, elegir un empleado arriba dejaría esta tabla con los turnos de ese
-        empleado y el título de la semana, que es una mezcla que nadie pidió.
-
-        Va entre los botones de vista y las flechas: en el medio de la fila de
-        controles, que es donde el ojo ya está.
-      -->
-      <select class="filtro-empleado"
-              *ngIf="puedeFiltrarPorEmpleado"
-              [ngModel]="filtroEmpleadoPeriodo"
-              (ngModelChange)="onFiltroPeriodoChange($event)"
-              aria-label="Filtrar los turnos del período por empleado">
-        <option [value]="SIN_FILTRO">Todos los empleados</option>
-        <option *ngFor="let e of empleados" [value]="'' + e.id">{{ e.nombre }}</option>
-      </select>
       <div class="navegacion">
           <button class="btn-nav" (click)="navegarTurnos(-1)">‹</button>
           <button class="btn-hoy" (click)="irHoyTurnos()">Actual</button>
@@ -189,6 +175,24 @@
                    aria-label="Ir a una fecha" />
           </span>
        </div>
+      <!--
+El filtro va AL FINAL, pegado al calendarito. En el medio de la fila se
+        partía la navegación de fechas en dos (Semana|Mes ... combo ... ‹ Actual › 📅):
+        lo que navega y lo que filtra quedaban separados como si fueran dos cosas
+        distintas del mismo grupo.
+
+        Estado propio del de "Turnos de hoy": si compartieran el filtro, elegir un
+        empleado arriba dejaría esta tabla con los turnos de ese empleado y el
+        título de la semana, que es una mezcla que nadie pidió.
+      -->
+      <select class="filtro-empleado"
+              *ngIf="puedeFiltrarPorEmpleado"
+              [ngModel]="filtroEmpleadoPeriodo"
+              (ngModelChange)="onFiltroPeriodoChange($event)"
+              aria-label="Filtrar los turnos del período por empleado">
+        <option [value]="SIN_FILTRO">Todos los empleados</option>
+        <option *ngFor="let e of empleados" [value]="'' + e.id">{{ e.nombre }}</option>
+      </select>
     </div>
     <div class="tabla-wrapper">
       <table class="tabla">
