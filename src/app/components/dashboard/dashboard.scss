@@ -236,23 +236,11 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 20px;
+  // 16px y no 20px: ahora esta fila puede ir seguida de `.fila-filtro`, y con 20px
+  // el combo quedaba más separado de los controles que de la tabla, al revés de lo
+  // que se ve en la sección de arriba.
+  margin-bottom: 16px;
   flex-wrap: wrap;
-}
-
-/* El filtro de la semana/mes va al FINAL de la fila, pegado al calendarito.
- *
- * `margin-left: auto` lo empuja al borde derecho. Sin esto queda pegado a los
- * botones Semana|Mes y el resto de la fila se amontona a la izquierda, con un hueco
- * raro entre el combo y las flechas.
- *
- * `order: 10` lo pone DESPUÉS de las flechas aunque en el HTML esté escrito antes:
- * el `auto` del `margin-left` solo funciona si el combo es el último flex item, y en
- * una pantalla angosta los items bajan de línea y el orden natural manda.
- */
-.controles > .filtro-empleado {
-  margin-left: auto;
-  order: 10;
 }
 
 .vistas {
@@ -376,11 +364,12 @@
   }
 }
 
-/* La fila propia del filtro de "Turnos de hoy", entre el encabezado y la tabla.
+/* La fila propia del filtro de empleado, entre los controles y la tabla.
  *
- * Sin esto el combo iba pegado al botón y se leía como otra acción; ahora es una
- * fila sola, alineada a la izquierda con el título, con el mismo aire que la
- * `.seccion-header` deja abajo (16px) para que la tabla no quede pegada al combo.
+ * La usan LOS DOS combos (el de "Turnos de hoy" y el de la semana/mes) justamente
+ * para que se lean como la misma cosa: misma fila, misma alineación a la izquierda,
+ * mismo aire abajo. Cuando uno estaba pegado al botón y el otro al borde derecho de
+ * la fila de controles, en el celular quedaban en esquinas distintas.
  */
 .fila-filtro {
   display: flex;

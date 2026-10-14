@@ -175,18 +175,23 @@
                    aria-label="Ir a una fecha" />
           </span>
        </div>
-      <!--
-El filtro va AL FINAL, pegado al calendarito. En el medio de la fila se
-        partía la navegación de fechas en dos (Semana|Mes ... combo ... ‹ Actual › 📅):
-        lo que navega y lo que filtra quedaban separados como si fueran dos cosas
-        distintas del mismo grupo.
+    </div>
 
-        Estado propio del de "Turnos de hoy": si compartieran el filtro, elegir un
-        empleado arriba dejaría esta tabla con los turnos de ese empleado y el
-        título de la semana, que es una mezcla que nadie pidió.
-      -->
+    <!--
+      El filtro va en su PROPIA fila, ABAJO de los controles y a la IZQUIERDA: igual
+      que el de "Turnos de hoy", para que los dos se lean como la misma cosa.
+
+      Estaba al final de la fila de controles, empujado con `margin-left: auto`. En
+      pantalla ancha se veía bien, pero en el celular la fila se parte en varias
+      líneas y el combo caía SOLO, alineado a la derecha, mientras el de arriba
+      quedaba a la izquierda: dos filtros iguales, en dos esquinas distintas.
+
+      Estado propio del de "Turnos de hoy": si compartieran el filtro, elegir un
+      empleado arriba dejaría esta tabla con los turnos de ese empleado y el
+      título de la semana, que es una mezcla que nadie pidió.
+    -->
+    <div class="fila-filtro" *ngIf="puedeFiltrarPorEmpleado">
       <select class="filtro-empleado"
-              *ngIf="puedeFiltrarPorEmpleado"
               [ngModel]="filtroEmpleadoPeriodo"
               (ngModelChange)="onFiltroPeriodoChange($event)"
               aria-label="Filtrar los turnos del período por empleado">
