@@ -350,7 +350,11 @@
   // mitad de una palabra.
   flex-wrap: wrap;
 
-  h3 {
+  // `:is(h3, h4)` y no solo `h3`: el encabezado de "Turnos de hoy" es un `<h4>`,
+  // así que antes caía con los márgenes y el tamaño del NAVEGADOR (1.33em arriba y
+  // abajo) y la fila quedaba de 64px contra los 38px de los controles de la semana.
+  // De ahí el "Turnos de hoy" que se veía perdido, con aire de más arriba y abajo.
+  :is(h3, h4) {
     font-size: 1.1rem;
     color: #334155;
     margin: 0;

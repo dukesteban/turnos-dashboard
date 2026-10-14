@@ -187,7 +187,13 @@
 <div *ngIf="mostrarFormProveedor" class="popup-overlay" (click)="cerrarFormProveedor()">
   <div class="popup" (click)="$event.stopPropagation()">
     <div class="popup-header">
-      <h3>➕ Nuevo proveedor</h3>
+      <!--
+      El ícono es 📦, el de la PESTAÑA, no ➕. Con el "más" el popup se leía
+      como "algo genérico nuevo" y no se lo asociaba con la caja de Proveedores.
+      El "➕ Nuevo" de la lista de arriba SÍ va con ➕: ahí el ícono es la acción
+      (agregar), acá es la sección.
+    -->
+      <h3>📦 Nuevo proveedor</h3>
       <button class="btn-cerrar" (click)="cerrarFormProveedor()">✕</button>
     </div>
 

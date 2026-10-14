@@ -38,6 +38,16 @@ const ANCHO_COL_DIA_CHICA = 150;
 const ANCHO_COL_SEMANA_CHICA = 74;
 
 /**
+ * Ancho de la columna de horas, la de la izquierda que queda pegada al scrollear.
+ *
+ * Tiene que coincidir con el `width` de `.col-horas-header` y `.col-horas-abs` del
+ * SCSS (40px), y NO es un detalle: `anchoGrillaSemana` lo suma para saber hasta
+ * dónde llega la grilla, y si el TS dice 40 y el CSS dice otro, el encabezado se
+ * queda corto por esa diferencia y vuelve el bug del fondo que solo tapa lunes.
+ */
+const ANCHO_COL_HORAS = 40;
+
+/**
  * Corte de "pantalla chica". 700px y no 640 porque es el breakpoint que ya usa
  * el resto de la app, y queda por debajo de una tablet en vertical, que es
  * justo el caso donde 240px de columna ya molestan.
@@ -635,11 +645,32 @@ claseBloque(turno: any, mini: boolean): string {
   }
 
   /**
-   * Ancho total de la grilla semanal: ahora es el 100% del contenedor, porque el
-   * reparto lo hace el flex de cada dia (ver `anchoDeDia`).
+   * Ancho MÍNIMO de la grilla semanal, en píxeles: la columna de horas más el piso
+   * de cada día.
+   *
+   * Antes esto era `'100%'` y no se notaba, porque mientras todo entrara en pantalla
+   * daba lo mismo. El problema aparece cuando la semana es más ancha que la pantalla
+   * y hay que scrollear en horizontal: la grilla se quedaba en el ancho del
+   * contenedor (898px medidos) y los días, con su `min-width`, se salían de la caja
+   * hacia la derecha.
+   *
+   * El `.header-semana` es `width: 100%` de esta grilla, así que medía 898 también y
+   * su fondo blanco tapaba SOLO lunes y martes. Al scrollear, los días siguientes
+   * seguían viéndose pero sin fondo, y abajo aparecían los colores de las columnas de
+   * empleados en la fila del encabezado. "Se bloquea solo lunes" era exactamente eso:
+   * el fondo que se bloquea es el del header, y el header no daba de ancho.
+   *
+   * El crecimiento de la grilla va por `width` (este valor) y el llenado de pantalla
+   * por `min-width: 100%` en el CSS: gana el más grande de los dos. Con una semana
+   * de un solo empleado por día la grilla se estira a la pantalla y `flex-grow`
+   * reparte, como siempre.
    */
   get anchoGrillaSemana(): string {
-    return '100%';
+    const pisoDias = this.diasDeSemana.reduce((sum, dia) => {
+      const n = Math.max(this.columnasDe(dia).length, 1);
+      return sum + n * (this.anchoColEmpleado + this.gapColumna);
+    }, 0);
+    return `${ANCHO_COL_HORAS + pisoDias}px`;
   }
 
 

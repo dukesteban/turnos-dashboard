@@ -7,6 +7,7 @@
 //     Empleados y el de Personas > Proveedores.
 @use '../../../styles/popup';
 @use '../../../styles/detalle';
+@use '../../../styles/buscador';
 
 .clientes-page {
   padding: 24px;
@@ -60,19 +61,9 @@
   &:hover { color: #1e293b; }
 }
 
-.buscador {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 9px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.88rem;
-  margin-bottom: 12px;
-  background: #f8fafc;
-  &:focus { outline: none; border-color: #3b82f6; background: white; }
-}
-
+// El `.buscador` no está acá: vive en `styles/_buscador.scss` y lo comparten las
+// tres pestañas de Personas. Estaba copiado en Clientes y Empleados, y el de
+// Proveedores se quedó sin él, que es justo cómo se produjo la diferencia de color.
 .lista-clientes {
   display: flex;
   flex-direction: column;

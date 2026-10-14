@@ -83,7 +83,10 @@
       <h4>Turnos de hoy</h4>
       <div class="acciones-seccion">
         <!--
-          Filtro por empleado. `[value]` con texto y NO `[ngValue]`: lo que importa acá
+          El botón va PRIMERO y el combo a su derecha: el combo es un filtro de la
+          tabla, no una acción, y al lado del botón se leía como otra acción más.
+
+          Filtra por empleado. `[value]` con texto y NO `[ngValue]`: importa que
           es que la opción elegida se vea marcada, y con `[ngValue]` el `<select>` de
           Angular no marca la primera ("Todos") cuando el valor es `null`. Por eso el
           "sin filtro" es el texto `SIN_FILTRO` y no `null`.
@@ -91,6 +94,7 @@
           Filtra la tabla Y los tres cuadros de arriba: si no, se verían 4 filas de
           Hernán con "12 atendidos" arriba, que se contradicen.
         -->
+        <button class="btn-primary" (click)="abrirModalNuevoTurno()">➕ Nuevo turno</button>
         <select class="filtro-empleado"
                 *ngIf="puedeFiltrarPorEmpleado"
                 [ngModel]="filtroEmpleadoHoy"
@@ -99,7 +103,6 @@
           <option [value]="SIN_FILTRO">Todos los empleados</option>
           <option *ngFor="let e of empleados" [value]="'' + e.id">{{ e.nombre }}</option>
         </select>
-        <button class="btn-primary" (click)="abrirModalNuevoTurno()">➕ Nuevo turno</button>
       </div>
     </div>
     <div class="tabla-wrapper">

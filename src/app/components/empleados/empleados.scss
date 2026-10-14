@@ -8,6 +8,7 @@
 @use '../../../styles/popup';
 @use '../../../styles/detalle';
 @use '../../../styles/lista';
+@use '../../../styles/buscador';
 
 .empleados-page {
   padding: 24px;
@@ -50,18 +51,9 @@
   border-radius: 12px;
   font-weight: 600;
 }
-.buscador {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 9px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.88rem;
-  margin-bottom: 12px;
-  background: #f8fafc;
-  &:focus { outline: none; border-color: #3b82f6; background: white; }
-}
+// El `.buscador` no está acá: vive en `styles/_buscador.scss` y lo comparten las
+// tres pestañas de Personas. Estaba copiado en Clientes y Empleados, y el de
+// Proveedores se quedó sin él, que es justo cómo se produjo la diferencia de color.
 .campo {
   margin-bottom: 12px;
 

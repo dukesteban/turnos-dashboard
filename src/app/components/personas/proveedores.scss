@@ -12,6 +12,10 @@
 @use '../../../styles/tabla';
 @use '../../../styles/lista';
 @use '../../../styles/detalle';
+// El buscador gris. Antes no estaba y caía al `input` global: blanco y con otro
+// padding, mientras el de Clientes y el de Empleados salían grises. Tres pestañas
+// del mismo menú con tres búsquedas distintas.
+@use '../../../styles/buscador';
 
 .proveedores-page {
   padding: 24px;

@@ -398,12 +398,18 @@
 
 // VISTA SEMANA
 .grilla-semana {
-  min-width: 500px;
   display: flex;
   flex-direction: column;
-  // La grilla toma todo el ancho disponible: el reparto entre días lo hace el
-  // `flex-grow` de cada columna (ver `anchoDeDia` en agenda.ts).
-  width: 100%;
+  // `width` lo pone el template (`anchoGrillaSemana`) y es el ancho REAL que piden
+  // las columnas. `min-width: 100%` es el piso de "llená la pantalla cuando sobra
+  // lugar", así que de los dos gana el más grande.
+  //
+  // El `width: 100%` que había acá era el bug: con la semana más ancha que la
+  // pantalla la grilla se quedaba en el ancho del contenedor, los días se salían de
+  // la caja, y el header —`width: 100%` de ella— con su fondo blanco tapaba solo
+  // lunes y martes. Abajo se veían los colores de las columnas de los empleados en
+  // la fila del encabezado.
+  min-width: 100%;
 }
 
 /* Alto del header de DÍAS de la vista Semana.
@@ -436,6 +442,8 @@ $h-header-semana: 72px;
   // Sin `min-width: fit-content`: eso hacía que el header midiese lo justo para sus
   // hijos en lugar de acompañar al flex del cuerpo, y las columnas del header no
   // caían arriba de las del cuerpo. Ahora los dos son flex con el mismo reparto.
+  // `100%` de `.grilla-semana`, que ya mide lo que piden las columnas. Es lo que
+  // hace que el fondo blanco cubra TODOS los días y no solo los primeros.
   width: 100%;
 }
 

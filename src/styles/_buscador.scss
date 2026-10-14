@@ -1,0 +1,43 @@
+// ============================================================
+// EL BUSCADOR DE LAS LISTAS DE PERSONAS
+// ------------------------------------------------------------
+// El `<input class="buscador">` de las tres pestañas de Personas (Clientes,
+// Empleados y Proveedores).
+//
+// ESTABA COPIADO Y PEGADO en `clientes.scss` y `empleados.scss`, y el de
+// Proveedores se OLVIDÓ: como no tenía regla propia, caía al estilo global de
+// `input` de `styles.scss` y salía blanco con borde más oscuro y otro padding,
+// mientras los otros dos salían gris claro. Tres pantallas del mismo menú con
+// tres búsquedas distintas.
+//
+// Va en un partial por el mismo motivo que `_buscador-crear.scss`: la regla es
+// chica, pero la diferencia entre tenerla y no tenerla es que una de las tres
+// pestañas se ve distinta. Que viva en un solo lugar es lo que evita el olvido.
+//
+// OJO con el costo: `@use` NO deduplica entre componentes (cada uno se lleva una
+// COPIA con su `[_ngcontent-xxx]`). Acá son ~15 líneas, así que da igual; con
+// `_popup.scss` (2,5 kB) sí rompía el budget de `empleados.scss`.
+//
+// Uso:  @use '../../../styles/buscador';
+// ============================================================
+
+.buscador {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  margin-bottom: 12px;
+  background: #f8fafc;
+  font-family: inherit;
+
+  // El foco lo pone el azul de la app y el fondo pasa a blanco: el gris dice
+  // "campo en reposo" y el blanco "acá se escribe".
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: white;
+  }
+}

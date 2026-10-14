@@ -266,11 +266,39 @@ describe('Agenda - la semana: cada dia con SU gente y SU ancho', () => {
       .toBe(`${colsMiercoles * (cmp.anchoColEmpleado + cmp.gapColumna)}px`);
   });
 
-  it('la grilla toma todo el ancho disponible', async () => {
-    // Con ancho fijo en pixeles la suma de las columnas no llenaba la pantalla.
-    // Ahora es 100% y el reparto lo hace el flex de cada dia.
+  it('la grilla mide lo que suman las columnas, y no el ancho del contenedor', async () => {
+    // ANTES ERA `'100%'`, y no se notaba mientras la semana entrara en pantalla.
+    // Cuando es más ancha que la pantalla hay que scrollear, y ahí la grilla se
+    // quedaba en el ancho del contenedor mientras los días se salían de la caja.
+    //
+    // Como el `.header-semana` es `width: 100%` de la grilla, su fondo blanco
+    // tapaba SOLO los primeros días (lunes y martes) y al scrollear se veían los
+    // colores de las columnas de los empleados en la fila del encabezado.
     const { cmp } = await listo();
-    expect(cmp.anchoGrillaSemana).toBe('100%');
+
+    const esperado = cmp.diasDeSemana.reduce((sum, dia) => {
+      const n = Math.max(cmp.columnasDe(dia).length, 1);
+      return sum + n * (cmp.anchoColEmpleado + cmp.gapColumna);
+    }, 0) + 40;   // 40 = la columna de horas
+
+    expect(cmp.anchoGrillaSemana).toBe(`${esperado}px`);
+  });
+
+  it('la grilla le alcanza a TODOS los dias, no solo a los primeros que entran', async () => {
+    // El bug en una sola linea: el ancho de la grilla tiene que ser mayor o igual
+    // que el `min-width` del ultimo dia, o su celda queda fuera de la caja y el
+    // header no la cubre.
+    const { cmp } = await listo();
+
+    const anchoGrilla = parseInt(cmp.anchoGrillaSemana, 10);
+    let acumulado = 40;   // la columna de horas
+    for (const dia of cmp.diasDeSemana) {
+      const n = Math.max(cmp.columnasDe(dia).length, 1);
+      acumulado += n * (cmp.anchoColEmpleado + cmp.gapColumna);
+    }
+
+    expect(acumulado).toBe(anchoGrilla);
+    expect(anchoGrilla).toBeGreaterThan(40);   // hay dias con gente
   });
 
   it('un dia sin nadie tiene ancho de UNA columna, no de cero', async () => {

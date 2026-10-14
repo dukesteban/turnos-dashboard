@@ -108,7 +108,15 @@
 
   <!-- VISTA SEMANA -->
   <div *ngIf="vista === 'semana'" class="grilla-contenedor">
-    <div class="grilla-semana" [style.min-width]="anchoGrillaSemana">
+    <!--
+      `width` y NO `min-width`: la grilla tiene que CRECER hasta donde llegan las
+      columnas, aunque el contenedor sea más angosto (ahí scrollea). El llenado de
+      pantalla cuando sobra lugar lo pone `.grilla-semana { min-width: 100% }`, y
+      gana el más grande de los dos. Con `min-width` en vez de `width`, la grilla se
+      quedaba en el ancho del contenedor y el header —que es `width: 100%` de ella—
+      con su fondo blanco solo tapaba lunes y martes.
+    -->
+    <div class="grilla-semana" [style.width]="anchoGrillaSemana">
 
       <!-- Header -->
       <div class="header-semana">

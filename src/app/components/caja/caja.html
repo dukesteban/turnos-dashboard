@@ -563,11 +563,16 @@
 </div><!-- /esTab('empleados') -->
 
   <!-- ══════════ POPUP: REGISTRAR PAGO ══════════
-       Mismo patrón que el popup de "Nuevo turno" del Dashboard. -->
+       Mismo patrón que el popup de "Nuevo turno" del Dashboard.
+
+       El título dice a QUIÉN se le paga, no "Registrar pago": los dos popups de
+       pago (este y el de proveedor de más abajo) tenían el mismo título, y son
+       dos acciones distintas que se confundían al verlos. El botón que los abre
+       en cada pestaña sí se llama "Registrar pago"; el popup aclara a quién. -->
   <div *ngIf="mostrarFormPago" class="popup-overlay" (click)="cerrarFormPago()">
     <div class="popup" (click)="$event.stopPropagation()">
       <div class="popup-header">
-        <h3>💸 Registrar pago</h3>
+        <h3>💸 Pago a Empleado</h3>
         <button class="btn-cerrar" (click)="cerrarFormPago()">✕</button>
       </div>
 
@@ -628,7 +633,7 @@
        (click)="cerrarFormPagoProveedor()">
     <div class="popup" (click)="$event.stopPropagation()">
       <div class="popup-header">
-        <h3>💸 Registrar pago</h3>
+        <h3>💸 Pago a Proveedor</h3>
         <button class="btn-cerrar" (click)="cerrarFormPagoProveedor()">✕</button>
       </div>
 
