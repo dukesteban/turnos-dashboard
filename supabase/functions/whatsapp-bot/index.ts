@@ -83,8 +83,18 @@ const TOOLS = [
   },
   {
     name: 'buscar_empleados',
-    description: 'Devuelve la lista de empleados activos. Si el cliente elige uno, usa su id en crear_turno.',
-    input_schema: { type: 'object', properties: {}, required: [] },
+    description:
+      'Devuelve los empleados activos. Si el cliente quiere que lo atienda ALGUIEN para un turno, pasale SIEMPRE la fecha: la lista sale SOLO de quien labra ese día, con su horario, y en no_disponibles viene quien no puede, con el motivo. Sin fecha devuelve todos los activos a ciegas.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fecha: {
+          type: 'string',
+          description: 'YYYY-MM-DD. OBLIGATORIA cuando el cliente quiere un empleado para un turno: sin ella podes ofrecer a alguien que ese día no trabaja y tener que dar marcha atrás.',
+        },
+      },
+      required: [],
+    },
   },
   {
     name: 'consultar_horarios_libres',
@@ -97,6 +107,10 @@ const TOOLS = [
         fecha: { type: 'string', description: 'YYYY-MM-DD' },
         hora_preferida: { type: 'string', description: 'HH:MM de lo que pidio el cliente, si dijo una' },
         empleado_id: { type: 'number', description: 'Solo si el cliente quiere un empleado concreto' },
+        cantidad: {
+          type: 'number',
+          description: 'Cuantos horarios queres que te devuelva. Por omision 3, que es lo que se le ofrece al cliente. Subilo solo si el cliente pide ver mas.',
+        },
       },
       required: ['servicio_id', 'fecha'],
     },
@@ -261,6 +275,34 @@ function sePisan(a: Bloque, b: Bloque): boolean {
 // veces con un tope de horas (Esteban, por ejemplo, no trabaja los miercoles y los
 // sabados corta a las 13). Antes solo se miraba `activo`, asi que el bot le agendo
 // un miercoles a las 19 y le dijo que lo atendia Esteban, que no estaba ese dia.
+/**
+ * El tramo del negocio en el que labra ese empleado ese día, YA recortado por su
+ * jornada.
+ *
+ * El tope de la jornada recorta el horario del negocio: si labra hasta las 13 y el
+ * negocio cierra a las 20, a ese empleado lo ven hasta las 13. Por eso hay que
+ * intersectar los dos y no usar solo el horario de atención.
+ *
+ * Varía en "" si no labra ese día. El que decide si eso es "no trabaja" o "no tiene
+ * jornada cargada" lo mira el que llama, porque cada tool lo reporta distinto.
+ */
+function tramoDelDia(
+  e: { jornada?: any },
+  diaSemana: number,
+  horarios: Array<{ hora_inicio: string; hora_fin: string }>
+): string {
+  const j = Array.isArray(e.jornada) ? e.jornada[diaSemana] : null;
+  if (j === null || j === undefined || !j.activo) return '';
+  return horarios
+    .map((h) => ({
+      desde: Math.max(horaAMin(h.hora_inicio), j.hora_inicio ? horaAMin(j.hora_inicio) : 0),
+      hasta: Math.min(horaAMin(h.hora_fin), j.hora_fin ? horaAMin(j.hora_fin) : 24 * 60),
+    }))
+    .filter((t) => t.hasta > t.desde)
+    .map((t) => `${minAHora(t.desde)} a ${minAHora(t.hasta)}`)
+    .join(' y ');
+}
+
 async function estadoDelDia(fecha: string, excluirTurnoId?: number) {
   const diaSemana = new Date(fecha + 'T00:00:00').getDay();
   const [{ data: empleados }, { data: turnos }, { data: ausencias }] = await Promise.all([
@@ -393,8 +435,72 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       return JSON.stringify({ ok: true, servicios: data ?? [] });
     }
     case 'buscar_empleados': {
-      const { data } = await sb.from('empleados').select('id, nombre').eq('activo', true).order('nombre');
-      return JSON.stringify({ ok: true, empleados: data ?? [] });
+      const { data: todos } = await sb
+        .from('empleados').select('id, nombre, jornada').eq('activo', true).order('nombre');
+
+      const fecha = input.fecha;
+
+      // Sin fecha: la lista completa, como siempre.
+      if (!fecha) {
+        return JSON.stringify({
+          ok: true,
+          empleados: (todos ?? []).map((e) => ({ id: e.id, nombre: e.nombre })),
+        });
+      }
+
+      // ─── CON fecha: solo quien labra ese dia ───
+      // El bug que arregla esto: el bot ofrecía los cuatro empleados a ciegas y
+      // recien cuando el cliente elegía a uno se enteraba de que ese día no labraba
+      // ("Esteban no trabaja los miércoles"), con lo que le había concedido algo que
+      // tenía que deshacer. O sea, ofrecerle una lista que la base ya sabe que es falsa.
+      const { data: cerrados } = await sb.from('dias_cerrados').select('fecha, fecha_hasta');
+      if (diaCerrado(cerrados ?? [], fecha)) {
+        return JSON.stringify({ ok: false, error: 'dia_cerrado', detalle: 'Ese dia el negocio esta cerrado.' });
+      }
+
+      const diaSemana = new Date(fecha + 'T00:00:00').getDay();
+      const { data: horarios } = await sb
+        .from('horarios_atencion').select('hora_inicio, hora_fin')
+        .eq('dia_semana', diaSemana).eq('activo', true).order('hora_inicio', { ascending: true });
+
+      const { data: ausencias } = await sb
+        .from('ausencias').select('empleado_id, motivo')
+        .lte('desde', fecha).gte('hasta', fecha);
+
+      const fuera = new Map<number, string>();
+      for (const a of ausencias ?? []) {
+        if (a.empleado_id) fuera.set(a.empleado_id, a.motivo ?? 'ausente');
+      }
+
+      const disponibles: any[] = [];
+      const noDisponibles: any[] = [];
+      for (const e of todos ?? []) {
+        const j = Array.isArray(e.jornada) ? e.jornada[diaSemana] : null;
+        if (j === null || j === undefined || !j.activo) {
+          noDisponibles.push({ id: e.id, nombre: e.nombre, motivo: 'no trabaja ese dia' });
+          continue;
+        }
+        if (fuera.has(e.id)) {
+          noDisponibles.push({ id: e.id, nombre: e.nombre, motivo: `ausente: ${fuera.get(e.id)}` });
+          continue;
+        }
+        disponibles.push({
+          id: e.id,
+          nombre: e.nombre,
+          horario: tramoDelDia(e, diaSemana, horarios ?? []) || 'sin horario',
+        });
+      }
+
+      return JSON.stringify({
+        ok: true,
+        fecha,
+        dia: DIAS_SEMANA[diaSemana],
+        empleados: disponibles,
+        no_disponibles: noDisponibles,
+        nota:
+          'La lista YA viene filtrada por quien labra ese dia. Si el cliente pidio uno que NO esta en `empleados`, ' +
+          'decile el `motivo` de `no_disponibles` y ofrece los que si: no le ofrezcas como equivalente a alguien que no puede.',
+      });
     }
     case 'empleados_del_dia': {
       // "quien trabaja el jueves" es una pregunta de gente, no de turnos. Antes el
@@ -447,16 +553,11 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
           continue;
         }
         // El tope de la jornada recorta el horario del negocio: si labra hasta las 13
-        // y el negocio cierra a las 20, a este empleado lo ven hasta las 13.
-        const tramo = (horarios as Array<{ hora_inicio: string; hora_fin: string }>)
-          .map((h) => ({
-            desde: Math.max(horaAMin(h.hora_inicio), j.hora_inicio ? horaAMin(j.hora_inicio) : 0),
-            hasta: Math.min(horaAMin(h.hora_fin), j.hora_fin ? horaAMin(j.hora_fin) : 24 * 60),
-          }))
-          .filter((t) => t.hasta > t.desde)
-          .map((t) => `${minAHora(t.desde)} a ${minAHora(t.hasta)}`);
+        // y el negocio cierra a las 20, a este empleado lo ven hasta las 13. Vive en
+        // `tramoDelDia`, que comparte con `buscar_empleados`.
+        const tramo = tramoDelDia(e, diaSemana, horarios ?? []);
 
-        lista.push({ id: e.id, nombre: e.nombre, horario: tramo.join(' y ') || 'sin horario' });
+        lista.push({ id: e.id, nombre: e.nombre, horario: tramo || 'sin horario' });
       }
 
       return JSON.stringify({
@@ -617,7 +718,21 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       //
       // Se ofrecen UNO antes y otro despues de la hora pedida: al cliente que le
       // fallan las 10 le sirve saber que tiene 10:15 y 9:45, no solo una.
-      const sugerencias = ordenada.slice(0, 3).map((h, i) => ({
+      //
+      // ─── POR QUE LA LISTA VIENE CORTADA ───
+      // Antes `libres` devolvía los 32 horarios del día y el modelo los volcaba
+      // todos: "14:45, 15:00, 15:15, 15:30, ... 19:00", dieciocho en un mensaje. Es
+      // más largo que el problema que está resolviendo, y el cliente tiene que leer
+      // para encontrar dos horarios que le sirvan.
+      //
+      // El corte es acá y no en el prompt porque el prompt es una recomendación y
+      // una recomendación se cumple la mitad de las veces: la lista larga ya estaba
+      // en el contexto y el modelo la tenía a mano. Con la lista corta, la
+      // herramienta le da lo que tiene que decir y nada más.
+      const pedidos = Number(input.cantidad ?? 3) || 3;
+      const cantidad = Math.max(1, Math.min(10, pedidos));
+
+      const sugerencias = ordenada.slice(0, cantidad).map((h, i) => ({
         opcion: i + 1,
         hora: minAHora(h),
         corre_minutos: pref == null ? null : h - pref,
@@ -625,7 +740,9 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
 
       return JSON.stringify({
         ok: true,
-        libres: ordenada.map(minAHora),
+        libres: ordenada.slice(0, cantidad).map(minAHora),
+        total_libres: ordenada.length,
+        hay_mas: ordenada.length > cantidad,
         sugerencias,
         // Que proponer cuando la hora pedida no se puede. Va calculada aca y no
         // dejada al modelo: es la misma que crear_turno va a elegir cuando el
@@ -643,6 +760,9 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         nota: pref != null
           ? 'La lista viene ordenada de la hora que pidio el cliente hacia atras. Ofrecele las 3 primeras de `sugerencias`, con su numero de opcion, y arrancá por la recomendada.'
           : 'Ordenadas por hora de apertura. Ofrecele las 3 primeras de `sugerencias`.',
+        // Esto se lee aunque el modelo no lea la `nota`: la lista ya viene corta y
+        // `hay_mas` le dice que puede pedir más si el cliente insiste.
+        maxima_a_ofrecer: cantidad,
         empleado_filtrado: nombrePedido ? nombrePedido.nombre : null,
       });
     }
@@ -1112,7 +1232,7 @@ Fechas: hoy es ${hoyIso} (${DIAS_SEMANA[hoy.getDay()]}). Esta es la tabla de los
 
 Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion, asi que abri presentandote como el bot de "${negocio.nombre}"${negocio.cierres ? ` y avisale que ${negocio.cierres}` : ''}. No lo hagas en los mensajes siguientes.` : 'ya te presentaste antes, no te vuelvas a presentar.'}
 
-Reglas de UX: todos los bloques de texto que escribas ANTES de una tool se leen al cliente (se juntan en un solo mensaje), asi que no te repitas: escribí una sola vez que vas a chequear y seguí. Y nunca anuncies algo que todavia no verificaste: si vas a llamar una tool para reservar o consultar, no arranques diciendo "dale, te lo reservo" ni "dale, chequeo" con la fecha y la hora detailadas; la frase previa tiene que ser generica (un "un momento", o nada) y el detalle va DESPUÉS del resultado de la tool. Si la tool falla, esa frase previa ya le dijo al cliente que estaba reservado. Cuando el cliente diga una hora concreta, pasala siempre en hora_preferida de consultar_horarios_libres. La lista te vuelve ordenada de esa hora hacia atras: ofrecele las 2 o 3 primeras, que son las mas parecidas a lo que pidio. Si vuelve pedido_disponible=false, decile el motivo_pedido tal cual (dice si esta tomado o si el servicio no entra antes del cierre) y ofrecele las alternativas de la lista; no te inventes otro motivo. Cuando la hora que pidio esta tomada, ofrecele las 2 o 3 de "sugerencias" tal como vienen numeradas ("te puedo hacer las 10:15 o las 9:45"), empezando por la "recomendada". Si el cliente acepta con un "dale", un "si", un "ok" o dice el numero de una opcion, NO le preguntes de nuevo ni le pidas que aclare: reservale YA con crear_turno, pasandole la hora que pidió y aceptar_cercania_minutos en 60, y la tool elige sola el horario libre mas cercano. Aceptar asi no es que el cliente quiera cualquier hora: es que ya te dijo que esa le sirve. Si el cliente nombra una opcion concreta ("la 9:45"), reserva esa exacta, sin aceptar_cercania_minutos. Cuando crear_turno devuelva se_corrio distinto de null, el turno NO quedo a la hora que pidió: decile la hora que quedo de verdad (hora_reservada) y quanto se corrió. Nunca anuncies la hora que pidió como si fuera la reservada. Si el cliente no dijo hora, ofrecé 3 horarios de la lista, tampoco todos. Si el cliente pide que lo atienda otra persona o en otro horario, usá reprogramar_turno pasándole empleado_id: sin ese campo el turno se reprograma pero se queda con el empleado anterior, y vos le dirás al cliente que lo atiende alguien que no lo atiende. Anunciá siempre el empleado_nombre que TE DEVUELVE la tool, nunca el que esperabas: si la tool te devuelve otro, ese es el que atiende. Si el cliente quiere un empleado concreto para un turno NUEVO, llamá buscar_empleados y pasale su id en empleado_id de consultar_horarios_libres y de crear_turno; nunca le asignes a otro en silencio. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre. NUNCA menciones los turnos que tiene el cliente salvo que los hayas leído recién con buscar_turnos_cliente en ESTE mensaje: no los recuerdes de mensajes anteriores, pueden haber sido cancelados o borrados. Y NUNCA respondas sobre disponibilidad, sobre quien atiende, o sobre si un cambio se pudo hacer, sin llamar a la tool en ESTE mensaje: lo que contestaste hace dos mensajes puede haber cambiado (otro cliente agendó, el empleado se inactivó, el turno se movió). Si el cliente repite una pregunta, volvé a llamar a la tool, no contestés de memoria. Si el cliente eligió una hora que no estaba entre las que ofreciste, no digas que la reservaste sin llamar crear_turno.
+Reglas de UX: todos los bloques de texto que escribas ANTES de una tool se leen al cliente (se juntan en un solo mensaje), asi que no te repitas: escribí una sola vez que vas a chequear y seguí. Y nunca anuncies algo que todavia no verificaste: si vas a llamar una tool para reservar o consultar, no arranques diciendo "dale, te lo reservo" ni "dale, chequeo" con la fecha y la hora detailadas; la frase previa tiene que ser generica (un "un momento", o nada) y el detalle va DESPUÉS del resultado de la tool. Si la tool falla, esa frase previa ya le dijo al cliente que estaba reservado. Cuando el cliente diga una hora concreta, pasala siempre en hora_preferida de consultar_horarios_libres. La lista te vuelve ordenada de esa hora hacia atras: ofrecele las 2 o 3 primeras, que son las mas parecidas a lo que pidio. Si vuelve pedido_disponible=false, decile el motivo_pedido tal cual (dice si esta tomado o si el servicio no entra antes del cierre) y ofrecele las alternativas de la lista; no te inventes otro motivo. Cuando la hora que pidio esta tomada, ofrecele las 2 o 3 de "sugerencias" tal como vienen numeradas ("te puedo hacer las 10:15 o las 9:45"), empezando por la "recomendada". Si el cliente acepta con un "dale", un "si", un "ok" o dice el numero de una opcion, NO le preguntes de nuevo ni le pidas que aclare: reservale YA con crear_turno, pasandole la hora que pidió y aceptar_cercania_minutos en 60, y la tool elige sola el horario libre mas cercano. Aceptar asi no es que el cliente quiera cualquier hora: es que ya te dijo que esa le sirve. Si el cliente nombra una opcion concreta ("la 9:45"), reserva esa exacta, sin aceptar_cercania_minutos. Cuando crear_turno devuelva se_corrio distinto de null, el turno NO quedo a la hora que pidió: decile la hora que quedo de verdad (hora_reservada) y quanto se corrió. Nunca anuncies la hora que pidió como si fuera la reservada. Si el cliente no dijo hora, ofrecé 3 horarios de la lista, tampoco todos. Si el cliente pide que lo atienda otra persona o en otro horario, usá reprogramar_turno pasándole empleado_id: sin ese campo el turno se reprograma pero se queda con el empleado anterior, y vos le dirás al cliente que lo atiende alguien que no lo atiende. Anunciá siempre el empleado_nombre que TE DEVUELVE la tool, nunca el que esperabas: si la tool te devuelve otro, ese es el que atiende. Si el cliente quiere un empleado concreto para un turno NUEVO, llamá buscar_empleados CON LA FECHA y pasale su id en empleado_id de consultar_horarios_libres y de crear_turno; nunca le asignes a otro en silencio. Sin la fecha esa tool te devuelve a los cuatro empleados y podes ofrecer a uno que ese día no trabaja: el cliente elige, vos lo reprogramás, y a media operación le decís que ese día no labra y hay que dar marcha atrás. La lista ya viene filtrada por jornada y ausencias; si el cliente pidió a alguien que no está en la lista, decile el "motivo" de no_disponibles y ofrecé los que sí. No sexes igual a un empleado que no puede. NUNCA listes más de 3 horarios o 3 empleados por mensaje: si querés más, pedilos en tandas de 3 preguntando cuál prefiere. Un mensaje con dieciocho horarios es más largo que el problema que está resolviendo, y el cliente tiene que leerlo entero para encontrar dos que le sirvan. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre. NUNCA menciones los turnos que tiene el cliente salvo que los hayas leído recién con buscar_turnos_cliente en ESTE mensaje: no los recuerdes de mensajes anteriores, pueden haber sido cancelados o borrados. Y NUNCA respondas sobre disponibilidad, sobre quien atiende, o sobre si un cambio se pudo hacer, sin llamar a la tool en ESTE mensaje: lo que contestaste hace dos mensajes puede haber cambiado (otro cliente agendó, el empleado se inactivó, el turno se movió). Si el cliente repite una pregunta, volvé a llamar a la tool, no contestés de memoria. Si el cliente eligió una hora que no estaba entre las que ofreciste, no digas que la reservaste sin llamar crear_turno.
 
 ${spec}`;
 
@@ -1355,6 +1475,8 @@ async function obtenerSpec(): Promise<string> {
 3. Cuando elija servicio, mostra los horarios libres con consultar_horarios_libres.
 4. Si elige horario, crealo con crear_turno.
 5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente. Si quiere cambiar la fecha o la hora de un turno que ya tiene, se reprograma con reprogramar_turno (primero le decis a que turno se refiere, con buscar_turnos_cliente, y le mostras el horario nuevo antes de llamar a la tool). Si el turno que quiere tocar ya paso, no se reprograma: se agenda uno nuevo.
+
+6. Si te preguntan quién te hizo, qué modelo sos, o quién programó esto, NO lo inventes y no mandes al cliente con el "responsable del negocio" como si fuera a saberlo: decís corto que sos el asistente de [negocio], que no sabés quién te programó, y seguí ofreciendo ayuda con los turnos. Una respuesta de dos renglones, sin lista ni conjeturas.
 
 IMPORTANTE sobre las fechas: no le pidas al cliente la fecha en formato yyyy-MM-dd. Entende 'el domingo que viene', 'pasado manana', 'el 11 de octubre' a partir de la fecha de hoy (esta en el system prompt). Si falta el año y el dia ya hay pasado este año, usa el año siguiente. Nunca digas 'hubiera un problema del lado del sistema' si una tool devuelve un error: explicale al cliente qué paso y ofrecele alternativas.`;
 }
