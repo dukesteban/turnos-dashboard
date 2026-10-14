@@ -319,7 +319,7 @@ describe('Configuración — datos del negocio', () => {
     expect(mock.llamadas).not.toContain('upsertConfiguracion');
   });
 
-  it('acepta el borde y guarda las 5 claves', async () => {
+  it('acepta el borde y guarda las 8 claves', async () => {
     const guardadas: string[] = [];
     const { cmp } = montar({
       upsertConfiguracion: (k: string) => { guardadas.push(k); return Promise.resolve(); },
@@ -329,8 +329,33 @@ describe('Configuración — datos del negocio', () => {
     expect(cmp.mensajeErrorDatos).toBe('');
     expect(guardadas).toEqual([
       'nombre_negocio', 'descripcion', 'horas_limite_cancelacion',
-      'recordatorio_cuando', 'recordatorio_hora', 'telefono_emergencia', 'tono',
+      'recordatorio_cuando', 'recordatorio_hora', 'telefono_emergencia', 'direccion', 'tono',
     ]);
+  });
+
+  it('la direccion es OPCIONAL: vacía se guarda sin pedir nada', async () => {
+    // Nada de la app la exige. Si el lavadero no la carga, el bot simplemente no da
+    // dirección y todo lo demás sigue andando.
+    const { cmp } = montar({ getConfiguracion: () => Promise.resolve([]) });
+    await cmp.cargarDatos();
+    expect(cmp.direccion).toBe('');
+    await cmp.guardarConfiguracion();
+    expect(cmp.mensajeErrorDatos).toBe('');
+  });
+
+  it('la direccion se carga como un solo texto, sin partirla', async () => {
+    // Un solo campo a propósito: cuatro casillas obligan a acertar el formato en
+    // cada una y el resultado queda partido.
+    const guardadas: Record<string, string> = {};
+    const { cmp } = montar({
+      getConfiguracion: () => Promise.resolve([]),
+      upsertConfiguracion: (k: string, v: string) => { guardadas[k] = v; return Promise.resolve(); },
+    });
+    await cmp.cargarDatos();
+    cmp.direccion = '  Av. Siempreviva 742, San Miguel de Tucumán, Tucumán  ';
+    await cmp.guardarConfiguracion();
+
+    expect(guardadas['direccion']).toBe('Av. Siempreviva 742, San Miguel de Tucumán, Tucumán');
   });
 
   it('guardarConfiguracion sale del modo edicion', async () => {

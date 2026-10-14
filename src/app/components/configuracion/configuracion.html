@@ -37,6 +37,19 @@
         <input type="text" [(ngModel)]="telefonoEmergencia" [readonly]="!editandoDatos" placeholder="Ej: 3815 55 12 74"/>
       </div>
       <div class="campo">
+        <label>Dirección</label>
+        <!--
+          Un solo campo a propósito, y el `placeholder` hace de guía de qué poner:
+          calle, número, piso/depto, ciudad y provincia. Cuatro casillas obligan a
+          acertar el formato en cada una y el resultado termina partido.
+
+          Opcional: vacío = el bot no da dirección y todo lo demás sigue igual. La
+          app nunca la exige.
+        -->
+        <input type="text" [(ngModel)]="direccion" [readonly]="!editandoDatos"
+               placeholder="Calle, número, piso/depto, ciudad, provincia — ej: Av.Siempreviva 742, San Miguel de Tucumán, Tucumán"/>
+      </div>
+      <div class="campo">
         <label>Tono del bot de WhatsApp</label>
         <select [(ngModel)]="tono" [disabled]="!editandoDatos">
           <option value="informal">Informal — como un chat</option>

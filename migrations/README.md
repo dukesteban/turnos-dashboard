@@ -100,12 +100,20 @@ Ninguna la arregla una migración del repo: no son de este proyecto.
 |---|---|---|
 | 2ª propuesta de fecha | `fecha_propuesta_2` | `fecha_propuesta2` |
 | 2ª propuesta de hora | `hora_propuesta_2` | `hora_propuesta2` |
-| historial del bot | no existe | `historial_claude` |
+| historial del bot | ya no es una diferencia: la 023 la agregó | `historial_claude` |
 
 **La app no toca ninguna de estas columnas** (verificado: no aparecen en ningún
-`.ts` ni `.html`). Las usa el bot de n8n en Railway. **No las toques sin avisarle
-al que mantiene el bot**, porque el bot y ryf pueden estar esperando la una o la
-otra.
+`.ts` ni `.html`).
+
+> **Actualización (14/10/2026).** `historial_claude` figuraba acá como diferencia
+> documentada, con la nota de no tocarla porque la usaba el bot de n8n en Railway.
+> Ese bot fue reemplazado por la función de borde `whatsapp-bot` de este proyecto,
+> que lee y escribe la columna, así que la 023 la agregó a ryf. Sin ella el bot
+> queda sin memoria ahí: el `upsert` fallaba en silencio, el historial llegaba vacío
+> y cada mensaje se trataba como el primero de la conversación.
+>
+> Las columnas `fecha_propuesta_2` / `hora_propuesta_2` sí quedan como estaban: son
+> de la versión vieja y ni la app ni el bot nuevo las miran.
 
 ### `telefonos`
 

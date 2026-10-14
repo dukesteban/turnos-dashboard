@@ -131,6 +131,20 @@ export class ConfiguracionComponent implements OnInit {
    */
   telefonoEmergencia = '';
 
+  /**
+   * Dirección del lavadero, en UN solo texto.
+   *
+   * No son campos separados de calle / número / ciudad / provincia a propósito: eso
+   * obliga al que lo carga a acertar el formato en cuatro casillas y termina
+   * escribiendo "Av. Siempreviva 742, Springfield" en la de la calle y nada en las
+   * otras. Acá se escribe como se habla y el bot lo devuelve tal cual, que es lo
+   * que necesita alguien que viene a consultar.
+   *
+   * TODO es opcional y esta clave no es obligatoria: vacío = el bot no da
+   * dirección, y sigue funcionando todo lo demás. Nadie la carga por las dudas.
+   */
+  direccion = '';
+
   // Días cerrados
   acordeonDiasCerrados = false;
   diasCerrados: any[] = [];
@@ -190,6 +204,7 @@ export class ConfiguracionComponent implements OnInit {
     this.recordatorioCuando = config.find((c: any) => c.clave === 'recordatorio_cuando')?.valor || 'dia_anterior';
     this.recordatorioHora = config.find((c: any) => c.clave === 'recordatorio_hora')?.valor || '08:00';
     this.telefonoEmergencia = config.find((c: any) => c.clave === 'telefono_emergencia')?.valor || '';
+    this.direccion = config.find((c: any) => c.clave === 'direccion')?.valor || '';
     this.tono = config.find((c: any) => c.clave === 'tono')?.valor || 'informal';
     this.diasCerrados = await this.supabase.getDiasCerrados();
     const horariosDB = await this.supabase.getHorarios();
@@ -358,6 +373,7 @@ export class ConfiguracionComponent implements OnInit {
       await this.supabase.upsertConfiguracion('recordatorio_cuando', this.recordatorioCuando);
       await this.supabase.upsertConfiguracion('recordatorio_hora', this.recordatorioHora);
       await this.supabase.upsertConfiguracion('telefono_emergencia', this.telefonoEmergencia.trim());
+      await this.supabase.upsertConfiguracion('direccion', this.direccion.trim());
       await this.supabase.upsertConfiguracion('tono', this.tono);
       this.editandoDatos = false;
       this.mostrarMensaje('✅ Configuración guardada.', 'datos');

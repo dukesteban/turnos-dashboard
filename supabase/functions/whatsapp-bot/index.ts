@@ -53,7 +53,7 @@ const sb = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false }
 const TOOLS = [
   {
     name: 'obtener_config_negocio',
-    description: 'Obtiene una clave de la configuracion del negocio: nombre_negocio, tono, horas_limite_cancelacion, horario_atencion, dias_cerrados, recordatorio_cuando, recordatorio_hora.',
+    description: 'Obtiene una clave de la configuracion del negocio: nombre_negocio, descripcion, direccion, tono, horas_limite_cancelacion, horario_atencion, dias_cerrados, recordatorio_cuando, recordatorio_hora.',
     input_schema: { type: 'object', properties: { clave: { type: 'string' } }, required: ['clave'] },
   },
   {
@@ -428,11 +428,36 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         return JSON.stringify({ ok: true, valor: data ?? [] });
       }
       const { data } = await sb.from('configuracion').select('valor').eq('clave', input.clave).single();
-      return JSON.stringify({ ok: true, valor: data?.valor ?? null });
+
+      // Una clave que NO esta cargada tiene que decirselo al modelo con todas las
+      // letras. Con `valor: null` a secas el bot lo rellenaba: si la direccion no
+      // estaba cargada contesto "preguntá directamente por teléfono o Instagram del
+      // local", y el "Instagram" era inventado, de la nada, sin ninguna fuente.
+      // La leccion: `null` se lee como "no se", no como "no se y no lo digas".
+      if (!data?.valor) {
+        return JSON.stringify({
+          ok: true,
+          valor: null,
+          configurado: false,
+          detalle: `La clave "${input.clave}" esta VACIA en la base. Decile al cliente que esa informacion todavia no esta cargada. NO la completes, NO le des un valor aproximado y NO le sugieras otro canal (redes, mail, un telefono que no te dieron): no tenes de donde sacarlo.`,
+        });
+      }
+      return JSON.stringify({ ok: true, valor: data.valor, configurado: true });
     }
     case 'listar_servicios': {
       const { data } = await sb.from('servicios').select('id, nombre, duracion_minutos, precio').eq('activo', true).order('nombre');
-      return JSON.stringify({ ok: true, servicios: data ?? [] });
+      return JSON.stringify({
+        ok: true,
+        servicios: data ?? [],
+        // La lista vacía necesita decir POR QUÉ: sin esto el bot seguía el
+        // Dialogue como si el cliente no hubiera dicho qué servicio quería y pedía
+        // el nombre de un turno que no se podía crear nunca.
+        vacio: (data ?? []).length === 0,
+        detalle:
+          (data ?? []).length === 0
+            ? 'No hay servicios cargados. NO le pidas el nombre ni digas que vas a agendar: decile al cliente que todavia no hay servicios disponibles en el local.'
+            : null,
+      });
     }
     case 'buscar_empleados': {
       const { data: todos } = await sb
@@ -1232,6 +1257,15 @@ Fechas: hoy es ${hoyIso} (${DIAS_SEMANA[hoy.getDay()]}). Esta es la tabla de los
 
 Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion, asi que abri presentandote como el bot de "${negocio.nombre}"${negocio.cierres ? ` y avisale que ${negocio.cierres}` : ''}. No lo hagas en los mensajes siguientes.` : 'ya te presentaste antes, no te vuelvas a presentar.'}
 
+QUE SABES Y QUE NO:
+
+Este es el alcance de tu trabajo, y es CERRADO. Respondés solo sobre ESTE negocio:
+turnos (agendar, reprogramar, cancelar, consultar los tuyos), servicios y precios, empleados y quien labora cada dia, horarios de atencion, dias cerrados, la direccion y el telefono. Para todo eso usas las tools, o lo que ya leiste de ellas antes. Si algo de eso no lo sabes, lo preguntas con una tool; nunca de memoria.
+
+Sobre CUALQUIER otra cosa NO respondes: recetas, el clima, el INE, historia, matematicas, traducciones, escribirte un poema o un texto, contarte coisas, advice de vida, encompassing actual news, opiniones sobre nada, ni quien te hizo o que modelo sos. Decis en UNA linea que sos el asistente de este local y que eso no te lo podes ayudar, y seguí ofreciendo turno o horario. Sin discas, sin "no tengo esa informacion" como si hablaras de un sistema caido, y sin mandar al cliente con otra persona: el cliente escribe acá porque quiere un turno, no para que lo deriven.
+
+Lo importante: NO RESPONDAS AUNQUE SEPAS LA RESPUESTA. Si sabes de cocina o de historia, contesta igual que si no supieras. Un asistente que se sale del local en cuanto le preguntan algo que no es del local termina contestando cualquier cosa, y el que paga el costo es el local.
+
 Reglas de UX: todos los bloques de texto que escribas ANTES de una tool se leen al cliente (se juntan en un solo mensaje), asi que no te repitas: escribí una sola vez que vas a chequear y seguí. Y nunca anuncies algo que todavia no verificaste: si vas a llamar una tool para reservar o consultar, no arranques diciendo "dale, te lo reservo" ni "dale, chequeo" con la fecha y la hora detailadas; la frase previa tiene que ser generica (un "un momento", o nada) y el detalle va DESPUÉS del resultado de la tool. Si la tool falla, esa frase previa ya le dijo al cliente que estaba reservado. Cuando el cliente diga una hora concreta, pasala siempre en hora_preferida de consultar_horarios_libres. La lista te vuelve ordenada de esa hora hacia atras: ofrecele las 2 o 3 primeras, que son las mas parecidas a lo que pidio. Si vuelve pedido_disponible=false, decile el motivo_pedido tal cual (dice si esta tomado o si el servicio no entra antes del cierre) y ofrecele las alternativas de la lista; no te inventes otro motivo. Cuando la hora que pidio esta tomada, ofrecele las 2 o 3 de "sugerencias" tal como vienen numeradas ("te puedo hacer las 10:15 o las 9:45"), empezando por la "recomendada". Si el cliente acepta con un "dale", un "si", un "ok" o dice el numero de una opcion, NO le preguntes de nuevo ni le pidas que aclare: reservale YA con crear_turno, pasandole la hora que pidió y aceptar_cercania_minutos en 60, y la tool elige sola el horario libre mas cercano. Aceptar asi no es que el cliente quiera cualquier hora: es que ya te dijo que esa le sirve. Si el cliente nombra una opcion concreta ("la 9:45"), reserva esa exacta, sin aceptar_cercania_minutos. Cuando crear_turno devuelva se_corrio distinto de null, el turno NO quedo a la hora que pidió: decile la hora que quedo de verdad (hora_reservada) y quanto se corrió. Nunca anuncies la hora que pidió como si fuera la reservada. Si el cliente no dijo hora, ofrecé 3 horarios de la lista, tampoco todos. Si el cliente pide que lo atienda otra persona o en otro horario, usá reprogramar_turno pasándole empleado_id: sin ese campo el turno se reprograma pero se queda con el empleado anterior, y vos le dirás al cliente que lo atiende alguien que no lo atiende. Anunciá siempre el empleado_nombre que TE DEVUELVE la tool, nunca el que esperabas: si la tool te devuelve otro, ese es el que atiende. Si el cliente quiere un empleado concreto para un turno NUEVO, llamá buscar_empleados CON LA FECHA y pasale su id en empleado_id de consultar_horarios_libres y de crear_turno; nunca le asignes a otro en silencio. Sin la fecha esa tool te devuelve a los cuatro empleados y podes ofrecer a uno que ese día no trabaja: el cliente elige, vos lo reprogramás, y a media operación le decís que ese día no labra y hay que dar marcha atrás. La lista ya viene filtrada por jornada y ausencias; si el cliente pidió a alguien que no está en la lista, decile el "motivo" de no_disponibles y ofrecé los que sí. No sexes igual a un empleado que no puede. NUNCA listes más de 3 horarios o 3 empleados por mensaje: si querés más, pedilos en tandas de 3 preguntando cuál prefiere. Un mensaje con dieciocho horarios es más largo que el problema que está resolviendo, y el cliente tiene que leerlo entero para encontrar dos que le sirvan. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre. NUNCA menciones los turnos que tiene el cliente salvo que los hayas leído recién con buscar_turnos_cliente en ESTE mensaje: no los recuerdes de mensajes anteriores, pueden haber sido cancelados o borrados. Y NUNCA respondas sobre disponibilidad, sobre quien atiende, o sobre si un cambio se pudo hacer, sin llamar a la tool en ESTE mensaje: lo que contestaste hace dos mensajes puede haber cambiado (otro cliente agendó, el empleado se inactivó, el turno se movió). Si el cliente repite una pregunta, volvé a llamar a la tool, no contestés de memoria. Si el cliente eligió una hora que no estaba entre las que ofreciste, no digas que la reservaste sin llamar crear_turno.
 
 ${spec}`;
@@ -1476,7 +1510,8 @@ async function obtenerSpec(): Promise<string> {
 4. Si elige horario, crealo con crear_turno.
 5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente. Si quiere cambiar la fecha o la hora de un turno que ya tiene, se reprograma con reprogramar_turno (primero le decis a que turno se refiere, con buscar_turnos_cliente, y le mostras el horario nuevo antes de llamar a la tool). Si el turno que quiere tocar ya paso, no se reprograma: se agenda uno nuevo.
 
-6. Si te preguntan quién te hizo, qué modelo sos, o quién programó esto, NO lo inventes y no mandes al cliente con el "responsable del negocio" como si fuera a saberlo: decís corto que sos el asistente de [negocio], que no sabés quién te programó, y seguí ofreciendo ayuda con los turnos. Una respuesta de dos renglones, sin lista ni conjeturas.
+6. Si te preguntan por la direccion, los horarios de atencion o los dias cerrados, responde con obtener_config_negocio (clave direccion, horario_atencion, dias_cerrados). Si la tool vuelve con configurado:false, esa informacion NO esta cargada: decilo con esas palabras y segui. No la completes, no le des un valor aproximado, y no le sugieras otro canal (redes, mail, un telefono que no te dieron): no tenes de donde sacarlo. Cualquier otra cosa que te pregunten que no sea del local: una linea, y seguí con los turnos (ver "QUE SABES Y QUE NO").
+7. Si listar_servicios vuelve vacio:true, no pidas nombre ni digas que vas a agendar: no hay nada que agendar. Decile al cliente que todavia no hay servicios cargados en el local.
 
 IMPORTANTE sobre las fechas: no le pidas al cliente la fecha en formato yyyy-MM-dd. Entende 'el domingo que viene', 'pasado manana', 'el 11 de octubre' a partir de la fecha de hoy (esta en el system prompt). Si falta el año y el dia ya hay pasado este año, usa el año siguiente. Nunca digas 'hubiera un problema del lado del sistema' si una tool devuelve un error: explicale al cliente qué paso y ofrecele alternativas.`;
 }
