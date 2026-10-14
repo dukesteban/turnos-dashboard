@@ -44,6 +44,16 @@ __screenshots__/
 Thumbs.db
 .vercel
 
+# ─── Secretos ───
+#
+# Los tokens de Meta y las claves de servicio NO van en el repo: quedan en un
+# `.env.tokens` local, que este patrón ignora. Lo que se versiona es
+# `.env.tokens.example`, sin valores, para que se sepa qué hay que cargar y dónde.
+.env
+.env.*
+!.env.example
+!.env.tokens.example
+
 # Agent files (local only)
 agent.md
 memory.md
