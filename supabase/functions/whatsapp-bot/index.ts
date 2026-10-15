@@ -2158,9 +2158,60 @@ Deno.serve(async (req) => {
   const message = value?.messages?.[0];
   if (!message) return new Response('Sin mensaje, OK', { status: 200 });
 
-  const telefono = message.from;
+  /**
+ * El texto que escribió la persona, venga de donde venga.
+ *
+ * Meta no manda el texto siempre en `text.body`. Cuando alguien manda una FOTO con
+ * un comentario debajo, el texto va en `image.caption`. Con una nota de voz que
+ * llega ya transcrita por el dispositivo, va en `audio.caption`. Con un PDF
+ *Appointment goes in `document.caption`. Y si toca un boton de los que manda el
+ * negocio, va en `interactive`.
+ *
+ * Antes solo se leia `text.body`, asi que una clienta que mandaba una foto de un
+ * corte con "el lunes a las 10" escrito abajo recibia "Por ahora solo entiendo
+ * texto": habia escrito, y el bot no lo leia. Es el caso mas comun de todos, por
+ * cierto: la foto de referencia con el pedido al lado.
+ */
+function textoDelMensaje(message: any): string {
+  const m = message ?? {};
+  const limp = (v: any) => (typeof v === 'string' ? v.trim() : '');
+  const candidatos: any[] = [
+    m.text?.body,
+    m.image?.caption,
+    m.video?.caption,
+    m.document?.caption,
+    m.audio?.caption,
+    m.button?.text,
+    m.interactive?.button_reply?.title,
+    m.interactive?.list_reply?.title,
+  ];
+  for (const c of candidatos) {
+    const t = limp(c);
+    if (t) return t;
+  }
+  return '';
+}
+
+/** Si en los ultimos 30 minutos ya le avisamos que escriba, no repetimos. */
+async function avisoReciente(telefono: string): Promise<boolean> {
+  const { data } = await sb
+    .from('conversaciones').select('updated_at').eq('telefono', telefono).maybeSingle();
+  if (!data?.updated_at) return false;
+  return Date.now() - new Date(data.updated_at).getTime() < 30 * 60 * 1000;
+}
+
+/** El aviso para lo que no es texto, en el tono que eligio el negocio. */
+async function mensajeSinTexto(): Promise<string> {
+  const { data } = await sb.from('configuracion').select('valor').eq('clave', 'tono').maybeSingle();
+  const profesional = (data?.valor ?? '').trim() === 'profesional';
+  return profesional
+    ? 'Recibimos tu mensaje. No podemos procesar audios ni imágenes, así que escribinos tu consulta por acá y te respondemos a la brevedad.'
+    : 'Te leo! Se nos mandan las notas de voz y las imágenes pero no las podemos mirar, así que escribinos por acá qué necesitás y te ayudamos al toque.';
+}
+
+const telefono = message.from;
   const tipo = message.type;
-  const texto = message.text?.body?.trim() ?? '';
+  const texto = textoDelMensaje(message);
 
   // ─── El bot no se contesta a sí mismo ───
   // `display_phone_number` es el número desde el que envía el negocio. Cuando el
@@ -2173,9 +2224,31 @@ Deno.serve(async (req) => {
     return new Response('Mensaje propio, ignorado', { status: 200 });
   }
 
-  // Meta manda mensajes que no son texto (imagen, audio, etc). Se responde con un guion.
-  if (tipo !== 'text' || !texto) {
-    await responderWhatsApp(telefono, 'Por ahora solo entiendo texto.');
+  // Un like o un emoji NO es una pregunta. Contestarle "solo entiendo texto" a
+  // alguien que reaccionó es hablarle al lado, y peor: si manda tres audios seguidos
+  // recibe tres veces el mismo aviso. Eso se contesta UNA vez y despues se calla.
+  //
+  // Los audios SÍ son un problema real: en WhatsApp la gente escribe grabando, y un
+  // bot que contesta "no entiendo" a una nota de voz le deja de servir justo a la
+  // mitad de sus clientas. No hay transcripcion disponible aca, asi que el aviso
+  // dice que lo escriba y con limite de uno cada media hora.
+  if (!texto) {
+    const tipoSinVoz = new Set(['reaction', 'sticker', 'unsupported', 'unknown']);
+    if (!tipoSinVoz.has(tipo) && !(await avisoReciente(telefono))) {
+      await responderWhatsApp(telefono, await mensajeSinTexto());
+      // Se marca la conversacion para no repetir el aviso. Solo si NO existe: si ya
+      // hay una fila es que hay una conversacion en curso, y una foto en el medio no
+      // puede pisar el estado de una propuesta a medio confirmar.
+      const { data: hay } = await sb
+        .from('conversaciones').select('id').eq('telefono', telefono).maybeSingle();
+      if (!hay) {
+        await sb.from('conversaciones').insert({
+          telefono,
+          estado: 'aviso_sin_texto',
+          updated_at: new Date().toISOString(),
+        });
+      }
+    }
     return new Response('OK', { status: 200 });
   }
 
