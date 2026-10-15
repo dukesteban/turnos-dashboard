@@ -122,12 +122,33 @@ function icsEscapar(s: string): string {
     .replace(/\r?\n/g, '\\n');
 }
 
-/** El .ics del turno. Fines de línea CRLF, que es lo que pide el RFC. */
+/**
+ * El precio como lo escribe un humano: "$58.000".
+ *
+ * Devuelve el prefijo completo con el guion y el espacio, o cadena vacia si el turno no
+ * tiene precio cargado. Un turno sin precio es raro pero pasa en los turnos de prueba, y
+ * un "Lavado - $NaN - RyF" en el calendario del cliente es peor que no poner precio.
+ */
+function precioLegible(precio: number | string | null | undefined): string {
+  const n = Number(precio);
+  return precio == null || precio === '' || !Number.isFinite(n) ? '' : ` - $${Math.round(n).toLocaleString('es-AR')}`;
+}
+
+/**
+ * El .ics del turno. Fines de línea CRLF, que es lo que pide el RFC.
+ *
+ * SOLO va el nombre del negocio, el servicio y el precio. Antes también iban la
+ * dirección y un "para cambiarlo o cancelarlo escribinos por acá", y en Android eso
+ * es lo primero que se lee al abrir el evento: ocupa media pantalla con algo que el
+ * cliente ya sabe y que tiene a mano en el chat de todos modos. Y el link, que es lo
+ * que el cliente ve en la conversación, queda mas corto.
+ */
 function icsDelTurno(t: {
-  id: number; cliente_nombre: string; servicio_nombre: string;
-  fecha: string; hora_inicio: string; hora_fin: string; negocio: string; direccion?: string | null;
+  id: number; servicio_nombre: string; precio?: number | string | null;
+  fecha: string; hora_inicio: string; hora_fin: string; negocio: string;
 }): string {
   const f = (v: string) => icsEscapar(v);
+  const titulo = `${t.servicio_nombre}${precioLegible(t.precio)} - ${t.negocio}`;
   const lineas = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -141,14 +162,12 @@ function icsDelTurno(t: {
     `DTSTAMP:${utcDesdeLocal(t.fecha, '12:00')}`,
     `DTSTART:${utcDesdeLocal(t.fecha, String(t.hora_inicio).slice(0, 5))}`,
     `DTEND:${utcDesdeLocal(t.fecha, String(t.hora_fin ?? t.hora_inicio).slice(0, 5))}`,
-    `SUMMARY:${f(t.servicio_nombre)} - ${f(t.negocio)}`,
-    `DESCRIPTION:${f('Turno reservado para ' + t.cliente_nombre + '. Para cambiarlo o cancelarlo escribinos por acá.')}`,
-    ...(t.direccion ? [`LOCATION:${f(t.direccion)}`] : []),
+    `SUMMARY:${f(titulo)}`,
     'STATUS:CONFIRMED',
     'BEGIN:VALARM',
     'TRIGGER:-PT2H',
     'ACTION:DISPLAY',
-    `DESCRIPTION:${f(t.servicio_nombre)} - ${f(t.negocio)}`,
+    `DESCRIPTION:${f(titulo)}`,
     'END:VALARM',
     'END:VEVENT',
     'END:VCALENDAR',
@@ -181,26 +200,33 @@ function icsDelTurno(t: {
     .slice(0, 16);
 }
 
-/** Los dos links que se le mandan al cliente al confirmar. */
+/**
+ * Los dos links que se le mandan al cliente al confirmar.
+ *
+ * El de Google va con lo MINIMO: nombre del servicio, precio y nombre del negocio, que
+ * es lo unico que el cliente necesita para reconocer el turno en su lista. Antes tambien
+ * iban la direccion y un "para cambiarlo o cancelarlo escribinos por aca", y cada uno
+ * sumaba sus cuantos caracteres codificados al link entero. El link se copia, se pega y
+ * se manda por WhatsApp: cada caracter de mas es un caracter de mas en el chat.
+ *
+ * Sin `ctz`: las fechas van en UTC con la Z, asi que Google las convierte solo a la zona
+ * de quien las abre. El parametro solo servia para cuando la fecha venia sin zona.
+ */
 async function linksDeCalendario(t: {
-  id: number; cliente_nombre: string; servicio_nombre: string;
+  id: number; servicio_nombre: string; precio?: number | string | null;
   fecha: string; hora_inicio: string; hora_fin: string;
 }): Promise<{ google: string; ics: string }> {
   const negocio = await config('nombre_negocio');
-  const direccion = await config('direccion');
 
   const ini = utcDesdeLocal(t.fecha, String(t.hora_inicio).slice(0, 5));
   const fin = utcDesdeLocal(t.fecha, String(t.hora_fin ?? t.hora_inicio).slice(0, 5));
-  const resumen = `${t.servicio_nombre} - ${negocio}`;
-  const detalle = `Turno reservado para ${t.cliente_nombre}. Para cambiarlo o cancelarlo escribinos por acá.`;
+  const precio = precioLegible(t.precio);
+  const resumen = `${t.servicio_nombre}${precio} - ${negocio}`;
 
   const google =
     'https://calendar.google.com/calendar/render?action=TEMPLATE' +
     `&text=${encodeURIComponent(resumen)}` +
-    `&dates=${ini}/${fin}` +
-    `&details=${encodeURIComponent(detalle)}` +
-    (direccion ? `&location=${encodeURIComponent(direccion)}` : '') +
-    '&ctz=America/Argentina/Buenos_Aires';
+    `&dates=${ini}/${fin}`;
 
   const firma = await firmaDeTurno(t.id);
   // `i` y no `id`: cuatro caracteres por link no son nada, pero el link va a leer un
@@ -1279,8 +1305,8 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       const { data: quien } = await sb.from('empleados').select('nombre').eq('id', empId).maybeSingle();
       const calendario = await linksDeCalendario({
         id: nuevo.id,
-        cliente_nombre: nombreFinal,
         servicio_nombre: serv.nombre,
+        precio: serv.precio,
         fecha,
         hora_inicio: horaReservada,
         hora_fin: minAHora(hastaElegida),
@@ -1359,7 +1385,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
     }
     case 'reprogramar_turno': {
       const { turno_id, nueva_fecha_hora } = input;
-      const { data: turno } = await sb.from('turnos').select('fecha, hora_inicio, hora_fin, estado, servicio_id, duracion_minutos, servicio_nombre').eq('id', turno_id).single();
+      const { data: turno } = await sb.from('turnos').select('fecha, hora_inicio, hora_fin, estado, servicio_id, duracion_minutos, servicio_nombre, precio').eq('id', turno_id).single();
       if (!turno) return err('turno_no_encontrado');
       if (turno.estado === 'cancelado') return err('turno_cancelado');
 
@@ -1462,8 +1488,8 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       // el calendario a la hora que ya no es.
       const calendario = await linksDeCalendario({
         id: turno_id,
-        cliente_nombre: turno.cliente_nombre,
         servicio_nombre: turno.servicio_nombre,
+        precio: turno.precio,
         fecha: nuevaFecha,
         hora_inicio: nuevaHora,
         hora_fin: minAHora(hasta),
@@ -1838,7 +1864,7 @@ Deno.serve(async (req) => {
 
       const { data: t } = await sb
         .from('turnos')
-        .select('id, cliente_nombre, servicio_nombre, fecha, hora_inicio, hora_fin, estado')
+        .select('id, servicio_nombre, precio, fecha, hora_inicio, hora_fin, estado')
         .eq('id', id)
         .maybeSingle();
 
@@ -1849,13 +1875,12 @@ Deno.serve(async (req) => {
 
       const ics = icsDelTurno({
         id: t.id,
-        cliente_nombre: t.cliente_nombre,
         servicio_nombre: t.servicio_nombre,
+        precio: t.precio,
         fecha: t.fecha,
         hora_inicio: t.hora_inicio,
         hora_fin: t.hora_fin,
         negocio: await config('nombre_negocio'),
-        direccion: await config('direccion'),
       });
 
       const cancelado = t.estado === 'cancelado' ? ics.replace('STATUS:CONFIRMED', 'STATUS:CANCELLED') : ics;
