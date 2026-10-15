@@ -73,6 +73,8 @@ async function config(clave: string): Promise<string> {
 // Se vacia en cada mensaje: son de ESE turno, no de todos.
 let pendientesDeCalendario: { google: string; ics: string }[] = [];
 
+let falloTecnico = false;
+
 /** Los links si el modelo ya los puso, para no mandarlos dos veces. */
 function yaEstanEnElTexto(texto: string, c: { google: string; ics: string }): boolean {
   return texto.includes(c.google) || texto.includes(c.ics);
@@ -1818,17 +1820,28 @@ async function responderAlCliente(historial: any[], telefono: string, spec: stri
   const hoy = new Date();
   const hoyIso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
 
-  const system = `Sos el asistente por WhatsApp de ${negocio.nombre}.
-
-COMO HABLAS: ${negocio.tono}
-
-Este tono lo define el negocio desde Configuración. Si te piden un cambio de tono en la conversación ("sos formal conmigo", "hablame más formal"), no lo cambies vos: decile que lo ajusta el responsable desde Configuración y seguí con el tono actual.
-
-Fechas: hoy es ${hoyIso} (${DIAS_SEMANA[hoy.getDay()]}). Esta es la tabla de los próximos días, con el nombre de cada uno: ${tablaDeDias()}. Cuando el cliente diga un día ("el lunes", "el domingo que viene", "mañana", "el 20"), buscá la fecha en esta tabla y pasala así a las tools. NO la calcules vos: antes te equivocabas el día de la semana y el cliente recibía un horario del día equivocado. Tool de verdad antes de afirmar: nunca confirmás turno sin que crear_turno te devuelva ok, y nunca decís que un horario está libre sin antes llamar consultar_horarios_libres. Si una tool devuelve error, le explicás al cliente qué pasó y ofrecés otro camino.
-
-Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion, asi que abri presentandote como el bot de "${negocio.nombre}"${negocio.cierres ? ` y avisale que ${negocio.cierres}` : ''}. No lo hagas en los mensajes siguientes.` : 'ya te presentaste antes, no te vuelvas a presentar.'}
-
-QUE SABES Y QUE NO:
+  // ─── El prompt, partido en dos: lo que NUNCA cambia y lo que cambia ───
+  //
+  // Esto no es una reorganizacion reorganización, es un ahorro de plata directo.
+  //
+  // El prompt entero son ~5.300 tokens y se manda ÍNTEGRO en cada llamada a Claude.
+  // Y un mensaje de WhatsApp no es una llamada: agendar un turno son 3 a 5 vueltas
+  // (buscar cliente, ver servicios, ver horarios, reservar, confirmar). O sea que
+  // esas mismas 20 páginas se cobran 5 veces por cada mensaje que manda una clienta.
+  //
+  // Claude tiene prompt caching: un bloque de texto EXACTAMENTE igual al de la
+  // llamada anterior se cobra al 10%. El problema era que el prompt arrancaba con
+  // "Sos el asistente de Test Peluquería" y tenía adentro "hoy es 2026-10-15", así
+  // que cambiaba en cada llamada y Claude no lo reconocía como repetido: caché vacía,
+  // siempre.
+  //
+  // Por eso el prompt va partido. Primero y con `cache_control` lo que es palabra
+  // fija (todas las reglas, el alcance, el spec). Al final, sin cachear, lo que
+  // depende del día y del negocio. Claude cobra el 10% de lo de arriba y el 100% de
+  // estas cuatro líneas.
+  //
+  // No se movió ni una regla: es el mismo prompt, en otro orden.
+  const parteFija = `QUE SABES Y QUE NO:
 
 Este es el alcance de tu trabajo, y es CERRADO. Respondés solo sobre ESTE negocio:
 turnos (agendar, reprogramar, cancelar, consultar los tuyos), servicios y precios, empleados y quien trabaja cada dia, horarios de atencion, dias cerrados, la direccion y el telefono. Para todo eso usas las tools, o lo que ya leiste de ellas antes. Si algo de eso no lo sabes, lo preguntas con una tool; nunca de memoria.
@@ -1859,6 +1872,23 @@ CUANDO UN DÍA ESTÉ LLENO, decilo. Se lo que pasó: el cliente pidió el lunes 
 Por qué sin preguntar: preguntar es una ida y vuelta más en CADA reserva, y le sirve a una parte sola. Mandándolo siempre, el que lo quiere lo tiene y el que no, ignora una línea al final. CUANDO EL CLIENTE PIDA MOVER UN TURNO, SEPARÁ SI CAMBIA EL DIA O SOLO LA HORA, porque no es lo mismo y equivocarse mueve el turno una semana entera. Si dice "a las 16", "mas tarde", "mas temprano", "lo corro un rato", "lo muevo un toque", SOLO cambio de hora: es el MISMO dia, y le tenés que pasar la hora SUELTA a reprogramar_turno (nueva_fecha_hora: "16:00"), sin fecha, porque la herramienta mantiene la del turno sola. NUNCA recalcules el dia en ese caso. El error que se vio al probar: la clienta estaba el jueves 29, pidio "el jueves a las 16", y el turno quedo el jueves 22, una semana antes, porque el dia se armo desde hoy en vez de desde el turno que ya tenia. Si el cliente pide OTRO dia ("lo paso al viernes", "para la semana que viene"), ahi si mandale el dia completo, y no se lo recalcules vos si no te lo dijo: preguntale el dia exacto. Cuando reprogrames, anunciá siempre el dia COMPLETO, aunque no haya cambiado ("te lo muevo a las 16 del jueves 29"): es la unica forma de que la clienta vea que no se corrio de fecha. La herramienta te devuelve fecha_se_mantuvo: si dice true, el dia no se toco y podés decirlo con esas palabras ("el mismo dia, a las 16"). Y si el turno se reprograma, mandá los links NUEVOS, nunca los viejos. Ojo que los dos links no se comportan igual y por eso el de Google da un problema: el link del iPhone es el MISMO (su firma y su UID dependen solo del id del turno, no de la fecha), asi que el que ya tiene guardado le va a mostrar la hora nueva solo. El de Google, en cambio, lleva la hora escrita adentro: si vuelve a tocar el link viejo, Google le AGREGA un segundo evento a la hora vieja, al lado del bueno, y se queda con dos. Por eso, cuando reprogrames un turno que ya le habías confirmado antes con links, sumale al final una linea corta, DESPUES de la confirmacion y antes de los links, pidiendole que borre el evento de la hora anterior del calendario. Solo en ese caso, no la primera vez que agendás: la primera vez no hay nada que borrar y la linea confunde. UN SERVICIO POR MENSAJE, Y UN TURNO POR VEZ: si el cliente quiere tres servicios, eso son tres turnos agendados de a uno, NO tres llamadas a crear_turno en el mismo mensaje. Agendá el primero, confirmá, y recién ahí preguntale si quiere agregar otro; al siguiente hacé lo mismo. No es capricho: cada turno tiene que entrar antes del cierre y no pisarse con lo anterior, y si los cargás juntos te enterás de los conflictos cuando ya reservaste. Cuando el cliente pida mas de un servicio, decile que los vas a ir anotando uno por uno y arrancá por el primero. NUNCA listes mas de 3 horarios o 3 empleados por mensaje: si queres mas, pedilos en tandas de 3 preguntando cuál prefiere. Un mensaje con dieciocho horarios es mas largo que el problema que estas resolviendo, y el cliente tiene que leerlo entero para encontrar dos que le sirvan. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre. NUNCA menciones los turnos que tiene el cliente salvo que los hayas leído recién con buscar_turnos_cliente en ESTE mensaje: no los recuerdes de mensajes anteriores, pueden haber sido cancelados o borrados. Y NUNCA respondas sobre disponibilidad, sobre quien atiende, o sobre si un cambio se pudo hacer, sin llamar a la tool en ESTE mensaje: lo que contestaste hace dos mensajes puede haber cambiado (otro cliente agendó, el empleado se inactivó, el turno se movió). Si el cliente repite una pregunta, volvé a llamar a la tool, no contestés de memoria. Si el cliente eligió una hora que no estaba entre las que ofreciste, no digas que la reservaste sin llamar crear_turno.
 
 ${spec}`;
+
+  // Lo único que cambia entre llamada y llamada va ACÁ, al final, y sin cachear.
+  const parteVariable = `Sos el asistente por WhatsApp de ${negocio.nombre}.
+
+COMO HABLAS: ${negocio.tono}
+
+Este tono lo define el negocio desde Configuración. Si te piden un cambio de tono en la conversación ("sos formal conmigo", "hablame más formal"), no lo cambies vos: decile que lo ajusta el responsable desde Configuración y seguí con el tono actual.
+
+Fechas: hoy es ${hoyIso} (${DIAS_SEMANA[hoy.getDay()]}). Esta es la tabla de los próximos días, con el nombre de cada uno: ${tablaDeDias()}. Cuando el cliente diga un día ("el lunes", "el domingo que viene", "mañana", "el 20"), buscá la fecha en esta tabla y pasala así a las tools. NO la calcules vos: antes te equivocabas el día de la semana y el cliente recibía un horario del día equivocado. Tool de verdad antes de afirmar: nunca confirmás turno sin que crear_turno te devuelva ok, y nunca decís que un horario está libre sin antes llamar consultar_horarios_libres. Si una tool devuelve error, le explicás al cliente qué pasó y ofrecés otro camino.
+
+Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion, asi que abri presentandote como el bot de "${negocio.nombre}"${negocio.cierres ? ` y avisale que ${negocio.cierres}` : ''}. No lo hagas en los mensajes siguientes.` : 'ya te presentaste antes, no te vuelvas a presentar.'}`;
+
+  // El `cache_control` va en el ÚLTIMO bloque, que marca dónde termina lo cacheado.
+  const system: any[] = [
+    { type: 'text', text: parteFija, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: parteVariable },
+  ];
 
   const tools = TOOLS.map((t) => ({
     name: t.name,
@@ -2053,7 +2083,17 @@ function sinRepetir(partes: string[]): string {
   return salida.join('\n\n') || 'Disculpá, no te entendí. ¿Querés que te mire un turno?';
 }
 
-async function llamarClaude(system: string, historial: any[], tools: any[]): Promise<any> {
+async function llamarClaude(system: any, historial: any[], tools: any[]): Promise<any> {
+  // Segundo punto de corte de caché, en el ÚLTIMO tool.
+  //
+  // El prefijo que Claude mira es: system -> tools -> messages. El `cache_control` del
+  // system ya cachea la parte fija. Este marca el final de tools también, y ese
+  // tramo SÍ se repite entre las 3 o 5 llamadas que hace un mismo mensaje de
+  // WhatsApp: mismo día, mismo nombre de negocio, mismos parametros de tools.
+  const toolsConCache = tools.length
+    ? tools.map((t, i) => (i === tools.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t))
+    : tools;
+
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -2066,7 +2106,7 @@ async function llamarClaude(system: string, historial: any[], tools: any[]): Pro
       max_tokens: 1024,
       system,
       messages: historial,
-      tools,
+      tools: toolsConCache,
     }),
   });
   if (!r.ok) {
@@ -2075,6 +2115,8 @@ async function llamarClaude(system: string, historial: any[], tools: any[]): Pro
   }
   return await r.json();
 }
+
+
 
 // ─── Handler principal ───
 Deno.serve(async (req) => {
@@ -2280,6 +2322,7 @@ const telefono = message.from;
     respuesta = await responderAlCliente(historialSano, telefono, spec);
     respuesta = agregarLinksDeCalendario(respuesta);
   } catch (e: any) {
+    falloTecnico = true;
     console.error(e);
     // El `console.error` solo lo ve el que tiene el dashboard de Supabase con los
     // logs en vivo. El que atiende en el local solo ve "se me cayó la conexión", y
@@ -2304,7 +2347,7 @@ const telefono = message.from;
   // Si respondió bien, no hay error pendiente: se limpia. Así la columna dice la
   // verdad, que es "el ÚLTIMO fallo", y no algo viejo de hace tres días que hace
   // creer que el bot sigue roto cuando ya anda.
-  if (!respuesta.startsWith('Uy, se me cayó')) {
+  if (!falloTecnico) {
     await sb.from('conversaciones').update({ ultimo_error: null }).eq('telefono', telefono);
   }
 
