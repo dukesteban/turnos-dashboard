@@ -59,6 +59,25 @@ async function config(clave: string): Promise<string> {
   return (data?.valor ?? '').trim();
 }
 
+// ─── Links del calendario que hay que mandar al final del mensaje ───
+//
+// El modelo NO es confiable para esto. Se probo: la tool devuelve `calendario` y en
+// una de cada dos confirmaciones lo copia al mensaje; en la otra se olvida y el
+// cliente recibe un turno confirmado sin ninguna forma de guardarlo.
+//
+// Con el mismo criterio que el "un momento, chequeo": si algo tiene que pasar SIEMPRE,
+// no se le pide al modelo que se acuerde, lo hace el codigo. El modelo sigue
+// escribiendo la frase natural ("ahora te paso el link...") y el codigo agrega los
+// links si no los puso.
+//
+// Se vacia en cada mensaje: son de ESE turno, no de todos.
+let pendientesDeCalendario: { google: string; ics: string }[] = [];
+
+/** Los links si el modelo ya los puso, para no mandarlos dos veces. */
+function yaEstanEnElTexto(texto: string, c: { google: string; ics: string }): boolean {
+  return texto.includes(c.google) || texto.includes(c.ics);
+}
+
 // ─── AGENDAR EL TURNO EN EL CALENDARIO DEL CLIENTE ───
 //
 // Después de confirmar, el cliente quiere tenerlo en su calendario, no anotado en un
@@ -1266,6 +1285,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         hora_inicio: horaReservada,
         hora_fin: minAHora(hastaElegida),
       });
+      pendientesDeCalendario.push(calendario);
       return JSON.stringify({
         ok: true,
         turno_id: nuevo.id,
@@ -1448,6 +1468,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         hora_inicio: nuevaHora,
         hora_fin: minAHora(hasta),
       });
+      pendientesDeCalendario.push(calendario);
 
       return JSON.stringify({
         ok: true,
@@ -1566,12 +1587,12 @@ Lo importante: NO RESPONDAS AUNQUE SEPAS LA RESPUESTA. Si sabes de cocina o de h
 
 COMO LE HABLAS AL CLIENTE: usá palabras de CLIENTE, no de sistema. "Trabaja", "atiende", "está", "turno", "horario". Nunca "labra" ni "labora": es jerga de la base de datos y el cliente no la entiende ni la pidió. Decí "quién trabaja el miércoles", nunca "quién labra". Lo mismo con "disponible", "agenda", "sistema", "registro" y "base": el cliente piensa en turnos y en el local, no en tablas. Excepciones, y solo si el cliente las usa primero: si te dice "el sábado labra hasta la una", contestale con esa palabra.
 
-Reglas de UX: NUNCA escribas nada antes de una tool. Cero texto, ni un "un momento", ni un "chequeo", ni un "dale". La tool corre y vos respondés DESPUÉS con la respuesta. El cliente no quiere ver tu proceso, quiere la respuesta: si le mandás "un momento, chequeo" y dos segundos después la hora que le sirve, leyó una línea que no le sirvió de nada. Si la respuesta necesita ser corta, tanto mejor. (se juntan en un solo mensaje), asi que no te repitas: escribí una sola vez que vas a chequear y seguí. Y nunca anuncies algo que todavia no verificaste: si vas a llamar una tool para reservar o consultar, no arranques diciendo "dale, te lo reservo" ni "dale, chequeo" con la fecha y la hora detailadas; la frase previa tiene que ser generica (un "un momento", o nada) y el detalle va DESPUÉS del resultado de la tool. Si la tool falla, esa frase previa ya le dijo al cliente que estaba reservado. Cuando el cliente diga una hora concreta, pasala siempre en hora_preferida de consultar_horarios_libres. La lista te vuelve ordenada de esa hora hacia atras: ofrecele las 2 o 3 primeras, que son las mas parecidas a lo que pidio. Si vuelve pedido_disponible=false, decile el motivo_pedido tal cual (dice si esta tomado o si el servicio no entra antes del cierre) y ofrecele las alternativas de la lista; no te inventes otro motivo. Cuando la hora que pidio esta tomada, ofrecele las 2 o 3 de "sugerencias" tal como vienen numeradas ("te puedo hacer las 10:15 o las 9:45"), empezando por la "recomendada". Si el cliente acepta con un "dale", un "si", un "ok" o dice el numero de una opcion, NO le preguntes de nuevo ni le pidas que aclare: reservale YA con crear_turno, pasandole la hora que pidió y aceptar_cercania_minutos en 60, y la tool elige sola el horario libre mas cercano. Aceptar asi no es que el cliente quiera cualquier hora: es que ya te dijo que esa le sirve. Si el cliente nombra una opcion concreta ("la 9:45"), reserva esa exacta, sin aceptar_cercania_minutos. Cuando crear_turno devuelva se_corrio distinto de null, el turno NO quedo a la hora que pidió: decile la hora que quedo de verdad (hora_reservada) y quanto se corrió. Nunca anuncies la hora que pidió como si fuera la reservada. PROPONÉ, NO PREGUNTES DE A UN DATO: si el cliente pidió un servicio y todavía no dijo día ni hora, NO le preguntes "¿qué día te viene bien?" para después preguntarle "¿a qué hora?". Llamá consultar_horarios_libres con el primer día que tenga horarios y PROPONÉ una hora concreta, como "mañana jueves a las 15:00 te puedo hacer la manicura, ¿te sirve?". Si querés dar opciones, UNA alternativa más, no tres. El cliente contesta "dale" y listo. Preguntar dato por dato lo hace escribir tres mensajes para obtener la misma información que él ya te iba a dar. Lo mismo cuando pide varias cosas de una vez: proponé el horario del primer servicio enseguida. Y el nombre se pregunta UNA sola vez por conversación: si ya lo preguntaste y no respondió, no lo vuelvas a preguntar en el mensaje siguiente. Si el cliente pide que lo atienda otra persona o en otro horario, usá reprogramar_turno pasándole empleado_id: sin ese campo el turno se reprograma pero se queda con el empleado anterior, y vos le dirás al cliente que lo atiende alguien que no lo atiende. Anunciá siempre el empleado_nombre que TE DEVUELVE la tool, nunca el que esperabas: si la tool te devuelve otro, ese es el que atiende. Si el cliente quiere un empleado concreto para un turno NUEVO, llamá buscar_empleados CON LA FECHA y pasale su id en empleado_id de consultar_horarios_libres y de crear_turno; nunca le asignes a otro en silencio. Sin la fecha esa tool te devuelve a los cuatro empleados y podes ofrecer a uno que ese día no trabaja: el cliente elige, vos lo reprogramás, y a media operación le decís que ese día no labra y hay que dar marcha atrás. La lista ya viene filtrada por jornada y ausencias; si el cliente pidió a alguien que no está en la lista, decile el "motivo" de no_disponibles y ofrecé los que sí. No sexes igual a un empleado que no puede. NUNCA digas "voy a cancelar" o "te lo muevo" si no llamaste a cancelar_turno o reprogramar_turno en ese mismo mensaje y te devolvieron ok. Si el bot ofrece una alternativa antes de terminar, NO agends el turno nuevo hasta que el cliente acepte: asi no queda nada que cancelar despues. Fue EXACTAMENTE lo que paso con una coloracion que quedo agendada dos veces el mismo dia. CADA VEZ QUE AGENDAS O MOVES UN TURNO, mandale los links del calendario, SIN PREGUNTAR si los quiere. Cuando crear_turno o reprogramar_turno te devuelvan el campo calendario, poné los DOS links al final del mensaje de confirmación, en dos líneas cortas, así:
+Reglas de UX: NUNCA escribas nada antes de una tool. Cero texto, ni un "un momento", ni un "chequeo", ni un "dale". La tool corre y vos respondés DESPUÉS con la respuesta. El cliente no quiere ver tu proceso, quiere la respuesta: si le mandás "un momento, chequeo" y dos segundos después la hora que le sirve, leyó una línea que no le sirvió de nada. Si la respuesta necesita ser corta, tanto mejor. (se juntan en un solo mensaje), asi que no te repitas: escribí una sola vez que vas a chequear y seguí. Y nunca anuncies algo que todavia no verificaste: si vas a llamar una tool para reservar o consultar, no arranques diciendo "dale, te lo reservo" ni "dale, chequeo" con la fecha y la hora detailadas; la frase previa tiene que ser generica (un "un momento", o nada) y el detalle va DESPUÉS del resultado de la tool. Si la tool falla, esa frase previa ya le dijo al cliente que estaba reservado. Cuando el cliente diga una hora concreta, pasala siempre en hora_preferida de consultar_horarios_libres. La lista te vuelve ordenada de esa hora hacia atras: ofrecele las 2 o 3 primeras, que son las mas parecidas a lo que pidio. Si vuelve pedido_disponible=false, decile el motivo_pedido tal cual (dice si esta tomado o si el servicio no entra antes del cierre) y ofrecele las alternativas de la lista; no te inventes otro motivo. Cuando la hora que pidio esta tomada, ofrecele las 2 o 3 de "sugerencias" tal como vienen numeradas ("te puedo hacer las 10:15 o las 9:45"), empezando por la "recomendada". Si el cliente acepta con un "dale", un "si", un "ok" o dice el numero de una opcion, NO le preguntes de nuevo ni le pidas que aclare: reservale YA con crear_turno, pasandole la hora que pidió y aceptar_cercania_minutos en 60, y la tool elige sola el horario libre mas cercano. Aceptar asi no es que el cliente quiera cualquier hora: es que ya te dijo que esa le sirve. Si el cliente nombra una opcion concreta ("la 9:45"), reserva esa exacta, sin aceptar_cercania_minutos. Cuando crear_turno devuelva se_corrio distinto de null, el turno NO quedo a la hora que pidió: decile la hora que quedo de verdad (hora_reservada) y quanto se corrió. Nunca anuncies la hora que pidió como si fuera la reservada. PROPONÉ, NO PREGUNTES DE A UN DATO: si el cliente pidió un servicio y todavía no dijo día ni hora, NO le preguntes "¿qué día te viene bien?" para después preguntarle "¿a qué hora?". Llamá consultar_horarios_libres con el primer día que tenga horarios y PROPONÉ una hora concreta, como "mañana jueves a las 15:00 te puedo hacer la manicura, ¿te sirve?". Si querés dar opciones, UNA alternativa más, no tres. El cliente contesta "dale" y listo. Preguntar dato por dato lo hace escribir tres mensajes para obtener la misma información que él ya te iba a dar. Lo mismo cuando pide varias cosas de una vez: proponé el horario del primer servicio enseguida. Y el nombre se pregunta UNA sola vez por conversación: si ya lo preguntaste y no respondió, no lo vuelvas a preguntar en el mensaje siguiente. Si el cliente pide que lo atienda otra persona o en otro horario, usá reprogramar_turno pasándole empleado_id: sin ese campo el turno se reprograma pero se queda con el empleado anterior, y vos le dirás al cliente que lo atiende alguien que no lo atiende. Anunciá siempre el empleado_nombre que TE DEVUELVE la tool, nunca el que esperabas: si la tool te devuelve otro, ese es el que atiende. Si el cliente quiere un empleado concreto para un turno NUEVO, llamá buscar_empleados CON LA FECHA y pasale su id en empleado_id de consultar_horarios_libres y de crear_turno; nunca le asignes a otro en silencio. Sin la fecha esa tool te devuelve a los cuatro empleados y podes ofrecer a uno que ese día no trabaja: el cliente elige, vos lo reprogramás, y a media operación le decís que ese día no labra y hay que dar marcha atrás. La lista ya viene filtrada por jornada y ausencias; si el cliente pidió a alguien que no está en la lista, decile el "motivo" de no_disponibles y ofrecé los que sí. No sexes igual a un empleado que no puede. NUNCA digas "voy a cancelar" o "te lo muevo" si no llamaste a cancelar_turno o reprogramar_turno en ese mismo mensaje y te devolvieron ok. Si el bot ofrece una alternativa antes de terminar, NO agends el turno nuevo hasta que el cliente acepte: asi no queda nada que cancelar despues. Fue EXACTAMENTE lo que paso con una coloracion que quedo agendada dos veces el mismo dia. CADA VEZ QUE AGENDAS O MOVES UN TURNO, mandale los links del calendario, SIN PREGUNTAR si los quiere. Cuando crear_turno o reprogramar_turno te devuelvan el campo calendario, poné los DOS links al final del mensaje de confirmación, así:
 
 📅 Google: <el link de calendario.google>
 📅 iPhone: <el link de calendario.ics>
 
-Sin escribir nada más alrededor: ni "querés que te lo mande", ni "guardalo en tu calendario", ni explicar qué es cada uno. Solo el emoji, la palabra y el link. El link ya empieza con https y WhatsApp lo vuelve clickeable solo.
+Con una línea antes que diga, corta y natural, que se los estás pasando para su calendario. Variá la palabra: "Ahora te paso el link para tu calendario", "Te dejo el link para que lo guardes", "Andá guardándolo en el calendario". Una sola frase, nunca dos. Solo el emoji, la palabra y el link. El link ya empieza con https y WhatsApp lo vuelve clickeable solo.
 
 Por qué sin preguntar: preguntar es una ida y vuelta más en CADA reserva, y le sirve a una parte sola. Mandándolo siempre, el que lo quiere lo tiene y el que no, ignora una línea al final. Y si el turno se reprograma, mandá los links NUEVOS, nunca los viejos: el viejo tiene la hora que ya no es. UN SERVICIO POR MENSAJE, Y UN TURNO POR VEZ: si el cliente quiere tres servicios, eso son tres turnos agendados de a uno, NO tres llamadas a crear_turno en el mismo mensaje. Agendá el primero, confirmá, y recién ahí preguntale si quiere agregar otro; al siguiente hacé lo mismo. No es capricho: cada turno tiene que entrar antes del cierre y no pisarse con lo anterior, y si los cargás juntos te enterás de los conflictos cuando ya reservaste. Cuando el cliente pida mas de un servicio, decile que los vas a ir anotando uno por uno y arrancá por el primero. NUNCA listes mas de 3 horarios o 3 empleados por mensaje: si queres mas, pedilos en tandas de 3 preguntando cuál prefiere. Un mensaje con dieciocho horarios es mas largo que el problema que estas resolviendo, y el cliente tiene que leerlo entero para encontrar dos que le sirvan. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre. NUNCA menciones los turnos que tiene el cliente salvo que los hayas leído recién con buscar_turnos_cliente en ESTE mensaje: no los recuerdes de mensajes anteriores, pueden haber sido cancelados o borrados. Y NUNCA respondas sobre disponibilidad, sobre quien atiende, o sobre si un cambio se pudo hacer, sin llamar a la tool en ESTE mensaje: lo que contestaste hace dos mensajes puede haber cambiado (otro cliente agendó, el empleado se inactivó, el turno se movió). Si el cliente repite una pregunta, volvé a llamar a la tool, no contestés de memoria. Si el cliente eligió una hora que no estaba entre las que ofreciste, no digas que la reservaste sin llamar crear_turno.
 
@@ -1639,6 +1660,31 @@ ${spec}`;
   }
 
   return unirRespuesta(partes, esPrimerMensaje);
+}
+
+/**
+ * Le agrega al final los links del calendario de los turnos que se acaban de crear o
+ * mover, SI el modelo no los puso.
+ *
+ * El modelo los copia una de cada dos veces. Cuando se olvida, el cliente recibe un
+ * turno confirmado sin ninguna forma de guardarlo, y no se da cuenta de que le falta
+ * algo: para él la conversación terminó bien.
+ *
+ * La frase antes de los links la escribe el modelo (en el mensaje ya viene algo como
+ * "te lo reservé"), y acá va solo una linea neutra si el mensaje no parece estar
+ * pasando los links.
+ */
+function agregarLinksDeCalendario(texto: string): string {
+  const faltan = pendientesDeCalendario.filter((c) => !yaEstanEnElTexto(texto, c));
+  if (faltan.length === 0) return texto;
+
+  const partes = [texto.trimEnd()];
+  for (const c of faltan) {
+    partes.push(
+      `📅 Google: ${c.google}\n📅 iPhone: ${c.ics}`,
+    );
+  }
+  return partes.join('\n\n');
 }
 
 /**
@@ -1895,7 +1941,10 @@ Deno.serve(async (req) => {
 
   let respuesta = '';
   try {
+    // Se vacía antes de responder: los links son de ESTE turno, no de los anteriores.
+    pendientesDeCalendario = [];
     respuesta = await responderAlCliente(historialSano, telefono, spec);
+    respuesta = agregarLinksDeCalendario(respuesta);
   } catch (e: any) {
     console.error(e);
     // Si algo falla, al menos que el cliente tenga por donde pedir ayuda en vez de
