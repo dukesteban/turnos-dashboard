@@ -47,6 +47,144 @@ const VERIFY_TOKEN = Deno.env.get('WHATSAPP_VERIFY_TOKEN') ?? '';
 
 const sb = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
 
+/**
+ * Una clave suelta de `configuracion`, o "" si no está.
+ *
+ * Vive acá y no dentro de `ejecutarTool` porque la usan cosas que NO son tools: los
+ * links del calendario y el .ics tienen que traer el nombre del negocio y la
+ * dirección, y ninguno de los dos pasa por el modelo.
+ */
+async function config(clave: string): Promise<string> {
+  const { data } = await sb.from('configuracion').select('valor').eq('clave', clave).maybeSingle();
+  return (data?.valor ?? '').trim();
+}
+
+// ─── AGENDAR EL TURNO EN EL CALENDARIO DEL CLIENTE ───
+//
+// Después de confirmar, el cliente quiere tenerlo en su calendario, no anotado en un
+// chat. Se le dan dos links:
+//
+//   · Google Calendar: una URL que abre el formulario de "crear evento" ya completo.
+//     Google la genera sola, no hace falta ningún archivo.
+//   · iOS (y Android, y Outlook, y desktop): un archivo .ics, que es EL estándar.
+//     El calendario de Apple lo abre al tocarlo.
+//
+// El .ics lo sirve esta misma función en `/turno.ics`, así que no hay que subir
+// ningún archivo a ningún lado ni guardar el calendario en una tabla.
+
+/**
+ * Argentina es UTC-3 fijo desde 2009 (no hay horario de verano).
+ *
+ * Se usa el mismo -3 en los dos lados, no `toISOString()` sobre una fecha parseada
+ * sin zona, que es donde estos cálculos se corren un día.
+ */
+const OFFSET_AR = -3;
+
+function utcDesdeLocal(fechaISO: string, hhmm: string): string {
+  // "YYYY-MM-DD" + "HH:MM" -> timestamp en UTC -> "YYYYMMDDTHHMMSSZ"
+  const [y, m, d] = fechaISO.split('-').map(Number);
+  const [hh, mm] = hhmm.split(':').map(Number);
+  const ms = Date.UTC(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0) - OFFSET_AR * 3600 * 1000;
+  return new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+
+/**
+ * Escapa un texto para .ics.
+ *
+ * El RFC 5545 obliga a escapar la coma, el punto y coma, la barra invertida y los
+ * saltos de línea. Sin esto, un servicio que se llame "Corte, lavado" parte el
+ * evento en dos y el calendario muestra basura.
+ */
+function icsEscapar(s: string): string {
+  return (s ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+/** El .ics del turno. Fines de línea CRLF, que es lo que pide el RFC. */
+function icsDelTurno(t: {
+  id: number; cliente_nombre: string; servicio_nombre: string;
+  fecha: string; hora_inicio: string; hora_fin: string; negocio: string; direccion?: string | null;
+}): string {
+  const f = (v: string) => icsEscapar(v);
+  const lineas = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    `PRODID:-//${f(t.negocio)}//Turnos//ES`,
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    // El UID tiene que ser único y estable: es lo que hace que el calendario
+    // actualice el evento en vez de duplicarlo si el cliente toca el link dos veces.
+    `UID:turno-${t.id}@${new URL(SUPABASE_URL).host}`,
+    `DTSTAMP:${utcDesdeLocal(t.fecha, '12:00')}`,
+    `DTSTART:${utcDesdeLocal(t.fecha, String(t.hora_inicio).slice(0, 5))}`,
+    `DTEND:${utcDesdeLocal(t.fecha, String(t.hora_fin ?? t.hora_inicio).slice(0, 5))}`,
+    `SUMMARY:${f(t.servicio_nombre)} - ${f(t.negocio)}`,
+    `DESCRIPTION:${f('Turno reservado para ' + t.cliente_nombre + '. Para cambiarlo o cancelarlo escribinos por acá.')}`,
+    ...(t.direccion ? [`LOCATION:${f(t.direccion)}`] : []),
+    'STATUS:CONFIRMED',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT2H',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${f(t.servicio_nombre)} - ${f(t.negocio)}`,
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ];
+  return lineas.join('\r\n') + '\r\n';
+}
+
+/**
+ * Firma del link del .ics, para que no se pueda adivinar el turno de otro.
+ *
+ * Sin esto, `?id=1`, `?id=2`... dejaría que cualquiera que tuviera la URL base
+ * leyera los turnos de todos los clientes del local. Con la firma, hace falta el
+ * secreto.
+ */async function firmaDeTurno(id: number): Promise<string> {
+  const clave = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(VERIFY_TOKEN || 'carwash'),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const buf = await crypto.subtle.sign('HMAC', clave, new TextEncoder().encode(`turno:${id}`));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 32);
+}
+
+/** Los dos links que se le mandan al cliente al confirmar. */
+async function linksDeCalendario(t: {
+  id: number; cliente_nombre: string; servicio_nombre: string;
+  fecha: string; hora_inicio: string; hora_fin: string;
+}): Promise<{ google: string; ics: string }> {
+  const negocio = await config('nombre_negocio');
+  const direccion = await config('direccion');
+
+  const ini = utcDesdeLocal(t.fecha, String(t.hora_inicio).slice(0, 5));
+  const fin = utcDesdeLocal(t.fecha, String(t.hora_fin ?? t.hora_inicio).slice(0, 5));
+  const resumen = `${t.servicio_nombre} - ${negocio}`;
+  const detalle = `Turno reservado para ${t.cliente_nombre}. Para cambiarlo o cancelarlo escribinos por acá.`;
+
+  const google =
+    'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+    `&text=${encodeURIComponent(resumen)}` +
+    `&dates=${ini}/${fin}` +
+    `&details=${encodeURIComponent(detalle)}` +
+    (direccion ? `&location=${encodeURIComponent(direccion)}` : '') +
+    '&ctz=America/Argentina/Buenos_Aires';
+
+  const firma = await firmaDeTurno(t.id);
+  const ics = `${SUPABASE_URL}/functions/v1/whatsapp-bot/turno.ics?id=${t.id}&f=${firma}`;
+
+  return { google, ics };
+}
+
 // ─── Tools, con sus descripciones para el modelo ───
 // El nombre va con guion bajo porque Anthropic no acepta guionesmedios en los nombres
 // de tools. La descripcion le dice al modelo QUE hace y CUANDO la usa.
@@ -1114,9 +1252,21 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
 
       if (errIns) return err('error_creando_turno', errIns.message);
       const { data: quien } = await sb.from('empleados').select('nombre').eq('id', empId).maybeSingle();
+      const calendario = await linksDeCalendario({
+        id: nuevo.id,
+        cliente_nombre: nombreFinal,
+        servicio_nombre: serv.nombre,
+        fecha,
+        hora_inicio: horaReservada,
+        hora_fin: minAHora(hastaElegida),
+      });
       return JSON.stringify({
         ok: true,
         turno_id: nuevo.id,
+        // Para que el cliente lo guarde en SU calendario. Ya vienen listos y con la
+        // hora correcta: el modelo no tiene que armar ninguna URL, que es donde
+        // se erran los minutos y la zona horaria.
+        calendario,
         // Que se reserve. Si el modelo anuncia `hora_pedida` en vez de esta, le
         // miente al cliente en la cara: por eso van las dos y el aviso va con esta.
         fecha_reservada: fecha,
@@ -1281,6 +1431,18 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         ? await sb.from('empleados').select('nombre').eq('id', empleadoFinal).maybeSingle()
         : { data: null };
 
+      // El link del calendario se REGENERA con la hora nueva. El que se le pasó al
+      // cliente cuando agendó tiene la hora vieja, así que reenviarlo lo metería en
+      // el calendario a la hora que ya no es.
+      const calendario = await linksDeCalendario({
+        id: turno_id,
+        cliente_nombre: turno.cliente_nombre,
+        servicio_nombre: turno.servicio_nombre,
+        fecha: nuevaFecha,
+        hora_inicio: nuevaHora,
+        hora_fin: minAHora(hasta),
+      });
+
       return JSON.stringify({
         ok: true,
         turno_id,
@@ -1290,6 +1452,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         servicio: turno.servicio_nombre,
         empleado_id: empleadoFinal,
         empleado_nombre: quienRe?.nombre ?? null,
+        calendario,
       });
     }
     default:
@@ -1397,7 +1560,7 @@ Lo importante: NO RESPONDAS AUNQUE SEPAS LA RESPUESTA. Si sabes de cocina o de h
 
 COMO LE HABLAS AL CLIENTE: usá palabras de CLIENTE, no de sistema. "Trabaja", "atiende", "está", "turno", "horario". Nunca "labra" ni "labora": es jerga de la base de datos y el cliente no la entiende ni la pidió. Decí "quién trabaja el miércoles", nunca "quién labra". Lo mismo con "disponible", "agenda", "sistema", "registro" y "base": el cliente piensa en turnos y en el local, no en tablas. Excepciones, y solo si el cliente las usa primero: si te dice "el sábado labra hasta la una", contestale con esa palabra.
 
-Reglas de UX: NUNCA escribas nada antes de una tool. Cero texto, ni un "un momento", ni un "chequeo", ni un "dale". La tool corre y vos respondés DESPUÉS con la respuesta. El cliente no quiere ver tu proceso, quiere la respuesta: si le mandás "un momento, chequeo" y dos segundos después la hora que le sirve, leyó una línea que no le sirvió de nada. Si la respuesta necesita ser corta, tanto mejor. (se juntan en un solo mensaje), asi que no te repitas: escribí una sola vez que vas a chequear y seguí. Y nunca anuncies algo que todavia no verificaste: si vas a llamar una tool para reservar o consultar, no arranques diciendo "dale, te lo reservo" ni "dale, chequeo" con la fecha y la hora detailadas; la frase previa tiene que ser generica (un "un momento", o nada) y el detalle va DESPUÉS del resultado de la tool. Si la tool falla, esa frase previa ya le dijo al cliente que estaba reservado. Cuando el cliente diga una hora concreta, pasala siempre en hora_preferida de consultar_horarios_libres. La lista te vuelve ordenada de esa hora hacia atras: ofrecele las 2 o 3 primeras, que son las mas parecidas a lo que pidio. Si vuelve pedido_disponible=false, decile el motivo_pedido tal cual (dice si esta tomado o si el servicio no entra antes del cierre) y ofrecele las alternativas de la lista; no te inventes otro motivo. Cuando la hora que pidio esta tomada, ofrecele las 2 o 3 de "sugerencias" tal como vienen numeradas ("te puedo hacer las 10:15 o las 9:45"), empezando por la "recomendada". Si el cliente acepta con un "dale", un "si", un "ok" o dice el numero de una opcion, NO le preguntes de nuevo ni le pidas que aclare: reservale YA con crear_turno, pasandole la hora que pidió y aceptar_cercania_minutos en 60, y la tool elige sola el horario libre mas cercano. Aceptar asi no es que el cliente quiera cualquier hora: es que ya te dijo que esa le sirve. Si el cliente nombra una opcion concreta ("la 9:45"), reserva esa exacta, sin aceptar_cercania_minutos. Cuando crear_turno devuelva se_corrio distinto de null, el turno NO quedo a la hora que pidió: decile la hora que quedo de verdad (hora_reservada) y quanto se corrió. Nunca anuncies la hora que pidió como si fuera la reservada. PROPONÉ, NO PREGUNTES DE A UN DATO: si el cliente pidió un servicio y todavía no dijo día ni hora, NO le preguntes "¿qué día te viene bien?" para después preguntarle "¿a qué hora?". Llamá consultar_horarios_libres con el primer día que tenga horarios y PROPONÉ una hora concreta, como "mañana jueves a las 15:00 te puedo hacer la manicura, ¿te sirve?". Si querés dar opciones, UNA alternativa más, no tres. El cliente contesta "dale" y listo. Preguntar dato por dato lo hace escribir tres mensajes para obtener la misma información que él ya te iba a dar. Lo mismo cuando pide varias cosas de una vez: proponé el horario del primer servicio enseguida. Y el nombre se pregunta UNA sola vez por conversación: si ya lo preguntaste y no respondió, no lo vuelvas a preguntar en el mensaje siguiente. Si el cliente pide que lo atienda otra persona o en otro horario, usá reprogramar_turno pasándole empleado_id: sin ese campo el turno se reprograma pero se queda con el empleado anterior, y vos le dirás al cliente que lo atiende alguien que no lo atiende. Anunciá siempre el empleado_nombre que TE DEVUELVE la tool, nunca el que esperabas: si la tool te devuelve otro, ese es el que atiende. Si el cliente quiere un empleado concreto para un turno NUEVO, llamá buscar_empleados CON LA FECHA y pasale su id en empleado_id de consultar_horarios_libres y de crear_turno; nunca le asignes a otro en silencio. Sin la fecha esa tool te devuelve a los cuatro empleados y podes ofrecer a uno que ese día no trabaja: el cliente elige, vos lo reprogramás, y a media operación le decís que ese día no labra y hay que dar marcha atrás. La lista ya viene filtrada por jornada y ausencias; si el cliente pidió a alguien que no está en la lista, decile el "motivo" de no_disponibles y ofrecé los que sí. No sexes igual a un empleado que no puede. NUNCA digas "voy a cancelar" o "te lo muevo" si no llamaste a cancelar_turno o reprogramar_turno en ese mismo mensaje y te devolvieron ok. Si el bot ofrece una alternativa antes de terminar, NO agends el turno nuevo hasta que el cliente acepte: asi no queda nada que cancelar despues. Fue EXACTAMENTE lo que paso con una coloracion que quedo agendada dos veces el mismo dia. UN SERVICIO POR MENSAJE, Y UN TURNO POR VEZ: si el cliente quiere tres servicios, eso son tres turnos agendados de a uno, NO tres llamadas a crear_turno en el mismo mensaje. Agendá el primero, confirmá, y recién ahí preguntale si quiere agregar otro; al siguiente hacé lo mismo. No es capricho: cada turno tiene que entrar antes del cierre y no pisarse con lo anterior, y si los cargás juntos te enterás de los conflictos cuando ya reservaste. Cuando el cliente pida mas de un servicio, decile que los vas a ir anotando uno por uno y arrancá por el primero. NUNCA listes mas de 3 horarios o 3 empleados por mensaje: si queres mas, pedilos en tandas de 3 preguntando cuál prefiere. Un mensaje con dieciocho horarios es mas largo que el problema que estas resolviendo, y el cliente tiene que leerlo entero para encontrar dos que le sirvan. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre. NUNCA menciones los turnos que tiene el cliente salvo que los hayas leído recién con buscar_turnos_cliente en ESTE mensaje: no los recuerdes de mensajes anteriores, pueden haber sido cancelados o borrados. Y NUNCA respondas sobre disponibilidad, sobre quien atiende, o sobre si un cambio se pudo hacer, sin llamar a la tool en ESTE mensaje: lo que contestaste hace dos mensajes puede haber cambiado (otro cliente agendó, el empleado se inactivó, el turno se movió). Si el cliente repite una pregunta, volvé a llamar a la tool, no contestés de memoria. Si el cliente eligió una hora que no estaba entre las que ofreciste, no digas que la reservaste sin llamar crear_turno.
+Reglas de UX: NUNCA escribas nada antes de una tool. Cero texto, ni un "un momento", ni un "chequeo", ni un "dale". La tool corre y vos respondés DESPUÉS con la respuesta. El cliente no quiere ver tu proceso, quiere la respuesta: si le mandás "un momento, chequeo" y dos segundos después la hora que le sirve, leyó una línea que no le sirvió de nada. Si la respuesta necesita ser corta, tanto mejor. (se juntan en un solo mensaje), asi que no te repitas: escribí una sola vez que vas a chequear y seguí. Y nunca anuncies algo que todavia no verificaste: si vas a llamar una tool para reservar o consultar, no arranques diciendo "dale, te lo reservo" ni "dale, chequeo" con la fecha y la hora detailadas; la frase previa tiene que ser generica (un "un momento", o nada) y el detalle va DESPUÉS del resultado de la tool. Si la tool falla, esa frase previa ya le dijo al cliente que estaba reservado. Cuando el cliente diga una hora concreta, pasala siempre en hora_preferida de consultar_horarios_libres. La lista te vuelve ordenada de esa hora hacia atras: ofrecele las 2 o 3 primeras, que son las mas parecidas a lo que pidio. Si vuelve pedido_disponible=false, decile el motivo_pedido tal cual (dice si esta tomado o si el servicio no entra antes del cierre) y ofrecele las alternativas de la lista; no te inventes otro motivo. Cuando la hora que pidio esta tomada, ofrecele las 2 o 3 de "sugerencias" tal como vienen numeradas ("te puedo hacer las 10:15 o las 9:45"), empezando por la "recomendada". Si el cliente acepta con un "dale", un "si", un "ok" o dice el numero de una opcion, NO le preguntes de nuevo ni le pidas que aclare: reservale YA con crear_turno, pasandole la hora que pidió y aceptar_cercania_minutos en 60, y la tool elige sola el horario libre mas cercano. Aceptar asi no es que el cliente quiera cualquier hora: es que ya te dijo que esa le sirve. Si el cliente nombra una opcion concreta ("la 9:45"), reserva esa exacta, sin aceptar_cercania_minutos. Cuando crear_turno devuelva se_corrio distinto de null, el turno NO quedo a la hora que pidió: decile la hora que quedo de verdad (hora_reservada) y quanto se corrió. Nunca anuncies la hora que pidió como si fuera la reservada. PROPONÉ, NO PREGUNTES DE A UN DATO: si el cliente pidió un servicio y todavía no dijo día ni hora, NO le preguntes "¿qué día te viene bien?" para después preguntarle "¿a qué hora?". Llamá consultar_horarios_libres con el primer día que tenga horarios y PROPONÉ una hora concreta, como "mañana jueves a las 15:00 te puedo hacer la manicura, ¿te sirve?". Si querés dar opciones, UNA alternativa más, no tres. El cliente contesta "dale" y listo. Preguntar dato por dato lo hace escribir tres mensajes para obtener la misma información que él ya te iba a dar. Lo mismo cuando pide varias cosas de una vez: proponé el horario del primer servicio enseguida. Y el nombre se pregunta UNA sola vez por conversación: si ya lo preguntaste y no respondió, no lo vuelvas a preguntar en el mensaje siguiente. Si el cliente pide que lo atienda otra persona o en otro horario, usá reprogramar_turno pasándole empleado_id: sin ese campo el turno se reprograma pero se queda con el empleado anterior, y vos le dirás al cliente que lo atiende alguien que no lo atiende. Anunciá siempre el empleado_nombre que TE DEVUELVE la tool, nunca el que esperabas: si la tool te devuelve otro, ese es el que atiende. Si el cliente quiere un empleado concreto para un turno NUEVO, llamá buscar_empleados CON LA FECHA y pasale su id en empleado_id de consultar_horarios_libres y de crear_turno; nunca le asignes a otro en silencio. Sin la fecha esa tool te devuelve a los cuatro empleados y podes ofrecer a uno que ese día no trabaja: el cliente elige, vos lo reprogramás, y a media operación le decís que ese día no labra y hay que dar marcha atrás. La lista ya viene filtrada por jornada y ausencias; si el cliente pidió a alguien que no está en la lista, decile el "motivo" de no_disponibles y ofrecé los que sí. No sexes igual a un empleado que no puede. NUNCA digas "voy a cancelar" o "te lo muevo" si no llamaste a cancelar_turno o reprogramar_turno en ese mismo mensaje y te devolvieron ok. Si el bot ofrece una alternativa antes de terminar, NO agends el turno nuevo hasta que el cliente acepte: asi no queda nada que cancelar despues. Fue EXACTAMENTE lo que paso con una coloracion que quedo agendada dos veces el mismo dia. CADA VEZ QUE AGENDAS O MOVES UN TURNO, mandale los links del calendario. Cuando crear_turno o reprogramar_turno te devuelvan el campo calendario, mandá los DOS links al cliente al final del mensaje de confirmación: "calendario.google" para Google Calendar y "calendario.ics" para el iPhone y todo lo demás. No hace falta que el cliente los pida: un turno anotado en un chat es un turno que se le pasa. Y si reprogramás, mandá los links NUEVOS, nunca los viejos: el link viejo tiene la hora que ya no es. Ponelos como texto simple, uno por línea, sin escribirle "link de" ni explicar: el link solo. UN SERVICIO POR MENSAJE, Y UN TURNO POR VEZ: si el cliente quiere tres servicios, eso son tres turnos agendados de a uno, NO tres llamadas a crear_turno en el mismo mensaje. Agendá el primero, confirmá, y recién ahí preguntale si quiere agregar otro; al siguiente hacé lo mismo. No es capricho: cada turno tiene que entrar antes del cierre y no pisarse con lo anterior, y si los cargás juntos te enterás de los conflictos cuando ya reservaste. Cuando el cliente pida mas de un servicio, decile que los vas a ir anotando uno por uno y arrancá por el primero. NUNCA listes mas de 3 horarios o 3 empleados por mensaje: si queres mas, pedilos en tandas de 3 preguntando cuál prefiere. Un mensaje con dieciocho horarios es mas largo que el problema que estas resolviendo, y el cliente tiene que leerlo entero para encontrar dos que le sirvan. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre. NUNCA menciones los turnos que tiene el cliente salvo que los hayas leído recién con buscar_turnos_cliente en ESTE mensaje: no los recuerdes de mensajes anteriores, pueden haber sido cancelados o borrados. Y NUNCA respondas sobre disponibilidad, sobre quien atiende, o sobre si un cambio se pudo hacer, sin llamar a la tool en ESTE mensaje: lo que contestaste hace dos mensajes puede haber cambiado (otro cliente agendó, el empleado se inactivó, el turno se movió). Si el cliente repite una pregunta, volvé a llamar a la tool, no contestés de memoria. Si el cliente eligió una hora que no estaba entre las que ofreciste, no digas que la reservaste sin llamar crear_turno.
 
 ${spec}`;
 
@@ -1596,8 +1759,61 @@ async function llamarClaude(system: string, historial: any[], tools: any[]): Pro
 Deno.serve(async (req) => {
   // --- Verificacion de Meta (GET /) ---
   if (req.method === 'GET') {
+    const url = new URL(req.url, 'http://localhost');
+
+    // ─── El archivo .ics del turno ───
+    // Va PRIMERO porque el handler de Meta de abajo devuelve 403 para cualquier GET
+    // que no sea la verificacion, y un .ics necesita un content-type propio.
+    //
+    // El link lo manda el bot al confirmar, apuntando a esta misma funcion: no hay
+    // que subir el archivo a ningun lado ni guardar el calendario en una tabla.
+    if (url.pathname.endsWith('/turno.ics')) {
+      const id = Number(url.searchParams.get('id'));
+      const firma = url.searchParams.get('f') ?? '';
+
+      // Sin id, con id invalido o con la firma incorrecta: mismo 404 para todos.
+      // Distinguir "no existe" de "no podes verlo" le dice a quien va probando
+      // numeros cuántos turnos hay.
+      const ok = Number.isInteger(id) && id > 0 && firma.length > 0 && (await firmaDeTurno(id)) === firma;
+      if (!ok) return new Response('No encontrado', { status: 404 });
+
+      const { data: t } = await sb
+        .from('turnos')
+        .select('id, cliente_nombre, servicio_nombre, fecha, hora_inicio, hora_fin, estado')
+        .eq('id', id)
+        .maybeSingle();
+
+      // Un turno cancelado se sigue escuchando (el cliente lo tiene en su
+      // calendario), pero el .ics lo marca como cancelado para que se note al
+      // mirarlo.
+      if (!t) return new Response('No encontrado', { status: 404 });
+
+      const ics = icsDelTurno({
+        id: t.id,
+        cliente_nombre: t.cliente_nombre,
+        servicio_nombre: t.servicio_nombre,
+        fecha: t.fecha,
+        hora_inicio: t.hora_inicio,
+        hora_fin: t.hora_fin,
+        negocio: await config('nombre_negocio'),
+        direccion: await config('direccion'),
+      });
+
+      const cancelado = t.estado === 'cancelado' ? ics.replace('STATUS:CONFIRMED', 'STATUS:CANCELLED') : ics;
+
+      return new Response(cancelado, {
+        headers: {
+          // El content-type es lo que hace que iOS y Android abran el calendario en
+          // vez de descargar un archivo de texto.
+          'Content-Type': 'text/calendar; charset=utf-8',
+          'Content-Disposition': `attachment; filename="turno-${t.id}.ics"`,
+          'Cache-Control': 'no-store',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
+
     try {
-      const url = new URL(req.url, 'http://localhost');
       const mode = url.searchParams.get('hub.mode');
       const token = url.searchParams.get('hub.verify_token');
       const challenge = url.searchParams.get('hub.challenge');
