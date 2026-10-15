@@ -2010,12 +2010,32 @@ Deno.serve(async (req) => {
     respuesta = agregarLinksDeCalendario(respuesta);
   } catch (e: any) {
     console.error(e);
+    // El `console.error` solo lo ve el que tiene el dashboard de Supabase con los
+    // logs en vivo. El que atiende en el local solo ve "se me cayó la conexión", y
+    // con eso no puede distinguir entre "se cayó un segundo" y "la API key venció"
+    // y "se acabaron los tokens", que son tres cosas que se arreglan distinto.
+    //
+    // Se escribe el mensaje crudo: si viene de Claude, trae el status y el cuerpo de
+    // la respuesta, que es donde dice 401, 429 o lo que sea. Cortado a 500 porque
+    // algunos errores traen HTML largo de una pasarela y esto no es un archivo de
+    // log, es una fila.
+    await sb
+      .from('conversaciones')
+      .update({ ultimo_error: String(e?.message ?? e).slice(0, 500) })
+      .eq('telefono', telefono);
     // Si algo falla, al menos que el cliente tenga por donde pedir ayuda en vez de
     // quedarse mirando un "probá en unos minutos" sin salida.
     respuesta = await mensajeDeFalla();
   }
 
   historialSano.push({ role: 'assistant', content: respuesta });
+
+  // Si respondió bien, no hay error pendiente: se limpia. Así la columna dice la
+  // verdad, que es "el ÚLTIMO fallo", y no algo viejo de hace tres días que hace
+  // creer que el bot sigue roto cuando ya anda.
+  if (!respuesta.startsWith('Uy, se me cayó')) {
+    await sb.from('conversaciones').update({ ultimo_error: null }).eq('telefono', telefono);
+  }
 
   // ─── Guardar el historial en conversations. `historial_claude` es el espacio que
   // preparaste para esto. Si la fila no existe, se crea. ───
