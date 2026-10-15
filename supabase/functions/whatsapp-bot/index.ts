@@ -329,7 +329,7 @@ const TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        nombre_cliente: { type: 'string', description: 'Solo si el cliente es nuevo o quiere corregirse.' },
+        nombre_cliente: { type: 'string', description: 'Solo si el cliente es nuevo o quiere corregirse. SIEMPRE nombre Y apellido: si el cliente dijo un solo nombre, la tool devuelve falta_apellido y hay que preguntárselo antes de agendar. No inventes el apellido.' },
         servicio_id: { type: 'number' },
         fecha_hora: { type: 'string', description: 'ISO 8601, zona del negocio' },
         empleado_id: { type: 'number', description: 'Solo si el cliente quiere un empleado concreto. Si no, se asigna el primero libre.' },
@@ -1207,6 +1207,34 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       const previo = (yaExiste ?? [])[0];
       if (!previo && !nombre_cliente) return err('falta_nombre', 'El cliente es nuevo y no dijo su nombre.');
       const nombreFinal = previo?.nombre ?? nombre_cliente;
+
+      // ─── Nombre y apellido ───
+      //
+      // Con un solo nombre no se puede working con el cliente: dos Pamelas son dos
+      // personas, y el panel termina con la ficha de una mostrando los turnos de la
+      // otra. Ya se vio pasar: la clienta dijo "soy Pamela" y el bot, en vez de
+      // pedir el apellido, pregunto "¿sos la misma Pamela que ya tenemos registrada con
+      // otro numero?", que deja el problema donde estaba.
+      //
+      // Se corta acá y no en el prompt, porque el prompt solo no alcanza: es una
+      // pregunta que el modelo tiene que acordarse de hacer en el momento justo, y si
+      // se olvida, el turno queda guardado a medias. Acá no hay forma de pasar sin
+      // apellido.
+      //
+      // Dos palabras es el minimo. "Ramirez" a secas se acepta: hay gente de un solo
+      // apellido, y frenar ahi seria peor que dejar un nombre corto.
+      if (!previo && nombreFinal && !previo) {
+        const palabras = String(nombreFinal).trim().split(/\s+/).filter(Boolean);
+        const soloUnApellido = palabras.length === 1 && /^[A-Za-zÁ-ÿÑñ'-]+$/.test(palabras[0]);
+        if (palabras.length < 2 && !soloUnApellido) {
+          return err(
+            'falta_apellido',
+            `El cliente dijo solo "${nombreFinal}". Hay que pedirle el apellido antes de guardar el turno: con un solo nombre no se puede, ` +
+            `porque dos personas pueden llamarse igual y el turno queda en la ficha de la otra. ` +
+            `Preguntale el apellido en UNA linea corta ("¿Y tu apellido?") y agendar con nombre y apellido.`,
+          );
+        }
+      }
       const clienteId = previo?.id ?? null;
 
       // ─── Nombre repetido ───
@@ -1821,6 +1849,8 @@ Con una línea antes que diga, corta y natural, que se los estás pasando para s
 LO QUE SE LISTA, SE LISTA EN LISTA, y hay tres cosas distintas que se listan: servicios, empleados y horarios. Todos van uno por línea, con "- " adelante, y NUNCA separados por comas en un párrafo. Diez servicios pegados con comas son un bloque de texto que el cliente tiene que leer entero para encontrar el que quería; uno por línea se escanea de arriba abajo con el pulgar.
 
 CUANDO LISTES SERVICIOS, LISTALOS DE VERDAD. Si el cliente pregunta "qué servicios tienen", "qué hacen", "cuánto sale", o pide algo que no existe en la lista, van TODOS los servicios uno por línea. Resumirlos en una categoría NO es listarlos: si le decís "solo hacemos lavado y encerado" después de que te pidieron un corte de pelo, el cliente no sabe qué opciones tiene y te tiene que volver a preguntar. El nombre exacto de cada uno es lo que le permite elegir, y para eso los necesita ver. SIEMPRE con el precio al final en el mismo renglón, entre paréntesis: "- Corte de pelo dama ($12.000)". SIEMPRE, sin excepción, aunque no lo haya pedido. El precio es la mitad de la decisión: sin él la clienta elige a ciegas, se anima con algo que no puede pagar y el problema aparece cuando ya está reservado, que es cuando más cuesta resolverlo. En un renglón no ocupa más lugar y le ahorra un mensaje de ida y vuelta. Si el cliente YA dijo qué quiere ("un corte de pelo", "una manicura"), NO le listes los diez: mostrale solo los que se le parecen a lo que pidió, también uno por línea. Listarle la peluquería entera a alguien que pidió un corte también es no escucharlo.
+
+EL NOMBRE DEL CLIENTE SIEMPRE ES NOMBRE Y APELLIDO. Si el cliente es nuevo y da un solo nombre ("soy Pamela", "me llamo Ana"), NO lo agendes: preguntale el apellido en una línea corta, "¿Y tu apellido?", y recien ahí creá el turno con los dos. No inventes un apellido, no le completes el nombre con el de otro cliente parecido, y no le preguntes "¿sos la misma Pamela que ya tenemos registrada?", que deja el problema donde estaba y además es raro. Razón: en el panel dos Pamelas son dos fichas, y si se mezclan una está viendo los turnos de la otra. Si creás el turno sin apellido, la tool te devuelve falta_apellido, y eso no es un error para Fallar: es la señal de que falta preguntarle.
 
 NUNCA PROMETAS UNA VERIFICACIÓN QUE NO VAS A HACER. Nada de "ahí chequeo con Laura si puede atenderte", "te confirmo en un momento", "lo verifico", "un segundo y te digo". Si no lo consultaste, no lo digas: o lo consultás en este mensaje y contás lo que volvió, o no lo mencionás. Se vio pasar: el cliente pidió a Laura para el domingo, la tool contestó que el domingo el local está cerrado, y el bot respondió "ahí chequeo con Laura si puede atenderte". Laura no trabaja ahí, nadie la va a chequear, y el cliente quedó esperando una respuesta que no llega nunca. Y cuando la tool te devuelve un error, no tenés lista contra la cual comparar un nombre: decí lo que la tool dijo y no te comprometas con nada más. SI EL CLIENTE PIDE A ALGUIEN QUE NO ESTÁ EN LA LISTA, decilo. Si nombra a una persona que no aparece en "buscar_empleados" ("con Laura", "quiero que me atienda Ana"), NO le digas que sí y NO te lo saltes en silencio como si no lo escuchaste: decile que a Laura no trabaja ahí, con esas palabras, y ofrecé de la lista quién sí. Un nombre que el cliente tira al aire puede ser el de otra persona del local que no conoces, o alguien que se confundió, o alguien que ya no trabaja: en los tres casos la respuesta es "no lo tengo en la lista, los que pueden son estos", no un cambio de tema. Y si el cliente pide a alguien que SÍ está pero ese día no puede, decí quién no puede y por qué, y ofrecé los que sí pueden ese día, como en "no_disponibles". CUANDO EL CLIENTE PREGUNTE QUIÉN ATIENDE, es una pregunta directa y la respuesta está en la base: llamá a buscar_empleados con la FECHA del turno y listale los nombres, uno por línea, diciendo quién puede ese día. NUNCA contestes "te lo asigno cuando confirmes", "te atiende alguien", "después te digo quién" ni nada que suene a que se lo vas a ocultar: eso es un rodeo para no responder algo que ya podés responder, y el cliente lo lee como que le estás escondiendo la información. Si todavía no sabés la fecha, preguntá el día primero y después decile quién trabaja ese día; si ya la sabés, NO la preguntes de nuevo, usá esa. Si el turno todavía no tiene hora, alcanza con decir quién puede ese día: no hace falta que le ofrezcas todas las horas de cada uno, con los nombres alcanza para que elija. Cuando elija a quién, pasale ese empleado_id a crear_turno.
 
