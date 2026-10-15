@@ -357,7 +357,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         turno_id: { type: 'number' },
-        nueva_fecha_hora: { type: 'string', description: 'ISO 8601, zona del negocio' },
+        nueva_fecha_hora: { type: 'string', description: 'ISO 8601, zona del negocio. Si el cliente pide cambiar SOLO la hora ("a las 16", "mas tarde", "mas temprano"), mandalo como "16:00" y la fecha se mantiene sola: no recalcules el dia. Si el cliente pidio otro dia, mandalo completo.' },
         empleado_id: { type: 'number', description: 'Solo si el cliente pidio que lo atienda otra persona. Verificalo antes con consultar_horarios_libres.' },
       },
       required: ['turno_id', 'nueva_fecha_hora'],
@@ -1400,12 +1400,36 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       const minsMin = (await horasMinCancelar()) * 60;
       if (minsFaltan < minsMin) return err('fuera_de_plazo', `Se reprograma hasta ${minsMin / 60} hs antes.`);
 
-      const dt = new Date(nueva_fecha_hora);
-      if (isNaN(dt.getTime())) return err('fecha_invalida');
-      if (dt.getTime() < Date.now()) return err('fuera_de_horario', 'La fecha ya paso.');
+      // ─── Que parte se cambia realmente ───
+      //
+      // El cliente casi siempre pide cambiar SOLO la hora: "pasame a las 16", "mas
+      // tarde", "lo corro un rato". Si eso llega como una hora suelta, la fecha se
+      // mantiene tal cual del turno.
+      //
+      // Por que no alcanza con avisarle al modelo que use la fecha original: lo que
+      // paso al probarlo es que el cliente dijo "el jueves a las 16", el modelo armo
+      // la fecha desde HOY, y el turno quedo una semana corrido del que la clienta
+      // queria. El dia que dice "el jueves" casi siempre es el mismo dia que ya
+      // tenia reservado, no el jueves mas proximo que viene en el calendario.
+      //
+      // Con esto la fecha no puede moverse sola: si al modelo se le olvida y manda
+      // solo la hora, el turno se queda en el dia que estaba. Si el cliente pidio
+      // otro dia, el modelo tiene que mandar el dia, y si no lo manda no hay forma
+      // de saber cual queria.
+      const soloHora = /^\s*\d{1,2}:\d{2}\s*$/.test(String(nueva_fecha_hora));
+      let nuevaFecha: string;
+      let nuevaHora: string;
 
-      const nuevaFecha = nueva_fecha_hora.split('T')[0];
-      const nuevaHora = nueva_fecha_hora.split('T')[1].slice(0, 5);
+      if (soloHora) {
+        nuevaFecha = String(turno.fecha).slice(0, 10);
+        nuevaHora = String(nueva_fecha_hora).trim().slice(0, 5);
+      } else {
+        const dt = new Date(nueva_fecha_hora);
+        if (isNaN(dt.getTime())) return err('fecha_invalida');
+        if (dt.getTime() < Date.now()) return err('fuera_de_horario', 'La fecha ya paso.');
+        nuevaFecha = nueva_fecha_hora.split('T')[0];
+        nuevaHora = nueva_fecha_hora.split('T')[1].slice(0, 5);
+      }
 
       // Mismas validaciones que crear_turno: si el turno nuevo no se puede agendar,
       // reprogramar tampoco.
@@ -1502,6 +1526,12 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         fecha: nuevaFecha,
         hora: nuevaHora,
         hora_fin: minAHora(hasta),
+        // Para que el modelo diga el dia completo sin deducirlo. Si el cliente pidio
+        // solo cambiar la hora, esto le recuerda que el dia NO se toco y que lo
+        // anuncie como "el mismo dia", no como un turno nuevo.
+        fecha_se_mantuvo: soloHora,
+        fecha_anterior: String(turno.fecha).slice(0, 10),
+        hora_anterior: String(turno.hora_inicio).slice(0, 5),
         servicio: turno.servicio_nombre,
         empleado_id: empleadoFinal,
         empleado_nombre: quienRe?.nombre ?? null,
@@ -1620,7 +1650,7 @@ Reglas de UX: NUNCA escribas nada antes de una tool. Cero texto, ni un "un momen
 
 Con una línea antes que diga, corta y natural, que se los estás pasando para su calendario. Variá la palabra: "Ahora te paso el link para tu calendario", "Te dejo el link para que lo guardes", "Andá guardándolo en el calendario". Una sola frase, nunca dos. Solo el emoji, la palabra y el link. El link ya empieza con https y WhatsApp lo vuelve clickeable solo.
 
-Por qué sin preguntar: preguntar es una ida y vuelta más en CADA reserva, y le sirve a una parte sola. Mandándolo siempre, el que lo quiere lo tiene y el que no, ignora una línea al final. Y si el turno se reprograma, mandá los links NUEVOS, nunca los viejos. Ojo que los dos links no se comportan igual y por eso el de Google da un problema: el link del iPhone es el MISMO (su firma y su UID dependen solo del id del turno, no de la fecha), asi que el que ya tiene guardado le va a mostrar la hora nueva solo. El de Google, en cambio, lleva la hora escrita adentro: si vuelve a tocar el link viejo, Google le AGREGA un segundo evento a la hora vieja, al lado del bueno, y se queda con dos. Por eso, cuando reprogrames un turno que ya le habías confirmado antes con links, sumale al final una linea corta, DESPUES de la confirmacion y antes de los links, pidiendole que borre el evento de la hora anterior del calendario. Solo en ese caso, no la primera vez que agendás: la primera vez no hay nada que borrar y la linea confunde. UN SERVICIO POR MENSAJE, Y UN TURNO POR VEZ: si el cliente quiere tres servicios, eso son tres turnos agendados de a uno, NO tres llamadas a crear_turno en el mismo mensaje. Agendá el primero, confirmá, y recién ahí preguntale si quiere agregar otro; al siguiente hacé lo mismo. No es capricho: cada turno tiene que entrar antes del cierre y no pisarse con lo anterior, y si los cargás juntos te enterás de los conflictos cuando ya reservaste. Cuando el cliente pida mas de un servicio, decile que los vas a ir anotando uno por uno y arrancá por el primero. NUNCA listes mas de 3 horarios o 3 empleados por mensaje: si queres mas, pedilos en tandas de 3 preguntando cuál prefiere. Un mensaje con dieciocho horarios es mas largo que el problema que estas resolviendo, y el cliente tiene que leerlo entero para encontrar dos que le sirvan. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre. NUNCA menciones los turnos que tiene el cliente salvo que los hayas leído recién con buscar_turnos_cliente en ESTE mensaje: no los recuerdes de mensajes anteriores, pueden haber sido cancelados o borrados. Y NUNCA respondas sobre disponibilidad, sobre quien atiende, o sobre si un cambio se pudo hacer, sin llamar a la tool en ESTE mensaje: lo que contestaste hace dos mensajes puede haber cambiado (otro cliente agendó, el empleado se inactivó, el turno se movió). Si el cliente repite una pregunta, volvé a llamar a la tool, no contestés de memoria. Si el cliente eligió una hora que no estaba entre las que ofreciste, no digas que la reservaste sin llamar crear_turno.
+Por qué sin preguntar: preguntar es una ida y vuelta más en CADA reserva, y le sirve a una parte sola. Mandándolo siempre, el que lo quiere lo tiene y el que no, ignora una línea al final. CUANDO EL CLIENTE PIDA MOVER UN TURNO, SEPARÁ SI CAMBIA EL DIA O SOLO LA HORA, porque no es lo mismo y equivocarse mueve el turno una semana entera. Si dice "a las 16", "mas tarde", "mas temprano", "lo corro un rato", "lo muevo un toque", SOLO cambio de hora: es el MISMO dia, y le tenés que pasar la hora SUELTA a reprogramar_turno (nueva_fecha_hora: "16:00"), sin fecha, porque la herramienta mantiene la del turno sola. NUNCA recalcules el dia en ese caso. El error que se vio al probar: la clienta estaba el jueves 29, pidio "el jueves a las 16", y el turno quedo el jueves 22, una semana antes, porque el dia se armo desde hoy en vez de desde el turno que ya tenia. Si el cliente pide OTRO dia ("lo paso al viernes", "para la semana que viene"), ahi si mandale el dia completo, y no se lo recalcules vos si no te lo dijo: preguntale el dia exacto. Cuando reprogrames, anunciá siempre el dia COMPLETO, aunque no haya cambiado ("te lo muevo a las 16 del jueves 29"): es la unica forma de que la clienta vea que no se corrio de fecha. La herramienta te devuelve fecha_se_mantuvo: si dice true, el dia no se toco y podés decirlo con esas palabras ("el mismo dia, a las 16"). Y si el turno se reprograma, mandá los links NUEVOS, nunca los viejos. Ojo que los dos links no se comportan igual y por eso el de Google da un problema: el link del iPhone es el MISMO (su firma y su UID dependen solo del id del turno, no de la fecha), asi que el que ya tiene guardado le va a mostrar la hora nueva solo. El de Google, en cambio, lleva la hora escrita adentro: si vuelve a tocar el link viejo, Google le AGREGA un segundo evento a la hora vieja, al lado del bueno, y se queda con dos. Por eso, cuando reprogrames un turno que ya le habías confirmado antes con links, sumale al final una linea corta, DESPUES de la confirmacion y antes de los links, pidiendole que borre el evento de la hora anterior del calendario. Solo en ese caso, no la primera vez que agendás: la primera vez no hay nada que borrar y la linea confunde. UN SERVICIO POR MENSAJE, Y UN TURNO POR VEZ: si el cliente quiere tres servicios, eso son tres turnos agendados de a uno, NO tres llamadas a crear_turno en el mismo mensaje. Agendá el primero, confirmá, y recién ahí preguntale si quiere agregar otro; al siguiente hacé lo mismo. No es capricho: cada turno tiene que entrar antes del cierre y no pisarse con lo anterior, y si los cargás juntos te enterás de los conflictos cuando ya reservaste. Cuando el cliente pida mas de un servicio, decile que los vas a ir anotando uno por uno y arrancá por el primero. NUNCA listes mas de 3 horarios o 3 empleados por mensaje: si queres mas, pedilos en tandas de 3 preguntando cuál prefiere. Un mensaje con dieciocho horarios es mas largo que el problema que estas resolviendo, y el cliente tiene que leerlo entero para encontrar dos que le sirvan. Nunca digas que un día está cerrado sin antes llamar consultar_horarios_libres o haber leído dias_cerrados. Al saludar, si buscar_cliente te dio un nombre, usalo: el cliente ya está registrado y no hay que pedirle el nombre. NUNCA menciones los turnos que tiene el cliente salvo que los hayas leído recién con buscar_turnos_cliente en ESTE mensaje: no los recuerdes de mensajes anteriores, pueden haber sido cancelados o borrados. Y NUNCA respondas sobre disponibilidad, sobre quien atiende, o sobre si un cambio se pudo hacer, sin llamar a la tool en ESTE mensaje: lo que contestaste hace dos mensajes puede haber cambiado (otro cliente agendó, el empleado se inactivó, el turno se movió). Si el cliente repite una pregunta, volvé a llamar a la tool, no contestés de memoria. Si el cliente eligió una hora que no estaba entre las que ofreciste, no digas que la reservaste sin llamar crear_turno.
 
 ${spec}`;
 
