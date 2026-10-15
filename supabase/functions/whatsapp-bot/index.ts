@@ -273,13 +273,25 @@ const TOOLS = [
   {
     name: 'buscar_empleados',
     description:
-      'Devuelve los empleados activos. Si el cliente quiere que lo atienda ALGUIEN para un turno, pasale SIEMPRE la fecha: la lista sale SOLO de quien trabaja ese día, con su horario, y en no_disponibles viene quien no puede, con el motivo. Sin fecha devuelve todos los activos a ciegas.',
+      'Devuelve los empleados activos. Si el cliente quiere que lo atienda ALGUIEN para un turno, pasale SIEMPRE la fecha: la lista sale SOLO de quien trabaja ese día, con su horario, y en no_disponibles viene quien no puede, con el motivo. Sin fecha devuelve todos los activos a ciegas. Si el cliente nombro a una persona concreta ("con Laura", "quiero que me atienda Juan"), pasale el nombre en `nombre`: la tool te dice si esa persona trabaja aca o no, y cual es su id. NO compares vos el nombre con la lista: se vio al modelo decir "Laura trabaja aca" con Laura ausente de la lista, y "con Laura si esta disponible" cuando Laura no existe.',
     input_schema: {
       type: 'object',
       properties: {
         fecha: {
           type: 'string',
           description: 'YYYY-MM-DD. OBLIGATORIA cuando el cliente quiere un empleado para un turno: sin ella podes ofrecer a alguien que ese día no trabaja y tener que dar marcha atrás.',
+        },
+        nombre: {
+          type: 'string',
+          description: 'El nombre que dijo el cliente, tal cual lo dijo, si nombró a alguien. La tool verifica si existe y devuelve encontrado true/false con el detalle para que le digas.',
+        },
+        hora: {
+          type: 'string',
+          description: 'HH:MM, SOLO si el cliente dijo a que hora quiere. Con hora, la lista es de quien puede TOMAR el turno a esa hora, no solo de quien trabaja ese dia: son dos cosas distintas y se confundian. Pasale tambien servicio_id para saber cuanto dura.',
+        },
+        servicio_id: {
+          type: 'number',
+          description: 'Solo junto con `hora`, para calcular si el turno entra en el horario de cada uno.',
         },
       },
       required: [],
@@ -654,10 +666,40 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
 
       const fecha = input.fecha;
 
+      // ─── El nombre que nombro el cliente ───
+      //
+      // La comparacion la hace ACA, no el modelo. Se lo vio hacer de dos maneras
+      // que dan lo mismo y las dos malas: "Laura trabaja aca" con Laura ausente de
+      // la lista, y "con Laura si esta disponible" cuando Laura no existe. El
+      // modelo tiene la lista a la vista y aun asi la resuelve mal, porque comparar
+      // un nombre con una lista es exactamente el tipo de tarea que un LLM hace
+      // plausiendo en vez de leyendo.
+      //
+      // Aca hay una sola respuesta correcta posible y sale de los datos.
+      const pedido = String(input.nombre ?? '').trim();
+      let nombreResuelto: any = null;
+      if (pedido) {
+        const limpio = pedido.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        // Primero nombre o apellido, por si el cliente dijo solo uno de los dos.
+        const coincide = (todos ?? []).find((e: any) => {
+          const partes = String(e.nombre).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/);
+          return partes.includes(limpio) || String(e.nombre).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === limpio;
+        });
+        nombreResuelto = coincide
+          ? { nombre: pedido, encontrado: true, id: coincide.id, nombre_real: coincide.nombre }
+          : {
+              nombre: pedido,
+              encontrado: false,
+              detalle: `${pedido} no trabaja en este local.`,
+              quien_si: (todos ?? []).map((e: any) => e.nombre),
+            };
+      }
+
       // Sin fecha: la lista completa, como siempre.
       if (!fecha) {
         return JSON.stringify({
           ok: true,
+          ...(nombreResuelto ? { nombre_consultado: nombreResuelto } : {}),
           empleados: (todos ?? []).map((e) => ({ id: e.id, nombre: e.nombre })),
         });
       }
@@ -677,6 +719,38 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         .from('horarios_atencion').select('hora_inicio, hora_fin')
         .eq('dia_semana', diaSemana).eq('activo', true).order('hora_inicio', { ascending: true });
 
+      // Un dia sin horario de atencion es un dia que el local NO ABRE. No es que
+      // falte el horario de un empleado.
+      //
+      // Antes no se chequeaba, y el domingo la tool contestaba que Martín Acosta
+      // estaba "sin horario": el bot lo tradujo a "Martín Acosta no tiene horario
+      // asignado", que no es lo que pasa. Lo que pasa es que no se atiende. El
+      // empleado tenía su jornada bien cargada para ese día; lo que no existe es el
+      // local abierto.
+      if (!horarios || horarios.length === 0) {
+        // Aun asi va la lista de quienes trabajan en el local. El dia cerrado no
+        // significa que no se sepa quienes son: si el cliente pidio a alguien por
+        // nombre, hace falta poder decirle "ese nombre no lo tengo aca" en vez de
+        // "con Laura si está disponible", que es una manera educada de no
+        // responder y dejar al cliente con la duda.
+        return JSON.stringify({
+          ok: false,
+          error: 'dia_sin_atencion',
+          detalle: `El ${DIAS_SEMANA[diaSemana].toLowerCase()} el local no abre.`,
+          fecha,
+          dia: DIAS_SEMANA[diaSemana].toLowerCase(),
+          ...(nombreResuelto ? { nombre_consultado: nombreResuelto } : {}),
+          // Nadie atiende ese dia, y los nombres que hay son TODOS los que
+          // trabajan en el local, para poder responder por un nombre pedido.
+          empleados: (todos ?? []).map((e: any) => ({ id: e.id, nombre: e.nombre })),
+          nota:
+            'Nadie atiende ese dia porque el local esta cerrado. Si el cliente nombro a ' +
+            'alguien, decile con esas palabras si ese nombre esta en `empleados` o no, y ' +
+            'despues seguí con la propuesta de otro dia. No digas "con X si esta disponible": ' +
+            'si no estas en la lista, no trabaja ahi.',
+        });
+      }
+
       const { data: ausencias } = await sb
         .from('ausencias').select('empleado_id, motivo')
         .lte('desde', fecha).gte('hasta', fecha);
@@ -685,6 +759,27 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       for (const a of ausencias ?? []) {
         if (a.empleado_id) fuera.set(a.empleado_id, a.motivo ?? 'ausente');
       }
+
+      // ─── Si dijeron una hora, distinguir QUIEN TRABAJA de QUIEN ESTA LIBRE ───
+      //
+      // Son dos preguntas distintas y la tool contestaba solo la primera. El bot decia
+      // "a las 15:00 te pueden atender Sofia o Valentina" sin haber consultado ningun
+      // horario: la lista que tenia era de quien LABRABA ese dia, que no dice si esta
+      // libre a esa hora. Con el dia entero lleno no lo estaba ninguno, y el bot
+      // ofrecio las dos.
+      //
+      // Con `hora` la lista pasa a ser de quien puede TOMAR el turno, que es lo que el
+      // cliente esta preguntando cuando dice "con quien a las 15".
+      const horaPedida = /^\s*\d{1,2}:\d{2}/.test(String(input.hora ?? ''))
+        ? horaAMin(String(input.hora).trim().slice(0, 5))
+        : null;
+      let duracionHora = 30;
+      if (horaPedida != null) {
+        const { data: s } = await sb
+          .from('servicios').select('duracion_minutos').eq('id', input.servicio_id ?? 1).maybeSingle();
+        duracionHora = s?.duracion_minutos || 30;
+      }
+      const agendaHora = horaPedida != null ? await estadoDelDia(fecha) : null;
 
       const disponibles: any[] = [];
       const noDisponibles: any[] = [];
@@ -701,19 +796,49 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         disponibles.push({
           id: e.id,
           nombre: e.nombre,
-          horario: tramoDelDia(e, diaSemana, horarios ?? []) || 'sin horario',
+          // El horario de TRABAJO va SOLO cuando se pregunto por una hora concreta y
+          // la tool puede decir si ademas esta libre. Si no se pregunto la hora, no
+          // viaja.
+          //
+          // Se saco a proposito: con "Sofia Ramirez (14:00 a 18:00)" a la vista, el
+          // bot contestaba "a las 15:00 esta disponible Sofia" sin haber consultado
+          // ningun horario. Leia el turno de trabajo como si fuera disponibilidad, que
+          // son dos cosas distintas: uno trabaja de 14 a 18 aunque tenga el turno
+          // tomado a las 15. Y se vio con el dia entero lleno, offering a dos
+          // empleados que no podia atender nadie.
+          //
+          // Para la pregunta "quien trabaja tal dia", que no es de turnos, esta
+          // `empleados_del_dia`, que si devuelve los horarios.
+          ...(horaPedida != null ? { horario: tramoDelDia(e, diaSemana, horarios ?? []) || 'sin horario' } : {}),
         });
+        // Labra el dia, pero puede estar tomado a esa hora. Va a `no_disponibles`
+        // con su motivo, nunca a `empleados`.
+        if (agendaHora && !agendaHora.libres(e.id, horaPedida!, horaPedida! + duracionHora)) {
+          disponibles.pop();
+          noDisponibles.push({
+            id: e.id,
+            nombre: e.nombre,
+            motivo: `trabaja ese dia pero esta ocupado a las ${String(input.hora).trim().slice(0, 5)}`,
+          });
+        }
       }
 
       return JSON.stringify({
         ok: true,
         fecha,
         dia: DIAS_SEMANA[diaSemana],
+        ...(nombreResuelto ? { nombre_consultado: nombreResuelto } : {}),
         empleados: disponibles,
         no_disponibles: noDisponibles,
         nota:
           'La lista YA viene filtrada por quien trabaja ese dia. Si el cliente pidio uno que NO esta en `empleados`, ' +
-          'decile el `motivo` de `no_disponibles` y ofrece los que si: no le ofrezcas como equivalente a alguien que no puede.',
+          'decile el `motivo` de `no_disponibles` y ofrece los que si: no le ofrezcas como equivalente a alguien que no puede. ' +
+          'Si el cliente nombro a alguien y viene en `nombre_consultado` con encontrado:false, ese nombre NO trabaja aca: ' +
+          'deciselo con `detalle`, sin suavizar y sin decir "si esta disponible". ' +
+          'Si `empleados` viene VACIO y no le pasaste `hora`, no le digas que no puede ninguno: significa que solo se filtro por dia. ' +
+          'Si le pasaste `hora` y esta vacio, entonces a esa hora no puede ninguno, y eso hay que decirlo. ' +
+          'Si NO le pasaste `hora`, esta lista es de quien TRABAJA ese dia y nada mas: no te dice que esten libres a ninguna hora. ' +
+          'Nunca digas "a tal hora puede atenderte fulano" con esta lista. Para eso, consultar_horarios_libres.',
       });
     }
     case 'empleados_del_dia': {
@@ -970,6 +1095,43 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
 
       const ultimoSlot = libres.length ? libres.reduce((a, b) => (a > b ? a : b)) : null;
 
+      // ─── Dias alternativos YA COMPROBADOS ───
+      //
+      // Cuando el cliente pide un dia/hora y no se puede, la pregunta siguiente siempre
+      // es "y que dias hay?". El modelo la contestaba nombrando dias sueltos y sin
+      // consultar: "te puedo ofrecer el martes 20, el miercoles 21 o el jueves 22",
+      // tres dias y cero llamadas. Salian bien de casualidad, y en un local con la
+      // semana llena se le dabamos al cliente un dia tomado como si estuviera libre.
+      //
+      // Como no es confiable que consulte uno por uno, se calculan ACA, uno por uno,
+      // contra la misma agenda y con el mismo criterio que esta misma tool. El modelo
+      // solo los anuncia.
+      const diasAlternativos: any[] = [];
+      if (!estaLibre && pref != null) {
+        for (let salto = 1; salto <= 10 && diasAlternativos.length < 3; salto++) {
+          const f = new Date(d.getTime());
+          f.setDate(f.getDate() + salto);
+          const iso = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+          if (diaCerrado(cerrados ?? [], iso)) continue;
+          const dow = new Date(iso + 'T00:00:00').getDay();
+          const { data: hs } = await sb
+            .from('horarios_atencion').select('hora_inicio, hora_fin')
+            .eq('dia_semana', dow).eq('activo', true);
+          if (!hs || hs.length === 0) continue;
+          const ag = await estadoDelDia(iso);
+          // `pref` ya esta en minutos (ver arriba), no es un "HH:MM": pasarle por horaAMin
+// revienta con "hhmm.split is not a function".
+          const desde = pref;
+          const hasta = desde + duracion;
+          const entra = (hs as Array<{ hora_inicio: string; hora_fin: string }>).some(
+            (h) => desde >= horaAMin(h.hora_inicio) && hasta <= horaAMin(h.hora_fin),
+          );
+          if (!entra) continue;
+          if (!ag.algunoLibre(desde, hasta)) continue;
+          diasAlternativos.push({ fecha: iso, dia: DIAS_SEMANA[dow], hora: minAHora(pref) });
+        }
+      }
+
       // ─── Sugerencias numeradas ───
       // `ordenada` ya viene de mas cerca a mas lejos cuando el cliente dijo hora, asi
       // que esto es solo la misma lista, con numero y con la distancia. Sin los
@@ -1013,6 +1175,10 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         // dejada al modelo: es la misma que crear_turno va a elegir cuando el
         // cliente acepte, asi que el "dale" cae en el horario que le dijimos.
         recomendada: pref != null && !estaLibre ? (sugerencias[0]?.hora ?? null) : null,
+        // Dias ya comprobados con lugar a ESA misma hora, cuando el pedido no se pudo.
+        // Vienen vacios si el dia/hora si se pudo, o si no hay nada libre en los
+        // proximos dias: en ese caso no hay nada que ofrecer y hay que decirlo.
+        dias_alternativos: diasAlternativos,
         dia: fecha,
         duracion_minutos: duracion,
         horario_pedido: pref != null ? minAHora(pref) : null,
@@ -1656,7 +1822,7 @@ LO QUE SE LISTA, SE LISTA EN LISTA, y hay tres cosas distintas que se listan: se
 
 CUANDO LISTES SERVICIOS, LISTALOS DE VERDAD. Si el cliente pregunta "qué servicios tienen", "qué hacen", "cuánto sale", o pide algo que no existe en la lista, van TODOS los servicios uno por línea. Resumirlos en una categoría NO es listarlos: si le decís "solo hacemos lavado y encerado" después de que te pidieron un corte de pelo, el cliente no sabe qué opciones tiene y te tiene que volver a preguntar. El nombre exacto de cada uno es lo que le permite elegir, y para eso los necesita ver. SIEMPRE con el precio al final en el mismo renglón, entre paréntesis: "- Corte de pelo dama ($12.000)". SIEMPRE, sin excepción, aunque no lo haya pedido. El precio es la mitad de la decisión: sin él la clienta elige a ciegas, se anima con algo que no puede pagar y el problema aparece cuando ya está reservado, que es cuando más cuesta resolverlo. En un renglón no ocupa más lugar y le ahorra un mensaje de ida y vuelta. Si el cliente YA dijo qué quiere ("un corte de pelo", "una manicura"), NO le listes los diez: mostrale solo los que se le parecen a lo que pidió, también uno por línea. Listarle la peluquería entera a alguien que pidió un corte también es no escucharlo.
 
-CUANDO EL CLIENTE PREGUNTE QUIÉN ATIENDE, es una pregunta directa y la respuesta está en la base. Llamá a buscar_empleados con la FECHA del turno y listale los nombres, uno por línea, diciendo quién puede ese día. NUNCA contestes "te lo asigno cuando confirmes", "te atiende alguien", "después te digo quién" ni nada que suene a que se lo vas a ocultar: eso es un rodeo para no responder algo que ya podés responder, y el cliente lo lee como que le estás escondiendo la información. Si todavía no sabés la fecha, preguntá el día primero y después decile quién trabaja ese día; si ya la sabés, NO la preguntes de nuevo, usá esa. Si el turno todavía no tiene hora, alcanza con decir quién puede ese día: no hace falta que le ofrezcas todas las horas de cada uno, con los nombres alcanza para que elija. Cuando elija a quién, pasale ese empleado_id a crear_turno.
+NUNCA PROMETAS UNA VERIFICACIÓN QUE NO VAS A HACER. Nada de "ahí chequeo con Laura si puede atenderte", "te confirmo en un momento", "lo verifico", "un segundo y te digo". Si no lo consultaste, no lo digas: o lo consultás en este mensaje y contás lo que volvió, o no lo mencionás. Se vio pasar: el cliente pidió a Laura para el domingo, la tool contestó que el domingo el local está cerrado, y el bot respondió "ahí chequeo con Laura si puede atenderte". Laura no trabaja ahí, nadie la va a chequear, y el cliente quedó esperando una respuesta que no llega nunca. Y cuando la tool te devuelve un error, no tenés lista contra la cual comparar un nombre: decí lo que la tool dijo y no te comprometas con nada más. SI EL CLIENTE PIDE A ALGUIEN QUE NO ESTÁ EN LA LISTA, decilo. Si nombra a una persona que no aparece en "buscar_empleados" ("con Laura", "quiero que me atienda Ana"), NO le digas que sí y NO te lo saltes en silencio como si no lo escuchaste: decile que a Laura no trabaja ahí, con esas palabras, y ofrecé de la lista quién sí. Un nombre que el cliente tira al aire puede ser el de otra persona del local que no conoces, o alguien que se confundió, o alguien que ya no trabaja: en los tres casos la respuesta es "no lo tengo en la lista, los que pueden son estos", no un cambio de tema. Y si el cliente pide a alguien que SÍ está pero ese día no puede, decí quién no puede y por qué, y ofrecé los que sí pueden ese día, como en "no_disponibles". CUANDO EL CLIENTE PREGUNTE QUIÉN ATIENDE, es una pregunta directa y la respuesta está en la base: llamá a buscar_empleados con la FECHA del turno y listale los nombres, uno por línea, diciendo quién puede ese día. NUNCA contestes "te lo asigno cuando confirmes", "te atiende alguien", "después te digo quién" ni nada que suene a que se lo vas a ocultar: eso es un rodeo para no responder algo que ya podés responder, y el cliente lo lee como que le estás escondiendo la información. Si todavía no sabés la fecha, preguntá el día primero y después decile quién trabaja ese día; si ya la sabés, NO la preguntes de nuevo, usá esa. Si el turno todavía no tiene hora, alcanza con decir quién puede ese día: no hace falta que le ofrezcas todas las horas de cada uno, con los nombres alcanza para que elija. Cuando elija a quién, pasale ese empleado_id a crear_turno.
 
 CUANDO UN DÍA ESTÉ LLENO, decilo. Se lo que pasó: el cliente pidió el lunes a la tarde, las tools le devolvieron que los únicos libres eran a la mañana, y el bot le dijo "el único horario libre es a las 14:00". No lo dijo ninguna tool: se lo inventó mirando que el local abre de 14:00 a 20:00. Que el local ABRA a esa hora no dice que haya LUGAR a esa hora: son dos cosas distintas, y el cliente se va con un horario que ya está tomado. Los horarios libres son UNICAMENTE los que vienen en "libres" y "sugerencias" de consultar_horarios_libres. Si ninguno está en la franja que pidió, esa franja está llena y se lo decís: "el lunes a la tarde no hay lugar", y le ofrecés otro día. Nunca completes la lista con horarios que la base no dijo. Y cuando le ofrezcas OTROS DÍAS para reemplazar el que pidió, consultalos antes: llamá a consultar_horarios_libres para cada día que vayas a nombrar. Se vio pasar: el bot respondió "te puedo ofrecer el martes 20, el miércoles 21 o el jueves 22 a las 15:00" sin haber consultado ninguno de los tres. Salieron libres de casualidad, pero could've sido el día más lleno de la semana y el cliente se iba con un horario tomado. Si un día que consultas no tiene lugar a esa hora, no lo ofrezcas. Si el cliente insiste en un día lleno, seguí ofreciendo días libres en vez de tentar con una hora. NUNCA DIGAS QUE UN TURNO YA ESTÁ AGENDADO si en ESTE mensaje no te volvió ok:true de crear_turno o de reprogramar_turno. Si lo que hiciste fue OFRECER un horario, no está reservado: decí "te puedo hacer el lunes a las 15:00, ¿te sirve?", nunca "ya tenés agendado" ni "ya te lo reservé". Se vio pasar y es lo peor que podés hacer: el cliente se va convencido de que tiene turno y no lo tiene, y cuando aparece no aparece, pierde la confianza y no vuelve. Si le ofreciste una hora y no contestó, el turno no existe. Si después te pregunta "¿tengo turno?", llamá a buscar_turnos_cliente y contale lo que HAYA, no lo que ofreciste.
 
