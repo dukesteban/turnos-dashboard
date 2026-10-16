@@ -2265,6 +2265,38 @@ const telefono = message.from;
   if (propio && ultimosDigitos(propio) === ultimosDigitos(telefono)) {
     return new Response('Mensaje propio, ignorado', { status: 200 });
   }
+  // -- Reintentos de Meta --
+  //
+  // Meta vuelve a mandar el webhook cuando no recibe 200 a tiempo, y a tiempo es
+  // poco: si la respuesta tarda mas de 20 segundos da el mensaje por caido. El bot
+  // tarda facil eso cuando da vueltas de herramientas (buscar cliente, ver
+  // servicios, ver horarios, reservar, confirmar), asi que en los turnos largos el
+  // reintento es la norma y no la excepcion.
+  //
+  // Sin esto se procesaba dos veces. Probado mandando el mismo webhook tres veces:
+  //
+  //   turnos en la base: 1     <- lo salvo el resto del sistema
+  //   mensajes al cliente: 4    <- los cuatro con sus cuatro links
+  //
+  // La clienta recibia lo mismo cuatro veces. Los datos no se rompieron porque la
+  // regla de "ya tenes eso agendado" y la restriccion EXCLUDE frenaron el segundo
+  // turno, pero cuatro respuestas a un solo mensaje se ven como que el bot esta
+  // roto.
+  //
+  // `message.id` (wamid.X) es unico e inmutable por mensaje. Se inserta ANTES de
+  // procesar: el que pierde el insert ya lo proceso otro, y solo contesta 200 para
+  // que Meta deje de reintentar. Va antes de todo lo demas a proposito, porque si
+  // el reintento llegara mientras el primero todavia esta corriendo tiene que
+  // chocar con el indice y no procesar.
+  const mensajeId = message.id ?? '';
+  if (mensajeId) {
+    const { error: errDup } = await sb
+      .from('mensajes_procesados')
+      .insert({ id: mensajeId, telefono });
+    if (errDup) {
+      return new Response('Ya procesado', { status: 200 });
+    }
+  }
 
   // Un like o un emoji NO es una pregunta. Contestarle "solo entiendo texto" a
   // alguien que reaccionó es hablarle al lado, y peor: si manda tres audios seguidos
