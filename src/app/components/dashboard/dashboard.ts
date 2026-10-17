@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth';
 import { SupabaseService } from '../../services/supabase';
 import { nombreMes, fechaDesdeISO } from '../../utils/fechas';
-import { soloLosTurnosDe } from '../../utils/turnos';
+import { soloLosTurnosDe, confirmarVolverAPendiente } from '../../utils/turnos';
 import { contiene } from '../../utils/texto';
 
 /**
@@ -422,6 +422,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return;
     }
     if (estado === 'pendiente') {
+      if (!confirmarVolverAPendiente(this.turnoSeleccionado)) return;
       const id = this.turnoSeleccionado.id;
       await this.supabase.volverAPendiente(id);
       await this.cargarTurnos(); // cargarDatos() en dashboard

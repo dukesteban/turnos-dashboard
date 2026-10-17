@@ -1,4 +1,4 @@
-import { soloLosTurnosDe, soloLasColumnasDe } from './turnos';
+import { soloLosTurnosDe, soloLasColumnasDe, confirmarVolverAPendiente } from './turnos';
 
 // ═════════════════════════════════════════════════════════════════════
 // EL FILTRO DE TURNOS DEL ROL EMPLEADO
@@ -83,5 +83,92 @@ describe('soloLasColumnasDe', () => {
 
   it('compara como numero, no como texto', () => {
     expect(soloLasColumnasDe([{ empleado: { id: '1' } } as any], 1).length).toBe(1);
+  });
+});
+// ─── EL CARTEL DE "VOLVER A PENDIENTE" ───
+//
+// `volverAPendiente()` borra metodo_pago, precio_final, observaciones,
+// servicio_nombre_final y servicio_id_final, y no se recupera. Los dos popups
+// (Agenda y Dashboard) lo llamaban con un clic y sin preguntar nada.
+
+describe('confirmarVolverAPendiente', () => {
+  let original: any;
+
+  beforeEach(() => {
+    original = (globalThis as any).confirm;
+  });
+
+  afterEach(() => {
+    (globalThis as any).confirm = original;
+  });
+
+  function espiarConfirm(respuesta: boolean): string[] {
+    const llamadas: string[] = [];
+    (globalThis as any).confirm = (texto: string) => {
+      llamadas.push(texto);
+      return respuesta;
+    };
+    return llamadas;
+  }
+
+  it('devuelve false si el que aprieta dice que no', () => {
+    espiarConfirm(false);
+    expect(confirmarVolverAPendiente({ estado: 'atendido', precio_final: 12000 })).toBe(false);
+  });
+
+  it('devuelve true si dice que si', () => {
+    espiarConfirm(true);
+    expect(confirmarVolverAPendiente({ estado: 'atendido', precio_final: 12000 })).toBe(true);
+  });
+
+  it('pregunta una sola vez', () => {
+    const llamadas = espiarConfirm(true);
+    confirmarVolverAPendiente({ estado: 'atendido', precio_final: 12000 });
+    expect(llamadas.length).toBe(1);
+  });
+
+  it('no pregunta si el turno no estaba atendido', () => {
+    const llamadas = espiarConfirm(true);
+    expect(confirmarVolverAPendiente({ estado: 'cancelado' })).toBe(true);
+    expect(confirmarVolverAPendiente({ estado: 'pendiente' })).toBe(true);
+    expect(llamadas.length).toBe(0);
+  });
+
+  it('no pregunta si no hay turno', () => {
+    const llamadas = espiarConfirm(true);
+    expect(confirmarVolverAPendiente(null)).toBe(true);
+    expect(llamadas.length).toBe(0);
+  });
+
+  it('el cartel nombra cada cosa que se pierde', () => {
+    const llamadas = espiarConfirm(true);
+    confirmarVolverAPendiente({
+      estado: 'atendido',
+      servicio_nombre_final: 'Coloración completa',
+      precio_final: 45000,
+      metodo_pago: 'Efectivo',
+      observaciones: 'la clienta trajo el tinte'
+    });
+    const texto = llamadas[0];
+    expect(texto).toContain('Coloración completa');
+    expect(texto).toContain('el precio final');
+    expect(texto).toContain('Efectivo');
+    expect(texto).toContain('las observaciones');
+    expect(texto).toContain('no se puede deshacer');
+  });
+
+  it('si estaba atendido pero sin datos, avisa igual', () => {
+    const llamadas = espiarConfirm(true);
+    confirmarVolverAPendiente({ estado: 'atendido' });
+    expect(llamadas[0]).toContain('los datos de la atención');
+    expect(llamadas[0]).toContain('solo se');
+  });
+
+  it('pregunta igual cuando el precio final es 0', () => {
+    // Un turno gratis no es menos un turno atendido: el 0 es falsy en JS y la
+    // condición `!= null` es justamente la que lo agarra.
+    const llamadas = espiarConfirm(true);
+    confirmarVolverAPendiente({ estado: 'atendido', precio_final: 0 });
+    expect(llamadas[0]).toContain('el precio final');
   });
 });

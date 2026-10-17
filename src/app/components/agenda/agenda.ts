@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth';
 import { SupabaseService } from '../../services/supabase';
 import { jornadaCubre, turnoTocadoPorAusencia, textoAusencia, normalizarJornada, debeMostrarColumna, fechaDesdeISO } from '../../utils/fechas';
-import { soloLosTurnosDe, soloLasColumnasDe } from '../../utils/turnos';
+import { soloLosTurnosDe, soloLasColumnasDe, confirmarVolverAPendiente } from '../../utils/turnos';
 
 const PX_POR_MINUTO = 1.2;
 /** Alto del header de columnas (vista dia). Los turnos se corren esta cantidad. */
@@ -828,6 +828,7 @@ claseBloque(turno: any, mini: boolean): string {
       return;
     }
     if (estado === 'pendiente') {
+      if (!confirmarVolverAPendiente(this.turnoSeleccionado)) return;
       const id = this.turnoSeleccionado.id;
       await this.supabase.volverAPendiente(id);
       await this.cargarTurnos(); // cargarDatos() en dashboard
