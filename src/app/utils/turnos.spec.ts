@@ -92,6 +92,10 @@ describe('soloLasColumnasDe', () => {
 // (Agenda y Dashboard) lo llamaban con un clic y sin preguntar nada.
 
 describe('confirmarVolverAPendiente', () => {
+  const ESPERADO =
+    'Si volvés el turno a pendiente se borra lo cargado y eso no se puede deshacer.' +
+    '\n\n¿Seguro que querés hacerlo?';
+
   let original: any;
 
   beforeEach(() => {
@@ -127,6 +131,28 @@ describe('confirmarVolverAPendiente', () => {
     expect(llamadas.length).toBe(1);
   });
 
+  it('el cartel es exactamente el acordado', () => {
+    const llamadas = espiarConfirm(true);
+    confirmarVolverAPendiente({ estado: 'atendido' });
+    expect(llamadas[0]).toBe(ESPERADO);
+  });
+
+  it('el cartel no cambia segun los datos que tenga el turno', () => {
+    // "Lo cargado" es fijo a proposito: una version que armaba la lista con lo que
+    // habia guardado era mas larga y la hacia dos veces mas facil de ignorar.
+    const a = espiarConfirm(true);
+    confirmarVolverAPendiente({ estado: 'atendido' });
+    const b = espiarConfirm(true);
+    confirmarVolverAPendiente({
+      estado: 'atendido',
+      servicio_nombre_final: 'Balayage',
+      precio_final: 75000,
+      metodo_pago: 'Tarjeta',
+      observaciones: 'la clienta trajo el tinte'
+    });
+    expect(a[0]).toBe(b[0]);
+  });
+
   it('no pregunta si el turno no estaba atendido', () => {
     const llamadas = espiarConfirm(true);
     expect(confirmarVolverAPendiente({ estado: 'cancelado' })).toBe(true);
@@ -140,35 +166,18 @@ describe('confirmarVolverAPendiente', () => {
     expect(llamadas.length).toBe(0);
   });
 
-  it('el cartel nombra cada cosa que se pierde', () => {
-    const llamadas = espiarConfirm(true);
-    confirmarVolverAPendiente({
-      estado: 'atendido',
-      servicio_nombre_final: 'Coloración completa',
-      precio_final: 45000,
-      metodo_pago: 'Efectivo',
-      observaciones: 'la clienta trajo el tinte'
-    });
-    const texto = llamadas[0];
-    expect(texto).toContain('Coloración completa');
-    expect(texto).toContain('el precio final');
-    expect(texto).toContain('Efectivo');
-    expect(texto).toContain('las observaciones');
-    expect(texto).toContain('no se puede deshacer');
-  });
-
-  it('si estaba atendido pero sin datos, avisa igual', () => {
+  it('pregunta aunque no haya ningun dato cargado', () => {
+    // Un turno atendido sin datos tampoco pierde nada, pero sigue marcado como
+    // atendido: si alguien marco atendido y nunca cargo nada, volver atras igual le
+    // cambia el estado. El cartel va igual.
     const llamadas = espiarConfirm(true);
     confirmarVolverAPendiente({ estado: 'atendido' });
-    expect(llamadas[0]).toContain('los datos de la atención');
-    expect(llamadas[0]).toContain('solo se');
+    expect(llamadas.length).toBe(1);
   });
 
-  it('pregunta igual cuando el precio final es 0', () => {
-    // Un turno gratis no es menos un turno atendido: el 0 es falsy en JS y la
-    // condición `!= null` es justamente la que lo agarra.
+  it('pregunta con precio final en cero', () => {
     const llamadas = espiarConfirm(true);
     confirmarVolverAPendiente({ estado: 'atendido', precio_final: 0 });
-    expect(llamadas[0]).toContain('el precio final');
+    expect(llamadas.length).toBe(1);
   });
 });

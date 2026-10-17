@@ -49,53 +49,37 @@ export function soloLasColumnasDe(columnas: any[], empleadoId: number | null): a
  *
  * ─── POR QUÉ ESTA EN UN ARCHIVO APARTE ───
  *
- * El botón "Volver a Pendiente" está en DOS lugares: el popup de la Agenda y el del
- * Dashboard. `volverAPendiente()` borra metodo_pago, precio_final, observaciones,
- * servicio_nombre_final y servicio_id_final, y eso no se recupera. Antes los dos lo
- * llamaban con un clic y sin preguntar nada.
+ * El botón "Volver a Pendiente" está en DOS componentes: agenda.ts y dashboard.ts,
+ * con el mismo código pegado. Escrito dos veces pasa lo de siempre: un día se
+ * arregla en la Agenda y el Dashboard sigue sin preguntar. Es lo mismo que pasó con
+ * el buscador de Personas, duplicado en tres pestañas y una quedó distinta.
  *
- * Escribido dos veces, pasa lo de siempre: un día se arregla en la Agenda y el
- * Dashboard sigue sin preguntar. Es lo mismo que pasó con el buscador de Personas,
- * duplicado en tres pestañas y una quedó distinta. Acá la diferencia es BORRAR
- * DATOS, así que la duplicación sale más cara.
+ * ─── POR QUÉ PIDE CONFIRMACIÓN ───
+ *
+ * `volverAPendiente()` borra metodo_pago, precio_final, observaciones,
+ * servicio_nombre_final y servicio_id_final. No se recupera. Y el botón está pegado
+ * al "Atendido" en la misma pantalla, así que el error de un dedo es fácil de hacer
+ * y el aviso llega tarde, cuando el dato ya no está.
+ *
+ * ─── POR QUÉ EL CARTEL ES CORTO ───
+ *
+ * Se probó primero una versión que nombraba cada cosa: "se borra el servicio
+ * atendido (Coloración completa), el precio final, la forma de pago (Efectivo) y
+ * las observaciones". Son ocho líneas y el que lo aprieta lo pasa por alto sin
+ * leer, que es justo lo que hace un cartel largo.
+ *
+ * "Lo cargado" alcanza: el que atiende un turno sabe qué cargó, y el cartel está
+ * para frenar el error de un dedo, no para hacer un inventario.
  *
  * ─── POR QUÉ SOLO PREGUNTA SI ESTABA ATENDIDO ───
  *
- * Volver a pendiente desde 'cancelado' no borra nada: ese turno nunca tuvo datos de
+ * De 'cancelado' a 'pendiente' no se borra nada: ese turno nunca tuvo datos de
  * atención. Ahí una pregunta de más es ruido, y enseña a ignorar el cartel.
- *
- * ─── POR QUÉ DICE QUÉ SE PIERDE ───
- *
- * Un "¿Estás seguro?" a secas no sirve: el que lo aprieta está atendiendo de a un
- * turno y no sabe que hay un precio final guardado. El cartel nombra las cosas
- * concretas para que la decisión sea informada.
  */
 export function confirmarVolverAPendiente(turno: any): boolean {
   if (!turno || turno.estado !== 'atendido') return true;
-
-  const sePierde: string[] = [];
-  if (turno.servicio_nombre_final) {
-    sePierde.push(`el servicio atendido (${turno.servicio_nombre_final})`);
-  }
-  if (turno.precio_final != null && turno.precio_final !== '') {
-    sePierde.push('el precio final');
-  }
-  if (turno.metodo_pago) {
-    sePierde.push(`la forma de pago (${turno.metodo_pago})`);
-  }
-  if (turno.observaciones) {
-    sePierde.push('las observaciones');
-  }
-
-  const lista = sePierde.length ? sePierde.join(', ') : 'los datos de la atención';
-  const extra = sePierde.length
-    ? ''
-    : '\n\nEste turno figure como atendido pero sin datos cargados, así que solo se ' +
-      'borra la marca de atendido.';
-
   return confirm(
-    `Si volvés el turno a pendiente se borra ${lista}, y eso no se puede deshacer.` +
-    extra +
+    'Si volvés el turno a pendiente se borra lo cargado y eso no se puede deshacer.' +
     '\n\n¿Seguro que querés hacerlo?'
   );
 }
