@@ -356,6 +356,19 @@ const TOOLS = [
     },
   },
   {
+    name: 'corregir_nombre_cliente',
+    description:
+      'Corrige el nombre de un cliente YA registrado, cuando se equivoco al dictarlo o escribio mal su apellido. Es el nombre del CLIENTE, no el del turno. IMPORTANTE: llamala DOS veces. La primera con confirmado:false, que devuelve el nombre actual y el nuevo para que se los muestres al cliente y el diga que si. Solo si el cliente confirma, la llamás otra vez con confirmado:true y ahi se aplica. La correccion tambien actualiza el nombre en los turnos anteriores del cliente.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        nombre_nuevo: { type: 'string', description: 'Nombre y apellido completos, tal cual lo quiere el cliente.' },
+        confirmado: { type: 'boolean', description: 'false para ver el cambio sin aplicarlo, true para aplicarlo.' },
+      },
+      required: ['nombre_nuevo'],
+    },
+  },
+  {
     name: 'cancelar_turno',
     description: 'Cancela un turno. Si faltan menos horas que el minimo configurado, devuelve error fuera_de_plazo.',
     input_schema: {
@@ -1593,6 +1606,81 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
           : 'Solo turnos de hoy en adelante, sin cancelados.',
       });
     }
+    // ─── Corregir el nombre de un cliente ───
+    //
+    // El bot SI o si le promete al cliente que lo cambia. Se vio pasar: la clienta
+    // pidio corregir su nombre, dijo el nuevo, y el bot contesto "Listo, lo tengo
+    // anotado" sin llamar ninguna tool. En la base no habia ninguna ficha con ese
+    // nombre. Es el mismo error de siempre al reves: anunciar lo que la base todavia
+    // no registro.
+    //
+    // Va en dos pasos a proposito. Primero se llama con confirmado:false, que
+    // devuelve el nombre actual y el nuevo, para que el cliente lea "de X a Y" y diga
+    // que si. Un nombre no se cambia porque al bot se le ocurra: ese paso es lo que
+    // hace que el cambio sea consentido y no un accidente.
+    //
+    // Actualiza tambien los turnos anteriores. Es lo mismo que hace el panel con
+    // updateCliente, y si no, la ficha queda diciendo una cosa y el historial otra:
+    // al buscar el nombre nuevo no aparece ningun turno.
+    case 'corregir_nombre_cliente': {
+      const nuevo = String(input.nombre_nuevo ?? '').trim();
+      if (!nuevo) return err('falta_nombre_nuevo');
+
+      const { data: existe } = await sb.rpc('buscar_cliente_por_telefono', { p_telefono: telefono });
+      const cliente = (existe ?? [])[0];
+      if (!cliente) {
+        return err(
+          'cliente_no_registrado',
+          'Ese numero no tiene ninguna ficha de cliente todavia. Si es el primero que agenda, el nombre se guarda solo.',
+        );
+      }
+
+      // Misma regla que al agendar: nombre y apellido. Sin apellido quedan dos
+      // fichas iguales y el panel deja de saber cual es cual.
+      const palabras = nuevo.split(/\s+/).filter(Boolean);
+      const soloUnApellido = palabras.length === 1 && /^[A-Za-zÁ-ÿÑñ'-]+$/.test(palabras[0]);
+      if (palabras.length < 2 && !soloUnApellido) {
+        return err(
+          'falta_apellido',
+          `El cliente dio solo "${nuevo}". Falta el apellido: con un solo nombre no se puede, porque dos personas pueden llamarse igual y los turnos quedan en la ficha de la otra.`,
+        );
+      }
+
+      const actual = String(cliente.nombre ?? '').trim();
+      if (actual.toLowerCase() === nuevo.toLowerCase()) {
+        return err('mismo_nombre', `El nombre ya es "${actual}". No hay nada que cambiar.`);
+      }
+
+      const { count: turnosAfectados } = await sb
+        .from('turnos').select('id', { count: 'exact', head: true }).eq('cliente_id', cliente.id);
+
+      if (input.confirmado !== true) {
+        return JSON.stringify({
+          ok: true,
+          aplicado: false,
+          nombre_actual: actual,
+          nombre_nuevo: nuevo,
+          turnos_afectados: turnosAfectados ?? 0,
+          detalle:
+            'Todavia NO se cambio nada. Mostrale al cliente el nombre que tiene y el que quiere, preguntale si lo confirma, ' +
+            'y solo si dice que si, volvela a llamar con confirmado:true.',
+        });
+      }
+
+      const { error: errCli } = await sb.from('clientes').update({ nombre: nuevo }).eq('id', cliente.id);
+      if (errCli) return err('error_corriendo_nombre', errCli.message);
+
+      const { error: errTur } = await sb.from('turnos').update({ cliente_nombre: nuevo }).eq('cliente_id', cliente.id);
+      if (errTur) return err('error_corriendo_turnos', errTur.message);
+
+      return JSON.stringify({
+        ok: true,
+        aplicado: true,
+        nombre_anterior: actual,
+        nombre_nuevo: nuevo,
+        turnos_actualizados: turnosAfectados ?? 0,
+      });
+    }
     case 'cancelar_turno': {
       const { turno_id } = input;
       const { data: turno } = await sb.from('turnos').select('fecha, hora_inicio, estado').eq('id', turno_id).single();
@@ -1888,6 +1976,8 @@ Con una línea antes que diga, corta y natural, que se los estás pasando para s
 LO QUE SE LISTA, SE LISTA EN LISTA, y hay tres cosas distintas que se listan: servicios, empleados y horarios. Todos van uno por línea, con "- " adelante, y NUNCA separados por comas en un párrafo. Diez servicios pegados con comas son un bloque de texto que el cliente tiene que leer entero para encontrar el que quería; uno por línea se escanea de arriba abajo con el pulgar.
 
 CUANDO LISTES SERVICIOS, LISTALOS DE VERDAD. Si el cliente pregunta "qué servicios tienen", "qué hacen", "cuánto sale", o pide algo que no existe en la lista, van TODOS los servicios uno por línea. Resumirlos en una categoría NO es listarlos: si le decís "solo hacemos lavado y encerado" después de que te pidieron un corte de pelo, el cliente no sabe qué opciones tiene y te tiene que volver a preguntar. El nombre exacto de cada uno es lo que le permite elegir, y para eso los necesita ver. SIEMPRE con el precio al final en el mismo renglón, entre paréntesis: "- Corte de pelo dama ($12.000)". SIEMPRE, sin excepción, aunque no lo haya pedido. El precio es la mitad de la decisión: sin él la clienta elige a ciegas, se anima con algo que no puede pagar y el problema aparece cuando ya está reservado, que es cuando más cuesta resolverlo. En un renglón no ocupa más lugar y le ahorra un mensaje de ida y vuelta. Si el cliente YA dijo qué quiere ("un corte de pelo", "una manicura"), NO le listes los diez: mostrale solo los que se le parecen a lo que pidió, también uno por línea. Listarle la peluquería entera a alguien que pidió un corte también es no escucharlo.
+
+CORREGIR EL NOMBRE DEL CLIENTE: si el cliente dice "quiero corregir mi nombre", "mi nombre esta mal", "me equivoque con el apellido" o cualquier cosa parecida, NO le prometas que lo vas a cambiar ni lo cambies de una. Primero llamá a corregir_nombre_cliente con confirmado:false: eso te devuelve el nombre que tiene ahora y el que quiere el cliente. Mostraselos y preguntas "¿lo cambiamos?". SOLO si el cliente dice que si, la llamás otra vez con confirmado:true. Si el cliente se arrepiente, no la llames con true y decile que no se cambió nada. Esto no es un detalle: se vio al bot decir "Listo, lo tengo anotado" sin llamar ninguna tool, y en la base no había ninguna ficha con ese nombre. Nunca digas que algo quedó anotado o guardado si la tool no te lo confirmó.
 
 EL NOMBRE DEL CLIENTE SIEMPRE ES NOMBRE Y APELLIDO. Si el cliente es nuevo y da un solo nombre ("soy Pamela", "me llamo Ana"), NO lo agendes: preguntale el apellido en una línea corta, "¿Y tu apellido?", y recien ahí creá el turno con los dos. No inventes un apellido, no le completes el nombre con el de otro cliente parecido, y no le preguntes "¿sos la misma Pamela que ya tenemos registrada?", que deja el problema donde estaba y además es raro. Razón: en el panel dos Pamelas son dos fichas, y si se mezclan una está viendo los turnos de la otra. Si creás el turno sin apellido, la tool te devuelve falta_apellido, y eso no es un error para Fallar: es la señal de que falta preguntarle.
 
