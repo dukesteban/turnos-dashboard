@@ -27,6 +27,50 @@ export class SupabaseService {
     );
   }
 
+  // ─── CACHE CORTO DE CONFIGURACION ─────────────────────────────────────────
+  //
+  // La pantalla de Configuracion pide seis listas al entrar (config, dias
+  // cerrados, horarios, servicios, metodos de pago y usuarios), y son siempre
+  // las mismas hasta que alguien las edita, que se editan justo ahi. Volver a
+  // la pantalla costaba ~700ms de consultas para mostrar lo mismo.
+  //
+  // 30 segundos y no para siempre: el panel puede estar abierto en dos lados y
+  // no queremos un precio viejo eterno. Ademas cada escritura de estas tablas
+  // llama a `invalidarConfig()`, asi que lo que se guarda desde la app se ve al
+  // instante.
+  private readonly cacheConfig = new Map<string, { vence: number; valor: any }>();
+  private readonly enVueloConfig = new Map<string, Promise<any>>();
+
+  private conCache<T>(clave: string, pedir: () => Promise<T>): Promise<T> {
+    const guardado = this.cacheConfig.get(clave);
+    if (guardado && guardado.vence > Date.now()) return Promise.resolve(guardado.valor as T);
+
+    // Dos pantallas pueden pedir lo mismo al mismo tiempo: el navbar y la
+    // pantalla de Configuracion piden `configuracion` en el mismo arranque.
+    const yaVa = this.enVueloConfig.get(clave);
+    if (yaVa) return yaVa as Promise<T>;
+
+    const pedido = pedir()
+      .then((valor) => {
+        this.cacheConfig.set(clave, { vence: Date.now() + 30_000, valor });
+        return valor;
+      })
+      .finally(() => this.enVueloConfig.delete(clave));
+
+    this.enVueloConfig.set(clave, pedido);
+    return pedido;
+  }
+
+  /**
+   * Tira el cache de Configuracion.
+   *
+   * Se llama desde cada escritura de esas tablas: si no, guardar un servicio y
+   * volver a pedir la lista devolveria la lista de antes.
+   */
+  private invalidarConfig() {
+    this.cacheConfig.clear();
+  }
+
   suscribirTurnos(callback: () => void) {
     return this.supabase
       .channel('turnos-cambios')
@@ -42,7 +86,12 @@ export class SupabaseService {
       .channel('horarios-cambios')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'horarios_atencion' },
-        () => callback()
+        () => {
+          // El cambio puede venir de otra pestaña o de otro usuario: el cache de
+          // Configuracion quedaria con los horarios de antes.
+          this.invalidarConfig();
+          callback();
+        }
       )
       .subscribe();
   }
@@ -63,12 +112,14 @@ export class SupabaseService {
 
   /** Los usuarios, para la pantalla de administracion. */
   async getUsuarios(): Promise<any[]> {
-    const { data, error } = await this.supabase
-      .from('usuarios')
-      .select('*')
-      .order('usuario', { ascending: true });
-    if (error) throw error;
-    return data || [];
+    return this.conCache('usuarios', async () => {
+      const { data, error } = await this.supabase
+        .from('usuarios')
+        .select('*')
+        .order('usuario', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    });
   }
 
   private async llamarUsuarios(cuerpo: Record<string, any>): Promise<any> {
@@ -83,6 +134,9 @@ export class SupabaseService {
       throw new Error(mensaje);
     }
     if (!data?.ok) throw new Error(data?.error || 'No se pudo completar el pedido.');
+    // Se creo, edito o borro un usuario: la lista cacheada de Configuracion
+    // quedaria con el de antes.
+    this.invalidarConfig();
     return data;
   }
 
@@ -284,11 +338,13 @@ export class SupabaseService {
 
   // CONFIGURACION
   async getConfiguracion() {
-    const { data, error } = await this.supabase
-      .from('configuracion')
-      .select('*');
-    if (error) throw error;
-    return data;
+    return this.conCache('configuracion', async () => {
+      const { data, error } = await this.supabase
+        .from('configuracion')
+        .select('*');
+      if (error) throw error;
+      return data;
+    });
   }
 
   async updateConfiguracion(clave: string, valor: string) {
@@ -297,6 +353,7 @@ export class SupabaseService {
       .update({ valor })
       .eq('clave', clave);
     if (error) throw error;
+    this.invalidarConfig();
   }
 
   async upsertConfiguracion(clave: string, valor: string) {
@@ -304,6 +361,7 @@ export class SupabaseService {
       .from('configuracion')
       .upsert({ clave, valor }, { onConflict: 'clave' });
     if (error) throw error;
+    this.invalidarConfig();
   }
 
   // ── PUESTOS: la tabla ya NO EXISTE (migracion 011) ─────────
@@ -538,13 +596,15 @@ export class SupabaseService {
 
   // METODOS DE PAGOS
   async getMetodosPago() {
-    const { data, error } = await this.supabase
-      .from('metodos_pago')
-      .select('*')
-      .eq('activo', true)
-      .order('orden');
-    if (error) throw error;
-    return data;
+    return this.conCache('metodos_pago', async () => {
+      const { data, error } = await this.supabase
+        .from('metodos_pago')
+        .select('*')
+        .eq('activo', true)
+        .order('orden');
+      if (error) throw error;
+      return data;
+    });
   }
 
   async createMetodoPago(nombre: string, emoji: string) {
@@ -553,6 +613,7 @@ export class SupabaseService {
       .insert({ nombre, emoji, orden: 99 })
       .select().single();
     if (error) throw error;
+    this.invalidarConfig();
     return data;
   }
 
@@ -562,6 +623,7 @@ export class SupabaseService {
       .update(datos)
       .eq('id', id);
     if (error) throw error;
+    this.invalidarConfig();
   }
 
   async deleteMetodoPago(id: number) {
@@ -570,17 +632,20 @@ export class SupabaseService {
       .delete()
       .eq('id', id);
     if (error) throw error;
+    this.invalidarConfig();
   }
 
   // HORARIOS
   async getHorarios() {
-    const { data, error } = await this.supabase
-      .from('horarios_atencion')
-      .select('*')
-      .order('dia_semana', { ascending: true })
-      .order('hora_inicio', { ascending: true });
-    if (error) throw error;
-    return data;
+    return this.conCache('horarios', async () => {
+      const { data, error } = await this.supabase
+        .from('horarios_atencion')
+        .select('*')
+        .order('dia_semana', { ascending: true })
+        .order('hora_inicio', { ascending: true });
+      if (error) throw error;
+      return data;
+    });
   }
 
   async updateHorario(id: number, horario: any) {
@@ -589,6 +654,7 @@ export class SupabaseService {
       .update(horario)
       .eq('id', id);
     if (error) throw error;
+    this.invalidarConfig();
   }
 
   async createHorario(horario: any) {
@@ -598,6 +664,7 @@ export class SupabaseService {
       .select()
       .single();
     if (error) throw error;
+    this.invalidarConfig();
     return data;
   }
 
@@ -607,16 +674,19 @@ export class SupabaseService {
       .delete()
       .eq('id', id);
     if (error) throw error;
+    this.invalidarConfig();
   }
 
   //DÍAS CERRADOS
   async getDiasCerrados() {
-    const { data, error } = await this.supabase
-      .from('dias_cerrados')
-      .select('*')
-      .order('fecha', { ascending: true });
-    if (error) throw error;
-    return data;
+    return this.conCache('dias_cerrados', async () => {
+      const { data, error } = await this.supabase
+        .from('dias_cerrados')
+        .select('*')
+        .order('fecha', { ascending: true });
+      if (error) throw error;
+      return data;
+    });
   }
 
   async createDiasCerrados(fecha: string, fechaHasta: string | null, motivo: string) {
@@ -626,6 +696,7 @@ export class SupabaseService {
       .select()
       .single();
     if (error) throw error;
+    this.invalidarConfig();
     return data;
   }
 
@@ -635,6 +706,7 @@ export class SupabaseService {
       .update({ fecha, fecha_hasta: fechaHasta || null, motivo })
       .eq('id', id);
     if (error) throw error;
+    this.invalidarConfig();
   }
 
   async deleteDiasCerrados(id: number) {
@@ -643,16 +715,19 @@ export class SupabaseService {
       .delete()
       .eq('id', id);
     if (error) throw error;
+    this.invalidarConfig();
   }
 
   // SERVICIOS
   async getServicios() {
-    const { data, error } = await this.supabase
-      .from('servicios')
-      .select('*')
-      .order('precio', { ascending: true });
-    if (error) throw error;
-    return data;
+    return this.conCache('servicios', async () => {
+      const { data, error } = await this.supabase
+        .from('servicios')
+        .select('*')
+        .order('precio', { ascending: true });
+      if (error) throw error;
+      return data;
+    });
   }
 
   async createServicio(servicio: any) {
@@ -662,6 +737,7 @@ export class SupabaseService {
       .select()
       .single();
     if (error) throw error;
+    this.invalidarConfig();
     return data;
   }
 
@@ -671,6 +747,7 @@ export class SupabaseService {
       .update(servicio)
       .eq('id', id);
     if (error) throw error;
+    this.invalidarConfig();
   }
 
   async deleteServicio(id: number) {
@@ -679,6 +756,7 @@ export class SupabaseService {
       .delete()
       .eq('id', id);
     if (error) throw error;
+    this.invalidarConfig();
   }
 
   // CLIENTES

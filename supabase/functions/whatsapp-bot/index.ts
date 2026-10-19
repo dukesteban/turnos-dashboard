@@ -446,17 +446,30 @@ const TONOS: Record<string, string> = {
   formal: 'Formal: trato de "usted", ustedes, más cuidado en las frases, sin apuro. Para un cliente que se queja o consulta un reclamo.',
 };
 
-async function contextoNegocio(): Promise<{ nombre: string; cierres: string | null; tono: string }> {
+async function contextoNegocio(): Promise<{
+  nombre: string;
+  cierres: string | null;
+  diasQueNoAbre: string | null;
+  tono: string;
+}> {
   // El orden de la desestructuracion tiene que CALCAR con el del arreglo. Antes
   // quedaron cruzados y `cerrados` recibia el tono: `(cerrados ?? []).filter` tiraba
   // TypeError y TODOS los mensajes del bot caian en el mensaje de falla.
-  const [{ data: conf }, { data: cerrados }, { data: tonoConf }] = await Promise.all([
+  const [{ data: conf }, { data: cerrados }, { data: tonoConf }, { data: horarios }] = await Promise.all([
     sb.from('configuracion').select('valor').eq('clave', 'nombre_negocio').maybeSingle(),
     sb.from('dias_cerrados').select('fecha, fecha_hasta, motivo').gte('fecha', new Date().toISOString().slice(0, 10)),
     sb.from('configuracion').select('valor').eq('clave', 'tono').maybeSingle(),
+    sb.from('horarios_atencion').select('dia_semana').eq('activo', true),
   ]);
 
   const nombre = conf?.valor || 'el lavadero';
+
+  // Los dias de la semana sin horario de atencion. Es el dato que le faltaba al
+  // modelo: la tabla de fechas dice "domingo 25", no dice que el local no abre
+  // los domingos, y por eso ofrecia el domingo como alternativa varias vezes.
+  const abiertos = new Set((horarios ?? []).map((h: any) => h.dia_semana));
+  const sinAbrir = DIAS_SEMANA.filter((_, i) => !abiertos.has(i));
+  const diasQueNoAbre = sinAbrir.length ? sinAbrir.join(', ') : null;
 
   const proximos = (cerrados ?? [])
     .filter((c: any) => new Date(c.fecha + 'T00:00:00').getTime() <= Date.now() + 1000 * 60 * 60 * 24 * 30)
@@ -464,7 +477,7 @@ async function contextoNegocio(): Promise<{ nombre: string; cierres: string | nu
 
   const tono = TONOS[(tonoConf?.valor ?? '').trim()] || TONOS.informal;
 
-  if (proximos.length === 0) return { nombre, cierres: null, tono };
+  if (proximos.length === 0) return { nombre, cierres: null, diasQueNoAbre, tono };
 
   const frases = proximos.slice(0, 2).map((c: any) => {
     const d = new Date(c.fecha + 'T00:00:00');
@@ -485,6 +498,7 @@ async function contextoNegocio(): Promise<{ nombre: string; cierres: string | nu
   return {
     nombre,
     tono,
+    diasQueNoAbre,
     // Sin el "recordale que" adelante: el prompt ya dice "y avisale que ...", y
     // quedaba "avisale que recordale que el 24 ...".
     cierres: frases.join(' y '),
@@ -658,6 +672,88 @@ async function estadoDelDia(fecha: string, excluirTurnoId?: number) {
       return otro ? otro.id : null;
     },
   };
+}
+
+/**
+ * Los proximos dias en los que el local abre Y hay lugar, ya comprobados.
+ *
+ * Se usa cuando el dia que pidio el cliente esta cerrado (por `dias_cerrados` o
+ * porque ese dia de la semana no abre). Sin esto el modelo nombraba dias "de
+ * memoria": en test ofrecio el domingo en un local que no abre los domingos,
+ * porque la unica instruccion que tenia era "ofrece otro dia" y la tabla de
+ * fechas no dice en que dias abre el local.
+ *
+ * Devuelve fecha, nombre del dia y una hora concreta libre, para que la oferta
+ * sea sobre datos y no sobre una suposicion.
+ */
+async function diasAbiertosCercanos(
+  cerrados: Array<{ fecha: string; fecha_hasta?: string | null }>,
+  desdeFecha: string,
+  duracion: number,
+  limite = 3,
+): Promise<Array<{ fecha: string; dia: string; hora: string }>> {
+  const salida: Array<{ fecha: string; dia: string; hora: string }> = [];
+  const base = new Date(desdeFecha + 'T00:00:00');
+
+  for (let salto = 1; salto <= 14 && salida.length < limite; salto++) {
+    const f = new Date(base.getTime());
+    f.setDate(f.getDate() + salto);
+    const iso = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+    if (diaCerrado(cerrados, iso)) continue;
+
+    const dow = f.getDay();
+    const { data: hs } = await sb
+      .from('horarios_atencion')
+      .select('hora_inicio, hora_fin')
+      .eq('dia_semana', dow)
+      .eq('activo', true)
+      .order('hora_inicio', { ascending: true });
+    if (!hs || hs.length === 0) continue;
+
+    const ag = await estadoDelDia(iso);
+    const bloque = (hs as Array<{ hora_inicio: string; hora_fin: string }>).find(
+      (h) => horaAMin(h.hora_inicio) + duracion <= horaAMin(h.hora_fin),
+    );
+    if (!bloque) continue;
+
+    const desde = horaAMin(bloque.hora_inicio);
+    if (!ag.algunoLibre(desde, desde + duracion)) continue;
+    salida.push({ fecha: iso, dia: DIAS_SEMANA[dow], hora: minAHora(desde) });
+  }
+
+  return salida;
+}
+
+/**
+ * El cierre mas cercano a una fecha (hasta 3 dias antes o despues), para
+ * avisarlo cuando el cliente reserva o pregunta justo al lado.
+ *
+ * Va en el resultado de la tool y no solo en el prompt: pedirle al modelo
+ * "recordalo" funcionaba a veces y a veces no (se probo: reservo el viernes 23
+ * con el local cerrado el sabado 24 y no dijo nada). Con el dato delante de la
+ * confirmacion, no depende de que se acuerde.
+ */
+function cierreCerca(
+  cerrados: Array<{ fecha: string; fecha_hasta?: string | null; motivo?: string | null }>,
+  fecha: string,
+): { fecha: string; motivo: string | null; detalle: string } | null {
+  const base = new Date(fecha + 'T00:00:00').getTime();
+  let mejor: { fecha: string; motivo: string | null; detalle: string; dist: number } | null = null;
+
+  for (let salto = -3; salto <= 3; salto++) {
+    if (salto === 0) continue; // ese mismo dia ya se rechaza aparte
+    const f = new Date(base);
+    f.setDate(f.getDate() + salto);
+    const iso = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+    const c = cierreQueCubre(cerrados, iso);
+    if (!c) continue;
+    const dist = Math.abs(salto);
+    if (!mejor || dist < mejor.dist) {
+      mejor = { fecha: iso, motivo: c.motivo ?? null, detalle: detalleCerrado(c), dist };
+    }
+  }
+
+  return mejor ? { fecha: mejor.fecha, motivo: mejor.motivo, detalle: mejor.detalle } : null;
 }
 
 // ─── Ejecutar la tool que eligio el modelo ───
@@ -1025,11 +1121,30 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
           const tb = horaAMin(String(t.hora_fin ?? '00:00').slice(0, 5));
           return ta < b && a < tb;
         });
+      // 0. La duracion la manda el servicio, no un slot fijo de 30 min. Va ANTES
+      // de los chequeos de dia cerrado porque los dias alternativos que se
+      // devuelven cuando el dia esta cerrado tambien dependen de la duracion.
+      const { data: serv } = await sb.from('servicios').select('id, nombre, duracion_minutos').eq('id', input.servicio_id).single();
+      const duracion = serv?.duracion_minutos || 30;
+
       // 1. cerrado? (`fecha` es el inicio, `fecha_hasta` el final; si no hay, fue un día solo)
       const { data: cerrados } = await sb.from('dias_cerrados').select('fecha, fecha_hasta, motivo');
       const cierre = cierreQueCubre(cerrados ?? [], fecha);
       if (cierre) {
-        return JSON.stringify({ ok: false, error: 'dia_cerrado', motivo: cierre.motivo ?? null, detalle: detalleCerrado(cierre) });
+        // Los dias de reemplazo ya vienen comprobados. Sin esto el modelo ofrecia
+        // "el viernes 23 o el domingo 25" en un local que no abre los domingos:
+        // la unica ayuda que tenia era "ofrece otro dia".
+        const alternativos = await diasAbiertosCercanos(cerrados ?? [], fecha, duracion);
+        return JSON.stringify({
+          ok: false,
+          error: 'dia_cerrado',
+          motivo: cierre.motivo ?? null,
+          detalle: detalleCerrado(cierre),
+          dias_alternativos: alternativos,
+          nota: alternativos.length
+            ? 'Ofrecele SOLO los dias de `dias_alternativos`: ya estan comprobados contra la agenda. No nombres otro dia que no venga en la lista.'
+            : 'No hay dias cercanos con lugar. Decile cuando reabre y no inventes un dia.',
+        });
       }
 
       // 2. dia de la semana
@@ -1041,7 +1156,20 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         .eq('dia_semana', diaSemana)
         .eq('activo', true)
         .order('hora_inicio', { ascending: true });
-      if (!horarios || horarios.length === 0) return JSON.stringify({ ok: false, error: 'dia_cerrado' });
+      if (!horarios || horarios.length === 0) {
+        // No es un cierre cargado: ese dia de la semana el local no abre.
+        const alternativos = await diasAbiertosCercanos(cerrados ?? [], fecha, duracion);
+        return JSON.stringify({
+          ok: false,
+          error: 'dia_cerrado',
+          motivo: null,
+          detalle: `El ${DIAS_SEMANA[diaSemana].toLowerCase()} el local no abre.`,
+          dias_alternativos: alternativos,
+          nota: alternativos.length
+            ? 'Ofrecele SOLO los dias de `dias_alternativos`: ya estan comprobados contra la agenda. No nombres otro dia que no venga en la lista.'
+            : 'No hay dias cercanos con lugar. Decile cuando reabre y no inventes un dia.',
+        });
+      }
 
       // Un dia puede tener VARIOS bloques: el lavadero abre de 8 a 12 y de 14 a 20.
       // Antes se tomaba solo el primero y el bot daba el mediodía por cierre, saying
@@ -1051,9 +1179,8 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         hasta: horaAMin(h.hora_fin),
       }));
 
-      // 3. la duracion la manda el servicio, no un slot fijo de 30 min
-      const { data: serv } = await sb.from('servicios').select('id, nombre, duracion_minutos').eq('id', input.servicio_id).single();
-      const duracion = serv?.duracion_minutos || 30;
+      // 3. la duracion ya se leyo arriba (bloque 0), porque los dias cerrados la
+      // necesitan para calcular los alternativos.
 
       // 4. estado del dia, POR EMPLEADO. Un horario esta libre si hay AL MENOS UN
       //    empleado sin nada encima en esa franja: antes se miraba el negocio entero
@@ -1263,6 +1390,13 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         quien_puede_atender: quienLoAtiende,
         hora_de_quien_puede_atender: horaParaNombres != null ? minAHora(horaParaNombres) : null,
         dia: fecha,
+        // Cierre a 3 dias o menos de la fecha consultada. Va con la respuesta
+        // para que el aviso salga cuando el cliente esta por reservar al lado, no
+        // como una instruccion suelta que el modelo puede saltear.
+        cierre_cerca: cierreCerca(cerrados ?? [], fecha),
+        nota_cierre:
+          'Si cierre_cerca no es null, cuando le propongas el turno sumale UNA frase corta ' +
+          'avisando que ese dia el local no trabaja y por que (el motivo esta en detalle).',
         duracion_minutos: duracion,
         horario_pedido: pref != null ? minAHora(pref) : null,
         pedido_disponible: pref == null ? null : estaLibre,
@@ -1611,6 +1745,13 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         empleado_nombre: quien?.nombre ?? null,
         cliente_id: clienteIdFinal,
         cliente_nombre: nombreFinal,
+        // Si el turno quedo pegado a un cierre, viene la fecha y el motivo. El
+        // modelo lo tiene delante justo cuando escribe la confirmacion.
+        cierre_cerca: cierreCerca(cerradosCr ?? [], fecha),
+        nota_cierre:
+          'Si cierre_cerca no es null, despues de confirmar el turno sumale UNA frase corta ' +
+          'avisando que ese dia el local no trabaja y por que (el motivo esta en detalle), y ' +
+          'despues los links. No lo pongas antes de anunciar el turno.',
       });
     }
     case 'buscar_turnos_cliente': {
@@ -2052,6 +2193,12 @@ NOMBRE DEL NEGOCIO: "${negocio.nombre}" es un nombre propio, va tal cual y sin t
 
 Fechas: hoy es ${hoyIso} (${DIAS_SEMANA[hoy.getDay()]}). Esta es la tabla de los próximos días, con el nombre de cada uno: ${tablaDeDias()}. Cuando el cliente diga un día ("el lunes", "el domingo que viene", "mañana", "el 20"), buscá la fecha en esta tabla y pasala así a las tools. NO la calcules vos: antes te equivocabas el día de la semana y el cliente recibía un horario del día equivocado. Tool de verdad antes de afirmar: nunca confirmás turno sin que crear_turno te devuelva ok, y nunca decís que un horario está libre sin antes llamar consultar_horarios_libres. Si una tool devuelve error, le explicás al cliente qué pasó y ofrecés otro camino.
 
+Cierres programados: ${negocio.cierres ? negocio.cierres + '.' : 'no hay ninguno cargado en los proximos 30 dias.'}
+Dias que el local NO abre (todas las semanas, por horario de atencion): ${negocio.diasQueNoAbre ?? 'ninguno'}. Nunca ofrezcas un dia de esta lista, ni como alternativa ni "por ejemplo": si el cliente pide uno, decile que ese dia no abre y ofrecele los dias de "dias_alternativos" que devuelve consultar_horarios_libres.
+Cuando la fecha de la que estan hablando esta a 3 dias o menos de un cierre (el dia anterior, el mismo dia o el siguiente), recordaselo con una frase corta y el motivo antes de cerrar el turno: "te aviso que el sabado 24 estamos cerrados por el feriado". Es información que el cliente necesita para organizarse, y si no se la decís se entera cuando llega. Las tools te lo devuelven en "cierre_cerca" cuando la fecha consultada esta cerca: si viene con datos, decilo aunque no te acuerdes de esta lista. No lo repitas en todos los mensajes ni lo menciones cuando la fecha no esta cerca, y si ya se lo avisaste al presentarte no lo repitas salvo que venga al caso.
+
+Si el cliente pide un dia cerrado, llamá a consultar_horarios_libres con esa fecha aunque ya sepas que esta cerrado: es la que te devuelve, en "dias_alternativos", los dias ya comprobados (abren y tienen lugar). Si la llamaste, ofrecele SOLO esos y decí el motivo del cierre. Si no la llamaste, no nombres ningun dia de reemplazo: preguntale cual le viene bien y consultalo cuando te conteste. No armes la lista con dias de la tabla de fechas: la tabla dice que dia es, no si el local abre, y asi se ofrecio un domingo en un local que no abre los domingos.
+
 Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion, asi que abri presentandote como el bot de "${negocio.nombre}"${negocio.cierres ? ` y avisale que ${negocio.cierres}` : ''}. No lo hagas en los mensajes siguientes.` : 'ya te presentaste antes, no te vuelvas a presentar.'}`;
 
   // El `cache_control` va en el ÚLTIMO bloque, que marca dónde termina lo cacheado.
@@ -2228,7 +2375,14 @@ function unirRespuesta(partes: string[], esPrimerMensaje = false): string {
   // Por qué no se arregla con una regla del prompt: ya la hay ("no escribas nada
   // antes de una tool") y no se cumple, porque el modelo escribe el bloque sin
   // pensar que se va a ver. Acá no depende de que se acuerde.
-  if (esPrimerMensaje && esPresentacion(utiles[0])) {
+  // Si la respuesta final YA se presenta, no hace falta el bloque de antes: el
+  // modelo repitio la presentacion despues de la tool y el cliente la leia dos
+  // veces (y con ella el aviso de cierre que venia pegado).
+  if (
+    esPrimerMensaje &&
+    esPresentacion(utiles[0]) &&
+    !esPresentacion(utiles[utiles.length - 1])
+  ) {
     const intro = soloPresentacion(utiles[0]);
     if (intro) return sinRepetir([intro, utiles[utiles.length - 1]]);
   }
