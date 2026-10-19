@@ -142,8 +142,8 @@ export class EmpleadosComponent implements OnInit {
   async ngOnInit() {
     // El rol sale del JWT, no de la base: es lo mismo que la RLS mira.
     this.rolActual = this.auth.getRol();
-    await this.cargarEmpleados();
-    await this.cargarRoles();
+    // Independientes: en serie eran dos vueltas a la base antes de ver la lista.
+    await Promise.all([this.cargarEmpleados(), this.cargarRoles()]);
     this.cdr.detectChanges();
   }
 

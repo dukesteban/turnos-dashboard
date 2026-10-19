@@ -519,6 +519,28 @@ function tramoDelDia(
     .join(' y ');
 }
 
+/**
+ * Las ausencias que cubren una fecha, incluidas las de UN solo dia.
+ *
+ * OJO con `hasta`: el panel guarda una ausencia de un dia con `desde` = ese dia y
+ * `hasta` = NULL. La migracion 007 lo permite a proposito (`hasta IS NULL OR
+ * hasta >= desde`). Con un `.gte('hasta', fecha)` pelado, Postgres DESCARTA esas
+ * filas: en SQL, `NULL >= fecha` no es verdadero, es NULL, y el WHERE las deja
+ * afuera. El bot las ignoraba y contaba como presente a alguien que estaba
+ * ausente.
+ *
+ * Las ausencias de varios dias (con `hasta` cargado) si funcionaban, y por eso
+ * el bug no aparecia probando con un rango: hay que probar con una de un dia,
+ * que es justo la que crea el boton del panel.
+ */
+function ausenciasQueCubren(fecha: string) {
+  return sb
+    .from('ausencias')
+    .select('empleado_id, motivo, hora_inicio, hora_fin')
+    .lte('desde', fecha)
+    .or(`hasta.gte.${fecha},hasta.is.null`);
+}
+
 async function estadoDelDia(fecha: string, excluirTurnoId?: number) {
   const diaSemana = new Date(fecha + 'T00:00:00').getDay();
   const [{ data: empleados }, { data: turnos }, { data: ausencias }] = await Promise.all([
@@ -527,11 +549,7 @@ async function estadoDelDia(fecha: string, excluirTurnoId?: number) {
       .select('id, hora_inicio, hora_fin, duracion_minutos, empleado_id')
       .eq('fecha', fecha)
       .neq('estado', 'cancelado'),
-    sb
-      .from('ausencias')
-      .select('empleado_id, hora_inicio, hora_fin')
-      .lte('desde', fecha)
-      .gte('hasta', fecha),
+    ausenciasQueCubren(fecha),
   ]);
 
   const todos = empleados ?? [];
@@ -766,9 +784,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         });
       }
 
-      const { data: ausencias } = await sb
-        .from('ausencias').select('empleado_id, motivo')
-        .lte('desde', fecha).gte('hasta', fecha);
+      const { data: ausencias } = await ausenciasQueCubren(fecha);
 
       const fuera = new Map<number, string>();
       for (const a of ausencias ?? []) {
@@ -883,11 +899,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         .eq('activo', true)
         .order('nombre');
 
-      const { data: ausencias } = await sb
-        .from('ausencias')
-        .select('empleado_id, motivo')
-        .lte('desde', fecha)
-        .gte('hasta', fecha);
+      const { data: ausencias } = await ausenciasQueCubren(fecha);
 
       const fuera = new Map<number, string>();
       for (const a of ausencias ?? []) {
@@ -2067,7 +2079,19 @@ Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion,
       });
     }
 
-    historial.push({ role: 'assistant', content: response.content } as any);
+    // Se guarda SOLO el `tool_use`, sin el texto que el modelo escribio antes de
+    // pedirlo.
+    //
+    // El texto ya se recolecto arriba en `partes` (y `unirRespuesta` lo usa para
+    // el saludo del primer mensaje). Dejarlo TAMBIEN en el historial hace que el
+    // modelo lo vea como algo ya dicho y lo REPITA en la respuesta final: el
+    // cliente recibe "Dejame chequear los horarios... El jueves no hay lugar",
+    // todo junto, y termina leyendo el proceso. Es el mismo texto que la regla
+    // del prompt ("no escribas nada antes de una tool") no logra evitar.
+    historial.push({
+      role: 'assistant',
+      content: (response.content ?? []).filter((b: any) => b.type === 'tool_use'),
+    } as any);
     historial.push({ role: 'user', content: resultados } as any);
 
     response = await llamarClaude(system, historial, tools);

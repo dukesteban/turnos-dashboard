@@ -158,7 +158,9 @@ export class SupabaseService {
       .from('turnos')
       .select('*')
       .eq('fecha', hoy)
-      .order('hora', { ascending: false });
+      // Del mas temprano al mas tarde, igual que la agenda: la tabla de "Turnos
+      // de hoy" se lee como una jornada, no como un historial.
+      .order('hora', { ascending: true });
     if (error) throw error;
     return data;
   }

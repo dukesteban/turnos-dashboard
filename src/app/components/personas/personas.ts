@@ -52,6 +52,17 @@ export class PersonasComponent {
    */
   tabActual = 'clientes';
 
+  /**
+   * Pestañas que ya se abrieron al menos una vez.
+   *
+   * Una vez montada, la pantalla queda viva (oculta) al cambiar de pestaña. Sin
+   * esto el `*ngIf` la destruía y, al volver, se pedían todos los datos de
+   * nuevo: cada toque en Clientes, Empleados o Proveedores costaba la misma
+   * espera. La primera visita de cada pestaña sigue cargando; las siguientes
+   * son instantáneas.
+   */
+  visitados: Record<string, boolean> = {};
+
   /** Las tres pestañas que existen. Cualquier otra cosa en la URL no es una. */
   private static readonly TABS = ['clientes', 'empleados', 'proveedores'];
 
@@ -77,10 +88,12 @@ export class PersonasComponent {
     const pedido = m ? m[1] : 'clientes';
     if (!PersonasComponent.TABS.includes(pedido)) {
       this.tabActual = 'clientes';
+      this.visitados['clientes'] = true;
       this.router.navigate(['/personas/clientes'], { replaceUrl: true });
       return;
     }
     this.tabActual = pedido;
+    this.visitados[pedido] = true;
   }
 
   get esClientes(): boolean   { return this.tabActual === 'clientes'; }
