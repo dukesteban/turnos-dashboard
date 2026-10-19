@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MonedaDirective } from '../../utils/moneda.directive';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth';
 import { SupabaseService } from '../../services/supabase';
@@ -21,7 +22,7 @@ export const SIN_FILTRO = 'todos';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MonedaDirective],
   templateUrl: './dashboard.html',
   styleUrls: ['./dashboard.scss']
 })

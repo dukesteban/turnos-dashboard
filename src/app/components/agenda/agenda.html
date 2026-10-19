@@ -261,7 +261,7 @@
           </div>
           <div class="campo">
             <label>Precio cobrado ($)</label>
-            <input type="number" [(ngModel)]="atendidoPrecio" (ngModelChange)="errorAtendido = ''" />
+            <input type="text" inputmode="decimal" appMoneda [(ngModel)]="atendidoPrecio" (ngModelChange)="errorAtendido = ''" />
           </div>
           <div class="campo">
             <label>Método de pago</label>

@@ -1,6 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MonedaDirective } from '../../utils/moneda.directive';
 import { SupabaseService } from '../../services/supabase';
 import { AuthService, ROLES, Rol } from '../../services/auth';
 import { paraComparar } from '../../utils/texto';
@@ -10,7 +11,7 @@ const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Vier
 @Component({
   selector: 'app-configuracion',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MonedaDirective],
   templateUrl: './configuracion.html',
   styleUrls: ['./configuracion.scss']
 })

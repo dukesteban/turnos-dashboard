@@ -252,7 +252,7 @@
           </div>
           <div class="campo">
             <label>Precio ($)</label>
-            <input type="number" [(ngModel)]="nuevoServicio.precio" placeholder="10000" (ngModelChange)="mensajeErrorServicios = ''"/>
+            <input type="text" inputmode="decimal" appMoneda [(ngModel)]="nuevoServicio.precio" placeholder="10000" (ngModelChange)="mensajeErrorServicios = ''"/>
           </div>
           <div class="campo">
             <label>Duración (min)</label>
@@ -273,7 +273,7 @@
               <td>
                 <div class="input-con-prefix">
                   <span class="prefix">$</span>
-                  <input type="number" [(ngModel)]="servicio.precio" class="input-inline input-numero" [readonly]="!servicio.editando" />
+                  <input type="text" inputmode="decimal" appMoneda [(ngModel)]="servicio.precio" class="input-inline input-numero" [readonly]="!servicio.editando" />
                 </div>
               </td>
               <td>

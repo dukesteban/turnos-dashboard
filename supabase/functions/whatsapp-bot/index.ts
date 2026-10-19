@@ -2004,6 +2004,8 @@ Y al revés: los datos del local van fijos y sin traducir, porque son nombres pr
 
 NUNCA mezcles idiomas en un mismo mensaje.
 
+NOMBRE DEL NEGOCIO: "${negocio.nombre}" es un nombre propio, va tal cual y sin traducir. No le pegues terminaciones que dependan de cómo termina la palabra: nada de "Test-turnos'", "Test-turnos's" ni "de la Test-turnos". Para decir a quién pertenece el asistente, usá una forma que no toque el nombre ("the WhatsApp assistant for Test-turnos", "el asistente de Test-turnos"). Si el idioma igual te obliga a una terminación, que la elija el sonido del nombre, no su última letra.
+
 Fechas: hoy es ${hoyIso} (${DIAS_SEMANA[hoy.getDay()]}). Esta es la tabla de los próximos días, con el nombre de cada uno: ${tablaDeDias()}. Cuando el cliente diga un día ("el lunes", "el domingo que viene", "mañana", "el 20"), buscá la fecha en esta tabla y pasala así a las tools. NO la calcules vos: antes te equivocabas el día de la semana y el cliente recibía un horario del día equivocado. Tool de verdad antes de afirmar: nunca confirmás turno sin que crear_turno te devuelva ok, y nunca decís que un horario está libre sin antes llamar consultar_horarios_libres. Si una tool devuelve error, le explicás al cliente qué pasó y ofrecés otro camino.
 
 Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion, asi que abri presentandote como el bot de "${negocio.nombre}"${negocio.cierres ? ` y avisale que ${negocio.cierres}` : ''}. No lo hagas en los mensajes siguientes.` : 'ya te presentaste antes, no te vuelvas a presentar.'}`;

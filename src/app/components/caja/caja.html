@@ -594,7 +594,7 @@
             </div>
             <div class="campo">
               <label>Monto</label>
-              <input type="number" [(ngModel)]="nuevoPago.monto" min="0" step="0.01" placeholder="0"
+              <input type="text" inputmode="decimal" appMoneda [(ngModel)]="nuevoPago.monto" placeholder="0"
                      (ngModelChange)="mensajeErrorPagos = ''" />
             </div>
           </div>
@@ -678,7 +678,7 @@
             </div>
             <div class="campo">
               <label>Monto</label>
-              <input type="number" [(ngModel)]="nuevoPagoProveedor.monto" min="0" step="0.01"
+              <input type="text" inputmode="decimal" appMoneda [(ngModel)]="nuevoPagoProveedor.monto"
                      placeholder="0" (ngModelChange)="mensajeErrorPagoProveedor = ''" />
             </div>
           </div>
@@ -799,7 +799,7 @@
           </div>
           <div class="campo">
             <label>Monto total</label>
-            <input type="number" [(ngModel)]="nuevaCompra.monto" min="0" step="0.01" placeholder="0"
+            <input type="text" inputmode="decimal" appMoneda [(ngModel)]="nuevaCompra.monto" placeholder="0"
                    (ngModelChange)="mensajeError = ''" />
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MonedaDirective } from '../../utils/moneda.directive';
 import { AuthService } from '../../services/auth';
 import { SupabaseService } from '../../services/supabase';
 import { jornadaCubre, turnoTocadoPorAusencia, textoAusencia, normalizarJornada, debeMostrarColumna, fechaDesdeISO } from '../../utils/fechas';
@@ -57,7 +58,7 @@ const ANCHO_MAX_CHICA = 700;
 @Component({
   selector: 'app-agenda',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MonedaDirective],
   templateUrl: './agenda.html',
   styleUrls: ['./agenda.scss']
 })
