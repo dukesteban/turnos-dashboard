@@ -225,11 +225,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit() {
-    await this.cargarTurnos();
-    this.metodosPago = await this.supabase.getMetodosPago();
-    this.empleados = await this.supabase.getEmpleados();
-    this.ausencias = await this.supabase.getAusencias();
-    this.telefonosPorCliente = await this.supabase.getTelefonosPorCliente();
+    // Todas juntas: son consultas independientes y en serie cada una costaba
+    // una vuelta completa a la base antes de pintar la pantalla.
+    const [metodosPago, empleados, ausencias, telefonos] = await Promise.all([
+      this.supabase.getMetodosPago(),
+      this.supabase.getEmpleados(),
+      this.supabase.getAusencias(),
+      this.supabase.getTelefonosPorCliente(),
+      this.cargarTurnos(),
+    ]);
+    this.metodosPago = metodosPago;
+    this.empleados = empleados;
+    this.ausencias = ausencias;
+    this.telefonosPorCliente = telefonos;
+
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();
     });
@@ -247,8 +256,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // cuentan lo mismo que la tabla de abajo: si el empleado ve tres turnos, ve "3
     // atendidos" y no "9 atendidos de toda la gente".
     const miId = this.auth.empleadoParaFiltrarTurnos();
-    this.turnosHoy = soloLosTurnosDe(await this.supabase.getTurnosHoy(), miId);
-    this.todosTurnos = soloLosTurnosDe(await this.supabase.getTurnos(), miId);
+    const { desde, hasta } = this.rangoDelPeriodo();
+    // Las dos listas van juntas: son consultas independientes y en serie cada
+    // una costaba una vuelta completa a la base.
+    const [hoy, periodo] = await Promise.all([
+      this.supabase.getTurnosHoy(),
+      this.supabase.getTurnosEntre(desde, hasta),
+    ]);
+    this.turnosHoy = soloLosTurnosDe(hoy, miId);
+    this.todosTurnos = soloLosTurnosDe(periodo, miId);
 
     this.recalcularResumenDeHoy();
     this.cdr.detectChanges();
@@ -292,38 +308,67 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  get turnosFiltrados(): any[] {
-    const base = this.fechaTurnos;
-    const formatLocal = (d: Date) => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    };
+  /** 'AAAA-MM-DD' local (no UTC: `toISOString` corre el dia en timezone negativo). */
+  private fechaLocal(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
 
-    let delPeriodo: any[];
+  /**
+   * Primero y ultimo dia del periodo que muestra la tabla (semana o mes).
+   *
+   * Sirve para pedirle a la base SOLO esos turnos. Antes se bajaba la tabla
+   * entera y se filtraba en memoria: con 28 turnos no se notaba, con anos de
+   * historia la pantalla se baja todo para mostrar una semana.
+   */
+  private rangoDelPeriodo(): { desde: string; hasta: string } {
+    const base = this.fechaTurnos;
     if (this.vistasTurnos === 'semana') {
       const lunes = new Date(base);
       lunes.setDate(base.getDate() - (base.getDay() === 0 ? 6 : base.getDay() - 1));
       const domingo = new Date(lunes);
       domingo.setDate(lunes.getDate() + 6);
-      delPeriodo = this.todosTurnos.filter(t => t.fecha >= formatLocal(lunes) && t.fecha <= formatLocal(domingo));
-    } else {
-      const y = base.getFullYear();
-      const m = String(base.getMonth() + 1).padStart(2, '0');
-      delPeriodo = this.todosTurnos.filter(t => t.fecha.startsWith(`${y}-${m}`));
+      return { desde: this.fechaLocal(lunes), hasta: this.fechaLocal(domingo) };
     }
+    const primero = new Date(base.getFullYear(), base.getMonth(), 1);
+    const ultimo = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+    return { desde: this.fechaLocal(primero), hasta: this.fechaLocal(ultimo) };
+  }
+
+  /**
+   * Recarga solo la tabla del periodo. No vuelve a pedir "Turnos de hoy", que
+   * no depende de la fecha que se este mirando.
+   */
+  private async cargarPeriodo() {
+    const { desde, hasta } = this.rangoDelPeriodo();
+    this.todosTurnos = soloLosTurnosDe(
+      await this.supabase.getTurnosEntre(desde, hasta),
+      this.auth.empleadoParaFiltrarTurnos()
+    );
+    this.cdr.detectChanges();
+  }
+
+  get turnosFiltrados(): any[] {
+    const { desde, hasta } = this.rangoDelPeriodo();
+    const delPeriodo = this.todosTurnos.filter(t => t.fecha >= desde && t.fecha <= hasta);
 
     // El combo de empleado se aplica DESPUÉS del período, y no antes: así el recorte
     // por fechas no tiene que volver a correr cuando cambia el empleado, que es lo
     // que se cambia más seguido. El orden inverso también funciona, pero no hay
     // razón para pagar las dos filtraciones.
-    return soloLosTurnosDe(delPeriodo, this.empleadoId(this.filtroEmpleadoPeriodo));
+    // Hoy ya tiene su propia tabla arriba: repetirlo aca hace que el mismo
+    // turno aparezca dos veces en la misma pantalla.
+    const hoy = this.fechaLocal(new Date());
+    return soloLosTurnosDe(delPeriodo, this.empleadoId(this.filtroEmpleadoPeriodo))
+      .filter(t => t.fecha !== hoy);
   }
 
   cambiarVistaTurnos(v: 'semana' | 'mes') {
     this.vistasTurnos = v;
     this.fechaTurnos = new Date(); // resetea al mes/semana actual
+    this.cargarPeriodo();
   }
   
   navegarTurnos(dir: number) {
@@ -334,10 +379,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
       d.setMonth(d.getMonth() + dir);
     }
     this.fechaTurnos = d;
+    this.cargarPeriodo();
   }
   
   irHoyTurnos() {
     this.fechaTurnos = new Date();
+    this.cargarPeriodo();
   }
 
   /**
@@ -356,16 +403,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /**
    * Salta a la semana o al mes que contienen la fecha elegida.
    *
-   * No hay que hacer nada mas: `rangoSemanaTurnos`, `tituloMesTurnos` y
-   * `turnosFiltrados` salen todos de `fechaTurnos`, asi que con mover esa
-   * variable se reacomodan el titulo y la tabla juntos.
+   * El titulo (`tituloMesTurnos`) sale de `fechaTurnos`, asi que se reacomoda
+   * solo. Los TURNOS no: la tabla pide solo el periodo visible, asi que hay que
+   * recargarla cuando la fecha salta a otra semana u otro mes.
    *
    * En la vista Mes la fecha da igual dentro del mismo mes (solo se mira el ano
    * y el mes), asi que elegir el 28/09 muestra Setiembre.
    */
   irAFechaTurnos(iso: string) {
     const d = fechaDesdeISO(iso);
-    if (d) this.fechaTurnos = d;
+    if (d) {
+      this.fechaTurnos = d;
+      this.cargarPeriodo();
+    }
   }
 
   toggleIngresos() {

@@ -85,7 +85,7 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
 
   const base: any = {
     // --- datos de lectura que los componentes usan al iniciar ---
-    getTurnos: vacio,
+    getTurnosEntre: vacio,
     getTurnosHoy: vacio,
     getEmpleados: () => Promise.resolve([EMP_ESTEBAN, EMP_JUAN]),
     getTodosEmpleados: () => Promise.resolve([EMP_ESTEBAN, EMP_JUAN]),
@@ -95,6 +95,7 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
     ]),
     getMetodosPago: () => Promise.resolve([{ id: 1, nombre: 'Efectivo' }]),
     getComisionesEmpleado: () => Promise.resolve([]),
+    getComisiones: () => Promise.resolve([]),
     getAusencias: () => Promise.resolve([]),
     getDiasCerrados: () => Promise.resolve([]),
     getHorarios: () => Promise.resolve([

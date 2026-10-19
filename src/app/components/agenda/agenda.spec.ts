@@ -131,7 +131,7 @@ describe('Agenda — regla de columnas por fecha', () => {
   it('el turno en riesgo hace aparecer la columna de un día que no labra', async () => {
     // Miércoles: Esteban NO trabaja. Tiene un turno ahí → está en riesgo.
     const enRiesgo = turno({ id: 77, empleado_id: EMP_ESTEBAN.id, fecha: '2026-12-02' });
-    const { cmp } = montar({ getTurnos: () => Promise.resolve([enRiesgo]) });
+    const { cmp } = montar({ getTurnosEntre: () => Promise.resolve([enRiesgo]) });
     await cmp.ngOnInit(); await settle();
     irA(cmp, 2026, 12, 2);
 
@@ -612,5 +612,53 @@ describe('Agenda - el ancho de columna segun la pantalla', () => {
     expect((cmp as any).anchoVentana).toBe(window.innerWidth);
 
     expect(() => cmp.ngOnDestroy()).not.toThrow();
+  });
+});
+
+
+// ═════════════════════════════════════════════════════════════════════════
+// RANGO DE TURNOS: la agenda pide su zona, no la tabla entera
+//
+// Antes `cargarTurnos` bajaba TODOS los turnos de la historia y filtraba en
+// memoria. Con 28 turnos de prueba no se notaba; con un local que atiende
+// todos los dias, la pantalla se baja anos de historia para mostrar una semana.
+// ═════════════════════════════════════════════════════════════════════════
+describe('Agenda - rango de turnos', () => {
+  const veces = (mock: any) =>
+    mock.llamadas.filter((c: string) => c === 'getTurnosEntre').length;
+
+  it('al iniciar pide una sola vez los turnos de la zona', async () => {
+    const { cmp, mock } = montar();
+    await cmp.ngOnInit();
+    await settle();
+
+    expect(veces(mock)).toBe(1);
+  });
+
+  it('moverse dentro de la zona cargada no vuelve a pedir turnos', async () => {
+    const { cmp, mock } = montar();
+    await cmp.ngOnInit();
+    await settle();
+    const antes = veces(mock);
+
+    cmp.navegarDia(1);
+    cmp.navegarDia(1);
+    cmp.navegarSemana(1);
+    await settle();
+
+    expect(veces(mock)).toBe(antes);
+  });
+
+  it('saltar lejos de la zona cargada si vuelve a pedir turnos', async () => {
+    const { cmp, mock } = montar();
+    await cmp.ngOnInit();
+    await settle();
+    const antes = veces(mock);
+
+    // Doce semanas para adelante: mas que el colchon de cinco.
+    for (let i = 0; i < 12; i++) cmp.navegarSemana(1);
+    await settle();
+
+    expect(veces(mock)).toBeGreaterThan(antes);
   });
 });

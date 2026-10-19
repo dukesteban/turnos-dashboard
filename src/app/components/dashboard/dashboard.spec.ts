@@ -485,7 +485,7 @@ describe('Dashboard — filtro por empleado', () => {
   const montarConTurnos = async () => {
     const r = await montarCargado({
       getTurnosHoy: () => Promise.resolve(TURNOS_HOY),
-      getTurnos: () => Promise.resolve(TURNOS),
+      getTurnosEntre: () => Promise.resolve(TURNOS),
     });
     r.cmp.fechaTurnos = new Date(2026, 11, 1);   // martes 01/12/2026
     return r;
@@ -976,10 +976,12 @@ describe('Dashboard - saltar a una fecha', () => {
     expect(cmp.tituloMesTurnos).toBe('Agosto 2026');
   });
 
-  it('la tabla se re-filtra sola: no hace falta recargar los turnos', () => {
-    // `turnosFiltrados` sale de `fechaTurnos` y de `todosTurnos`, que ya estan
-    // en memoria: mover la fecha alcanza, no hay llamada al servidor. Con un
-    // turno antes y otro despues de la fecha elegida, se ve el cambio.
+  it('el recorte por fechas se recalcula con la fecha elegida', () => {
+    // Aca se fija `todosTurnos` a mano para probar SOLO el recorte por fechas.
+    // En la app real `irAFechaTurnos` tambien pide el periodo nuevo a la base;
+    // lo que se verifica aca es que el filtro sale de `fechaTurnos` y no de una
+    // lista vieja: con un turno antes y otro despues de la fecha elegida, se ve
+    // el cambio.
     const cmp = nuevo();
     cmp.todosTurnos = [
       turno({ fecha: '2026-08-10', hora_inicio: '10:00:00' }),
@@ -1059,5 +1061,56 @@ describe('Dashboard - los botones flotantes a Caja', () => {
 
     expect(cmp.mostrarPopup).toBe(false);
     expect(navegaciones.length).toBe(1);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════
+// LA TABLA DEL PERIODO NO REPITE LA DE HOY
+//
+// "Turnos de hoy" ya tiene su propia tabla arriba. Si la del periodo incluye
+// el dia de hoy, el mismo turno aparece dos veces en la misma pantalla.
+// ═════════════════════════════════════════════════════════════════════════
+describe('Dashboard - la tabla del periodo', () => {
+  const isoLocal = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  const hoy = new Date();
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+  /** Primer dia de la MISMA semana que hoy que no sea hoy. */
+  const otroDia = (() => {
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(lunes);
+      d.setDate(lunes.getDate() + i);
+      if (isoLocal(d) !== isoLocal(hoy)) return d;
+    }
+    return lunes;
+  })();
+
+  const montarSemana = () => montarCargado({
+    getTurnosHoy: () => Promise.resolve([turno({ id: 1, fecha: isoLocal(hoy) })]),
+    getTurnosEntre: () => Promise.resolve([
+      turno({ id: 10, fecha: isoLocal(lunes), hora: '09:00:00', hora_inicio: '09:00:00' }),
+      turno({ id: 11, fecha: isoLocal(otroDia), hora: '10:00:00', hora_inicio: '10:00:00' }),
+    ]),
+  });
+
+  it('deja afuera los turnos de hoy, que ya estan arriba', async () => {
+    const { cmp } = await montarSemana();
+
+    const fechas = cmp.turnosFiltrados.map((t: any) => t.fecha);
+    expect(fechas).not.toContain(isoLocal(hoy));
+    // La tabla de hoy no se toca.
+    expect(cmp.turnosHoy.length).toBe(1);
+  });
+
+  it('respeta el orden de la base: del mas viejo al mas nuevo', async () => {
+    const { cmp } = await montarSemana();
+
+    const fechas = cmp.turnosFiltrados.map((t: any) => t.fecha);
+    expect(fechas).toEqual([...fechas].sort());
   });
 });

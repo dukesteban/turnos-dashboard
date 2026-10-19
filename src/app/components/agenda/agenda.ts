@@ -168,19 +168,37 @@ export class AgendaComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     window.addEventListener('resize', this.alRedimensionar);
+
+    // Las listas independientes arrancan YA, en paralelo, y mientras viajan se
+    // piden horarios y turnos. Antes eran nueve `await` uno detras de otro: cada
+    // uno costaba una vuelta completa a la base (~400 ms) y la pantalla tardaba
+    // varios segundos en algo que se puede pedir junto.
+    const datos = Promise.all([
+      this.supabase.getMetodosPago(),
+      this.supabase.getEmpleados(),
+      this.supabase.getAusencias(),
+      this.supabase.getTelefonosPorCliente(),
+      this.supabase.getDiasCerrados(),
+      this.supabase.getComisiones(),
+    ]);
+
+    // En serie a proposito: `cargarHorarios` fija `horaInicio/horaFin` y
+    // `cargarTurnos` los vuelve a ajustar con los turnos que trae.
     await this.cargarHorarios();
     await this.cargarTurnos();
-    this.metodosPago = await this.supabase.getMetodosPago();
-    this.empleados = await this.supabase.getEmpleados();
-    this.comisionesPorServicio = await this.supabase.getComisionesEmpleado(this.empleados.map((e: any) => e.id));
-    this.ausencias = await this.supabase.getAusencias();
-    this.telefonosPorCliente = await this.supabase.getTelefonosPorCliente();
+
+    const [metodosPago, empleados, ausencias, telefonos, diasCerrados, comisiones] = await datos;
+    this.metodosPago = metodosPago;
+    this.empleados = empleados;
+    this.ausencias = ausencias;
+    this.telefonosPorCliente = telefonos;
+    this.diasCerrados = diasCerrados;
+    this.comisionesPorServicio = comisiones;
     // Cache de jornadas: la usa turnoEnRiesgo() por cada bloque de la grilla.
     this.jornadas = {};
     for (const e of this.empleados as any[]) {
       this.jornadas[e.id] = normalizarJornada(e.jornada);
     }
-    this.diasCerrados = await this.supabase.getDiasCerrados();
     // IMPORTANTE: el getter columnasAgenda se evalua en el PRIMER render, cuando
     // this.empleados todavia esta vacio, y cachea un [] para la fecha de hoy.
     // Si no se limpia aca, la grilla queda sin columnas para siempre aunque los
@@ -198,7 +216,9 @@ export class AgendaComponent implements OnInit, OnDestroy {
     // Solo se ve mirando la app andando. Por eso hay un test de componente.
     this.limpiarCacheColumnas();
     this.subscription = this.supabase.suscribirTurnos(() => {
-      this.cargarTurnos();
+      // Forzado: aunque la semana ya este cargada, el cambio del realtime es
+      // justamente el que hay que traer.
+      this.cargarTurnos(true);
     });
     this.subHorarios = this.supabase.suscribirHorarios(() => {
       this.cargarHorarios();
@@ -293,12 +313,50 @@ export class AgendaComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  async cargarTurnos() {
+  /**
+   * Rango que ya esta en memoria. Sirve para que moverse con las flechas no
+   * vuelva a pegarle a la base si la semana pedida ya esta adentro.
+   */
+  private rangoTurnos: { desde: string; hasta: string } | null = null;
+
+  /** 'YYYY-MM-DD' corrido `dias` para atras (o para adelante, si es negativo). */
+  private correrDias(iso: string, dias: number): string {
+    const [y, m, d] = iso.split('-').map(Number);
+    const fecha = new Date(y, m - 1, d);
+    fecha.setDate(fecha.getDate() + dias);
+    return this.formatearFechaLocal(fecha);
+  }
+
+  /**
+   * Trae los turnos de la zona que se esta mirando, no la tabla entera.
+   *
+   * Se pide un colchon de 5 semanas para cada lado: alcanza para navegar con
+   * las flechas sin volver a la base, y no baja anos de historia para mostrar
+   * una semana. `forzar` lo usan el realtime y el primer render: ahi hay que
+   * refrescar aunque el rango ya este cubierto, porque justo cambio un turno.
+   */
+  async cargarTurnos(forzar = false) {
+    const foco = this.fechaISO;
+    const cubierto = !forzar
+      && this.rangoTurnos
+      && this.rangoTurnos.desde <= this.correrDias(foco, -7)
+      && this.rangoTurnos.hasta >= this.correrDias(foco, 7);
+
+    if (cubierto) {
+      // Los datos no cambian, pero la fecha elegida si: el input de la barra y
+      // los titulos se tienen que repintar igual.
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const desde = this.correrDias(foco, -35);
+    const hasta = this.correrDias(foco, 35);
     // El rol empleado ve solo los turnos de su columna, y solo su columna. Las dos
     // cosas se filtran: con los turnos filtrados pero las columnas completas, la grilla
     // muestra los turnos de otra persona en la columna de al lado; al reves, la columna
     // propia aparece vacía.
-    this.turnos = soloLosTurnosDe(await this.supabase.getTurnos(), this.auth.empleadoParaFiltrarTurnos());
+    this.turnos = soloLosTurnosDe(await this.supabase.getTurnosEntre(desde, hasta), this.auth.empleadoParaFiltrarTurnos());
+    this.rangoTurnos = { desde, hasta };
     this.limpiarCacheColumnas();
     this.ajustarLimitesConTurnos();
     this.cdr.detectChanges();
@@ -730,15 +788,20 @@ claseBloque(turno: any, mini: boolean): string {
     const d = new Date(this.fechaActual);
     d.setDate(d.getDate() + dir);
     this.fechaActual = d;
+    this.cargarTurnos();
   }
 
   navegarSemana(dir: number) {
     const d = new Date(this.fechaActual);
     d.setDate(d.getDate() + dir * 7);
     this.fechaActual = d;
+    this.cargarTurnos();
   }
 
-  irHoy() { this.fechaActual = new Date(); }
+  irHoy() {
+    this.fechaActual = new Date();
+    this.cargarTurnos();
+  }
 
   /**
    * Salta a la fecha elegida en el calendario.
@@ -750,8 +813,8 @@ claseBloque(turno: any, mini: boolean): string {
    * En la vista Semana no hay que hacer nada más: `diasDeSemana` ya normaliza
    * al lunes de esa semana.
    *
-   * Tampoco recarga los turnos: `cargarTurnos()` los trae TODOS y `turnosDia`
-   * filtra en memoria, que es justo por lo que `navegarDia` no recarga nada.
+   * Recarga solo si la fecha cae fuera del colchon ya cargado: mover el
+   * calendario dentro de la misma zona no vuelve a pegarle a la base.
    */
   irAFecha(iso: string) {
     // El parseo vive en `fechaDesdeISO` (utils/fechas) y lo comparte con el
@@ -759,7 +822,10 @@ claseBloque(turno: any, mini: boolean): string {
     // esta logica un dia se desincroniza del otro, y no se nota hasta que
     // alguien busca el 28/09 en un lado y no lo encuentra.
     const d = fechaDesdeISO(iso);
-    if (d) this.fechaActual = d;
+    if (d) {
+      this.fechaActual = d;
+      this.cargarTurnos();
+    }
   }
 
   formatearFecha(fecha: Date): string {

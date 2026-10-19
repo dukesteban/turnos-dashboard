@@ -129,12 +129,25 @@ export class SupabaseService {
   }
 
   // TURNOS
-  async getTurnos() {
+  /**
+   * Turnos de un rango de fechas, y nada mas.
+   *
+   * Antes las pantallas pedian la tabla ENTERA y filtraban en memoria. Con 28
+   * turnos no se notaba; con los años de historia de un local que atiende todos
+   * los dias, la agenda se baja todo en cada carga para mostrar una semana.
+   *
+   * El orden es ASCENDENTE (el mas viejo primero): es como se lee una semana,
+   * lunes antes que martes. El Dashboard muestra esta lista tal cual, sin
+   * volver a ordenar.
+   */
+  async getTurnosEntre(desde: string, hasta: string) {
     const { data, error } = await this.supabase
       .from('turnos')
       .select('*')
-      .order('fecha', { ascending: false })
-      .order('hora', { ascending: false });
+      .gte('fecha', desde)
+      .lte('fecha', hasta)
+      .order('fecha', { ascending: true })
+      .order('hora', { ascending: true });
     if (error) throw error;
     return data;
   }
@@ -1056,6 +1069,22 @@ export class SupabaseService {
   }
 
   // COMISIONES POR SERVICIO
+  /**
+   * Todas las comisiones por servicio, de una.
+   *
+   * La Agenda las pide al iniciar para el popup de "Atendido". Pedirlas por
+   * empleado obliga a esperar a que lleguen los empleados primero, y eso suma
+   * una vuelta entera a la base en la carga de la pantalla. La tabla es chica
+   * (una fila por empleado y servicio).
+   */
+  async getComisiones() {
+    const { data, error } = await this.supabase
+      .from('comisiones_empleado')
+      .select('*');
+    if (error) throw error;
+    return data || [];
+  }
+
   async getComisionesEmpleado(empleadoIds: number | number[]) {
     const ids = Array.isArray(empleadoIds) ? empleadoIds : [empleadoIds];
     const { data, error } = await this.supabase
@@ -1207,16 +1236,22 @@ export class SupabaseService {
     const ids = [...new Set((turnos || []).map((t: any) => t.empleado_id).filter(Boolean))];
     if (!ids.length) return [];
 
-    const { data: empleados, error: eEmp } = await this.supabase
-      .from('empleados')
-      .select('id, nombre, comision_porcentaje')
-      .in('id', ids);
+    // Las dos listas dependen de `ids` pero no una de la otra: en serie eran dos
+    // vueltas a la base en lugar de una.
+    const [
+      { data: empleados, error: eEmp },
+      { data: comisionServicio, error: eCom },
+    ] = await Promise.all([
+      this.supabase
+        .from('empleados')
+        .select('id, nombre, comision_porcentaje')
+        .in('id', ids),
+      this.supabase
+        .from('comisiones_empleado')
+        .select('empleado_id, servicio_id, porcentaje')
+        .in('empleado_id', ids),
+    ]);
     if (eEmp) throw eEmp;
-
-    const { data: comisionServicio, error: eCom } = await this.supabase
-      .from('comisiones_empleado')
-      .select('empleado_id, servicio_id, porcentaje')
-      .in('empleado_id', ids);
     if (eCom) throw eCom;
 
     // El porcentaje por servicio pisa al general, igual que en calcularComisiones.

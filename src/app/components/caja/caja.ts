@@ -180,8 +180,10 @@ export class CajaComponent implements OnInit {
   // Lo que los reemplaza son `claseDebe` y `claseHaber`, más abajo.
 
   async ngOnInit() {
-    await this.cargarHorarios();
-    await this.cargarDatos();
+    // Las dos juntas: `cargarHorarios` solo fija el rango de horas del grafico,
+    // y `cargarDatos` no depende de eso. En serie era una vuelta mas a la base
+    // antes de que apareciera cualquier numero.
+    await Promise.all([this.cargarHorarios(), this.cargarDatos()]);
     this.cdr.detectChanges();
     // DESPUES de `cargarDatos`, no antes: los tres popups arman sus valores por
     // defecto con las listas de empleados y proveedores (el que est� elegido en el
