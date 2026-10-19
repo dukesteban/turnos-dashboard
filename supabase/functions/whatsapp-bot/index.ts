@@ -259,7 +259,7 @@ async function linksDeCalendario(t: {
 const TOOLS = [
   {
     name: 'obtener_config_negocio',
-    description: 'Obtiene una clave de la configuracion del negocio: nombre_negocio, descripcion, direccion, tono, horas_limite_cancelacion, horario_atencion, dias_cerrados, recordatorio_cuando, recordatorio_hora.',
+    description: 'Obtiene una clave de la configuracion del negocio: nombre_negocio, descripcion, direccion, telefono_emergencia, tono, horas_limite_cancelacion, horario_atencion, dias_cerrados, recordatorio_cuando, recordatorio_hora.',
     input_schema: { type: 'object', properties: { clave: { type: 'string' } }, required: ['clave'] },
   },
   {
@@ -449,6 +449,18 @@ function detalleCerrado(cierre: { motivo?: string | null } | null): string {
 async function horasMinCancelar(): Promise<number> {
   const { data } = await sb.from('configuracion').select('valor').eq('clave', 'horas_limite_cancelacion').single();
   return Number(data?.valor) || 12;
+}
+
+/**
+ * El telefono del local, para los casos que el bot no puede resolver.
+ *
+ * Sale de Configuracion (`telefono_emergencia`), asi que el negocio lo cambia sin
+ * tocar codigo. Se usa cuando un turno ya no se puede mover ni cancelar: mandar al
+ * cliente "comunicate con el local" sin darle el numero es dejarlo donde estaba.
+ */
+async function telefonoDelLocal(): Promise<string> {
+  const { data } = await sb.from('configuracion').select('valor').eq('clave', 'telefono_emergencia').maybeSingle();
+  return (data?.valor ?? '').trim();
 }
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -1811,10 +1823,15 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         consulta = consulta.gte('fecha', hoy).neq('estado', 'cancelado');
       }
 
-      const { data } = await consulta
-        .order('fecha', { ascending: !incluirPasados })
-        .order('hora', { ascending: !incluirPasados })
-        .limit(20);
+      // En paralelo: si algun turno ya no se puede tocar, el bot tiene que poder
+      // dar el telefono del local sin mandar al cliente a buscarlo.
+      const [{ data }, tel] = await Promise.all([
+        consulta
+          .order('fecha', { ascending: !incluirPasados })
+          .order('hora', { ascending: !incluirPasados })
+          .limit(20),
+        telefonoDelLocal(),
+      ]);
 
       // ─── Que se puede y que no, ya resuelto ───
       //
@@ -1842,16 +1859,23 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         const minsFaltan = (inicio - ahora) / 60000;
         const sePuedeMover = !yaPaso && minsFaltan >= minsPlazo;
 
+        // El motivo se dice tal cual, asi que el telefono va aca: si no, el bot
+        // manda al cliente a "comunicarse con el local" y no le da el numero.
+        const motivoBase = yaPaso
+          ? 'Ya paso.'
+          : sePuedeMover
+            ? null
+            : `Falta menos de lo que se pide para moverlo o cancelarlo (${plazo}).`;
+        const motivo = motivoBase && tel
+          ? `${motivoBase} Si necesitas resolverlo, podes llamar al local al ${tel}.`
+          : motivoBase;
+
         return {
           ...t,
           fecha_texto: fechaTexto(t.fecha),
           ya_paso: yaPaso,
           se_puede_mover: sePuedeMover,
-          motivo: yaPaso
-            ? 'Ya paso.'
-            : sePuedeMover
-              ? null
-              : `Falta menos de lo que se pide para moverlo o cancelarlo (${plazo}).`,
+          motivo,
         };
       });
 
@@ -1952,15 +1976,22 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       // ese caso suena a que con mas tiempo si se podia, y no es eso.
       const inicio = msLocales(turno.fecha, turno.hora_inicio);
       if (inicio <= Date.now()) {
+        const tel = await telefonoDelLocal();
         return err(
           'turno_ya_pasado',
-          `Ese turno ya fue (era el ${turno.fecha} a las ${String(turno.hora_inicio).slice(0, 5)}). No se cancela: decile que hable con el local si necesita algo.`,
+          `Ese turno ya fue (era el ${turno.fecha} a las ${String(turno.hora_inicio).slice(0, 5)}). No se cancela${tel ? `. Si necesita algo, que llame al local al ${tel}` : ': que hable con el local'}.`,
         );
       }
 
       const minsFaltan = (inicio - Date.now()) / 60000;
       const minsMin = (await horasMinCancelar()) * 60;
-      if (minsFaltan < minsMin) return err('fuera_de_plazo', `Se cancela hasta ${minsMin / 60} hs antes.`);
+      if (minsFaltan < minsMin) {
+        const tel = await telefonoDelLocal();
+        return err(
+          'fuera_de_plazo',
+          `Se cancela hasta ${minsMin / 60} hs antes${tel ? `. Si necesita resolverlo, que llame al local al ${tel}` : ''}.`,
+        );
+      }
 
       const { error } = await sb.from('turnos').update({ estado: 'cancelado' }).eq('id', turno_id);
       if (error) return err('error_cancelando', error.message);
@@ -1976,15 +2007,22 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       // "ese turno ya fue", que es lo unico cierto y lo que el cliente entiende.
       const inicio = msLocales(turno.fecha, turno.hora_inicio);
       if (inicio <= Date.now()) {
+        const tel = await telefonoDelLocal();
         return err(
           'turno_ya_pasado',
-          `El turno del ${turno.fecha} a las ${String(turno.hora_inicio).slice(0, 5)} ya fue. Para algo de hoy en adelante, mejor agendá uno nuevo.`,
+          `El turno del ${turno.fecha} a las ${String(turno.hora_inicio).slice(0, 5)} ya fue. Para algo de hoy en adelante, mejor agendá uno nuevo${tel ? `. Si necesita resolverlo, que llame al local al ${tel}` : ''}.`,
         );
       }
 
       const minsFaltan = (inicio - Date.now()) / 60000;
       const minsMin = (await horasMinCancelar()) * 60;
-      if (minsFaltan < minsMin) return err('fuera_de_plazo', `Se reprograma hasta ${minsMin / 60} hs antes.`);
+      if (minsFaltan < minsMin) {
+        const tel = await telefonoDelLocal();
+        return err(
+          'fuera_de_plazo',
+          `Se reprograma hasta ${minsMin / 60} hs antes${tel ? `. Si necesita resolverlo, que llame al local al ${tel}` : ''}.`,
+        );
+      }
 
       // ─── Que parte se cambia realmente ───
       //
@@ -2910,9 +2948,9 @@ async function obtenerSpec(): Promise<string> {
 2. Si el cliente viene por un turno nuevo, pedile el servicio. PERO si la pregunta es de GENTE ("quien trabaja mañana", "quien esta el jueves"), no le pidas servicio: llamá empleados_del_dia con la fecha y respondé quién trabaja y en qué horario. Son preguntas distintas y reconducir la segunda a la primera hace que el cliente se enrede.
 3. Cuando elija servicio, mostra los horarios libres con consultar_horarios_libres.
 4. Si elige horario, crealo con crear_turno.
-5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente. Cada turno que devuelve esa tool trae se_puede_mover: ofrecele mover o cancelar SOLO los que vienen con true. Los que vienen con false ya no se tocan (ya pasaron, o falta menos que el plazo de cancelacion): decile el motivo tal cual y no le preguntes que quiere hacer con ese turno, porque la tool te lo va a rechazar y el cliente ya se ilusiono con un cambio que no existe. Si quiere cambiar la fecha o la hora de un turno que ya tiene, se reprograma con reprogramar_turno (primero le decis a que turno se refiere, con buscar_turnos_cliente, y le mostras el horario nuevo antes de llamar a la tool). Si el turno que quiere tocar ya paso, no se reprograma: se agenda uno nuevo.
+5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente. Cada turno que devuelve esa tool trae se_puede_mover: ofrecele mover o cancelar SOLO los que vienen con true. Los que vienen con false ya no se tocan (ya pasaron, o falta menos que el plazo de cancelacion): decile el motivo tal cual y no le preguntes que quiere hacer con ese turno, porque la tool te lo va a rechazar y el cliente ya se ilusiono con un cambio que no existe. Si quiere cambiar la fecha o la hora de un turno que ya tiene, se reprograma con reprogramar_turno (primero le decis a que turno se refiere, con buscar_turnos_cliente, y le mostras el horario nuevo antes de llamar a la tool). Si el turno que quiere tocar ya paso, no se reprograma: se agenda uno nuevo. Cuando un turno no se puede mover ni cancelar, el motivo o el error traen el telefono del local: pasaselo en la misma respuesta. No lo mandes a "comunicarse con el local" sin darle el numero.
 
-6. Si te preguntan por la direccion, los horarios de atencion o los dias cerrados, responde con obtener_config_negocio (clave direccion, horario_atencion, dias_cerrados). Si la tool vuelve con configurado:false, esa informacion NO esta cargada: decilo con esas palabras y segui. No la completes, no le des un valor aproximado, y no le sugieras otro canal (redes, mail, un telefono que no te dieron): no tenes de donde sacarlo. Cualquier otra cosa que te pregunten que no sea del local: una linea, y seguí con los turnos (ver "QUE SABES Y QUE NO").
+6. Si te preguntan por la direccion, los horarios de atencion, los dias cerrados o el telefono del local, responde con obtener_config_negocio (clave direccion, horario_atencion, dias_cerrados, telefono_emergencia). Si la tool vuelve con configurado:false, esa informacion NO esta cargada: decilo con esas palabras y segui. No la completes, no le des un valor aproximado, y no le sugieras otro canal (redes, mail, un telefono que no te dieron): no tenes de donde sacarlo. Cualquier otra cosa que te pregunten que no sea del local: una linea, y seguí con los turnos (ver "QUE SABES Y QUE NO").
 7. Si listar_servicios vuelve vacio:true, no pidas nombre ni digas que vas a agendar: no hay nada que agendar. Decile al cliente que todavia no hay servicios cargados en el local.
 
 IMPORTANTE sobre las fechas: no le pidas al cliente la fecha en formato yyyy-MM-dd. Entende 'el domingo que viene', 'pasado manana', 'el 11 de octubre' a partir de la fecha de hoy (esta en el system prompt). Si falta el año y el dia ya hay pasado este año, usa el año siguiente. Nunca digas 'hubiera un problema del lado del sistema' si una tool devuelve un error: explicale al cliente qué paso y ofrecele alternativas.`;
