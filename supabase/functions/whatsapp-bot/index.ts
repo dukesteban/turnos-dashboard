@@ -399,17 +399,35 @@ function err(codigo: string, detalle = '') {
   return JSON.stringify({ ok: false, error: codigo, detalle });
 }
 
-function diaCerrado(cerrados: Array<{ fecha: string; fecha_hasta?: string | null }>, fecha: string): boolean {
+function cierreQueCubre(cerrados: Array<{ fecha: string; fecha_hasta?: string | null; motivo?: string | null }>, fecha: string): { fecha: string; fecha_hasta?: string | null; motivo?: string | null } | null {
   // Un día cerrado sin fecha_hasta aplica SOLO ese día. Con fecha_hasta, aplica todo el
   // rango. La condición anterior (`lte(fecha) + or(fecha_hasta >= x, is null)`) contaba
   // COMO CERRADOS POR SIEMPRE los que tenían fecha_hasta NULL, porque esa cláusula
   // matchea cualquier fecha posterior a la del cierre.
   const D = new Date(fecha + 'T00:00:00').getTime();
-  return (cerrados ?? []).some((c: any) => {
+  return (cerrados ?? []).find((c: any) => {
     const desde = new Date(c.fecha + 'T00:00:00').getTime();
     const hasta = c.fecha_hasta ? new Date(c.fecha_hasta + 'T00:00:00').getTime() : desde;
     return desde <= D && D <= hasta;
-  });
+  }) ?? null;
+}
+
+function diaCerrado(cerrados: Array<{ fecha: string; fecha_hasta?: string | null }>, fecha: string): boolean {
+  return cierreQueCubre(cerrados, fecha) !== null;
+}
+
+/**
+ * El "detalle" que se le devuelve al modelo cuando un dia esta cerrado.
+ *
+ * Lleva el MOTIVO cuando lo cargaron: sin esto el bot solo podia decir "ese dia
+ * esta cerrado", y el cliente preguntaba por que. El motivo ya esta en
+ * `dias_cerrados`; no hay razon para que el modelo tenga que ir a buscarlo aparte.
+ */
+function detalleCerrado(cierre: { motivo?: string | null } | null): string {
+  const motivo = (cierre?.motivo ?? '').trim();
+  return motivo
+    ? `Ese dia el negocio esta cerrado por ${motivo}. Deciselo al cliente con la razon.`
+    : 'Ese dia el negocio esta cerrado.';
 }
 
 async function horasMinCancelar(): Promise<number> {
@@ -452,17 +470,24 @@ async function contextoNegocio(): Promise<{ nombre: string; cierres: string | nu
     const d = new Date(c.fecha + 'T00:00:00');
     const dia = d.getDate();
     const mes = MESES[d.getMonth()];
-    const rango = c.fecha_hasta && c.fecha_hasta !== c.fecha
-      ? ` al ${new Date(c.fecha_hasta + 'T00:00:00').getDate()} de ${mes}`
-      : '';
+    const hasta = c.fecha_hasta ? new Date(c.fecha_hasta + 'T00:00:00') : null;
     const motivo = c.motivo ? ` (${c.motivo.toLowerCase()})` : '';
-    return `el ${dia} de ${mes}${rango} no trabajamos${motivo}`;
+    if (hasta && c.fecha_hasta !== c.fecha) {
+      // Rango: "del 2 al 4 de noviembre" (y "del 30 de octubre al 2 de noviembre"
+      // si cruza de mes). Antes decia "el 2 de noviembre al 4 de noviembre".
+      const mesHasta = MESES[hasta.getMonth()];
+      const inicio = mesHasta === mes ? `${dia}` : `${dia} de ${mes}`;
+      return `del ${inicio} al ${hasta.getDate()} de ${mesHasta} no trabajamos${motivo}`;
+    }
+    return `el ${dia} de ${mes} no trabajamos${motivo}`;
   });
 
   return {
     nombre,
     tono,
-    cierres: `recordale que ${frases.join(' y ')}`,
+    // Sin el "recordale que" adelante: el prompt ya dice "y avisale que ...", y
+    // quedaba "avisale que recordale que el 24 ...".
+    cierres: frases.join(' y '),
   };
 }
 
@@ -742,9 +767,10 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       // recien cuando el cliente elegía a uno se enteraba de que ese día no labraba
       // ("Esteban no trabaja los miércoles"), con lo que le había concedido algo que
       // tenía que deshacer. O sea, ofrecerle una lista que la base ya sabe que es falsa.
-      const { data: cerrados } = await sb.from('dias_cerrados').select('fecha, fecha_hasta');
-      if (diaCerrado(cerrados ?? [], fecha)) {
-        return JSON.stringify({ ok: false, error: 'dia_cerrado', detalle: 'Ese dia el negocio esta cerrado.' });
+      const { data: cerrados } = await sb.from('dias_cerrados').select('fecha, fecha_hasta, motivo');
+      const cierreDia = cierreQueCubre(cerrados ?? [], fecha);
+      if (cierreDia) {
+        return JSON.stringify({ ok: false, error: 'dia_cerrado', motivo: cierreDia.motivo ?? null, detalle: detalleCerrado(cierreDia) });
       }
 
       const diaSemana = new Date(fecha + 'T00:00:00').getDay();
@@ -877,9 +903,10 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       // bot reconducía todo a "¿que servicio?" y el clienteGBA loop hasta que
       // aceptaba elegir uno, cuando la pregunta no tiene nada que ver con servicios.
       const fecha = input.fecha;
-      const { data: cerrados } = await sb.from('dias_cerrados').select('fecha, fecha_hasta');
-      if (diaCerrado(cerrados ?? [], fecha)) {
-        return JSON.stringify({ ok: false, error: 'dia_cerrado', detalle: 'Ese dia el negocio esta cerrado.' });
+      const { data: cerrados } = await sb.from('dias_cerrados').select('fecha, fecha_hasta, motivo');
+      const cierreDia = cierreQueCubre(cerrados ?? [], fecha);
+      if (cierreDia) {
+        return JSON.stringify({ ok: false, error: 'dia_cerrado', motivo: cierreDia.motivo ?? null, detalle: detalleCerrado(cierreDia) });
       }
 
       const diaSemana = new Date(fecha + 'T00:00:00').getDay();
@@ -999,8 +1026,11 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
           return ta < b && a < tb;
         });
       // 1. cerrado? (`fecha` es el inicio, `fecha_hasta` el final; si no hay, fue un día solo)
-      const { data: cerrados } = await sb.from('dias_cerrados').select('fecha, fecha_hasta');
-      if (diaCerrado(cerrados ?? [], fecha)) return JSON.stringify({ ok: false, error: 'dia_cerrado' });
+      const { data: cerrados } = await sb.from('dias_cerrados').select('fecha, fecha_hasta, motivo');
+      const cierre = cierreQueCubre(cerrados ?? [], fecha);
+      if (cierre) {
+        return JSON.stringify({ ok: false, error: 'dia_cerrado', motivo: cierre.motivo ?? null, detalle: detalleCerrado(cierre) });
+      }
 
       // 2. dia de la semana
       const d = new Date(fecha + 'T00:00:00');
@@ -1330,8 +1360,9 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       const [fecha, hora] = fecha_hora.split('T');
 
       // 2. cerrado?
-      const { data: cerradosCr } = await sb.from('dias_cerrados').select('fecha, fecha_hasta');
-      if (diaCerrado(cerradosCr ?? [], fecha)) return err('fuera_de_horario', 'Ese día el negocio no atiende.');
+      const { data: cerradosCr } = await sb.from('dias_cerrados').select('fecha, fecha_hasta, motivo');
+      const cierreCr = cierreQueCubre(cerradosCr ?? [], fecha);
+      if (cierreCr) return err('fuera_de_horario', detalleCerrado(cierreCr));
 
       // 3. servicio existe
       const { data: serv } = await sb.from('servicios').select('id, nombre, duracion_minutos, precio').eq('id', servicio_id).single();
@@ -1757,8 +1788,9 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
 
       // Mismas validaciones que crear_turno: si el turno nuevo no se puede agendar,
       // reprogramar tampoco.
-      const { data: cerradosRe } = await sb.from('dias_cerrados').select('fecha, fecha_hasta');
-      if (diaCerrado(cerradosRe ?? [], nuevaFecha)) return err('fuera_de_horario', 'Ese dia el negocio no atiende.');
+      const { data: cerradosRe } = await sb.from('dias_cerrados').select('fecha, fecha_hasta, motivo');
+      const cierreRe = cierreQueCubre(cerradosRe ?? [], nuevaFecha);
+      if (cierreRe) return err('fuera_de_horario', detalleCerrado(cierreRe));
 
       const diaSemana = new Date(nuevaFecha + 'T00:00:00').getDay();
       const { data: horariosRe } = await sb

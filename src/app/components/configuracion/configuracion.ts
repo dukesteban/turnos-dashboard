@@ -188,16 +188,30 @@ export class ConfiguracionComponent implements OnInit {
   ) {}
 
   async ngOnInit() {
-    await this.cargarDatos();
+    // `cargarUsuarios` no depende de `cargarDatos`: en serie eran dos esperas
+    // encadenadas antes de ver la pantalla.
+    //
     // La lista de usuarios se pide solo si esta pantalla la va a mostrar. El `*ngIf`
     // del template ya la esconde al secretario, pero `cargarDatos` corre siempre, y
     // pedirla igual seria una consulta que no se usa.
-    if (this.puedeAdministrarUsuarios) await this.cargarUsuarios();
+    await Promise.all([
+      this.cargarDatos(),
+      this.puedeAdministrarUsuarios ? this.cargarUsuarios() : Promise.resolve(),
+    ]);
     this.cdr.detectChanges();
   }
 
   async cargarDatos() {
-    const config = await this.supabase.getConfiguracion();
+    // Las cinco listas son independientes. En serie eran cinco vueltas a la base
+    // antes de poder dibujar el formulario (ryf esta en Oregon: ~370ms cada una).
+    const [config, diasCerrados, horariosDB, servicios, metodosPago] = await Promise.all([
+      this.supabase.getConfiguracion(),
+      this.supabase.getDiasCerrados(),
+      this.supabase.getHorarios(),
+      this.supabase.getServicios(),
+      this.supabase.getMetodosPago(),
+    ]);
+
     this.nombreNegocio = config.find((c: any) => c.clave === 'nombre_negocio')?.valor || '';
     this.descripcion = config.find((c: any) => c.clave === 'descripcion')?.valor || '';
 
@@ -207,15 +221,14 @@ export class ConfiguracionComponent implements OnInit {
     this.telefonoEmergencia = config.find((c: any) => c.clave === 'telefono_emergencia')?.valor || '';
     this.direccion = config.find((c: any) => c.clave === 'direccion')?.valor || '';
     this.tono = config.find((c: any) => c.clave === 'tono')?.valor || 'informal';
-    this.diasCerrados = await this.supabase.getDiasCerrados();
-    const horariosDB = await this.supabase.getHorarios();
+    this.diasCerrados = diasCerrados;
     this.horarios = (horariosDB || []).map((h: any) => ({
       ...h,
       hora_inicio: h.hora_inicio?.slice(0, 5) || '',
       hora_fin: h.hora_fin?.slice(0, 5) || ''
     }));
-    this.servicios = await this.supabase.getServicios();
-    this.metodosPago = await this.supabase.getMetodosPago();
+    this.servicios = servicios;
+    this.metodosPago = metodosPago;
     this.cdr.detectChanges();
   }
 
@@ -891,8 +904,14 @@ export class ConfiguracionComponent implements OnInit {
     // Los empleados se piden acá y no una vez sola en `ngOnInit`: la pantalla de
     // empleados puede cambiar de una sesion a otra (el admin da de alta a alguien y
     // recarga), y la lista de "empleado vinculado" quedaria con un nombre viejo.
-    this.empleadosDisponibles = await this.supabase.getEmpleados();
-    this.usuarios = await this.supabase.getUsuarios();
+    //
+    // Van en paralelo: ninguna de las dos necesita el resultado de la otra.
+    const [empleados, usuarios] = await Promise.all([
+      this.supabase.getEmpleados(),
+      this.supabase.getUsuarios(),
+    ]);
+    this.empleadosDisponibles = empleados;
+    this.usuarios = usuarios;
   }
 
   abrirFormUsuario() {
