@@ -150,6 +150,9 @@ export class AgendaComponent implements OnInit, OnDestroy {
   mostrarPopupCancelacion = false;
   motivoCancelacion = '';
   enviandoMensaje = false;
+  /** El envío automático no salió: se muestra y se ofrece el link a mano. */
+  errorMensaje = '';
+  linkWhatsapp = '';
   nombreNegocio = localStorage.getItem('nombre_negocio') || '';
   mostrarPopupPostergacion = false;
   motivoPostergacion = '';
@@ -1182,6 +1185,8 @@ claseBloque(turno: any, mini: boolean): string {
       if (this.telefonoDe(this.turnoSeleccionado) &&
           confirm('¿Querés enviarle un mensaje de WhatsApp al cliente?')) {
         this.motivoCancelacion = '';
+        this.errorMensaje = '';
+        this.linkWhatsapp = '';
         this.mostrarPopupCancelacion = true;
       } else {
         this.cerrarPopupCancelacion();
@@ -1195,30 +1200,43 @@ claseBloque(turno: any, mini: boolean): string {
   }
 
   async enviarMensajeCancelacion() {
-    if (!this.telefonoDe(this.turnoSeleccionado)) return;
+    const telefono = this.telefonoDe(this.turnoSeleccionado);
+    if (!telefono) return;
     this.enviandoMensaje = true;
+    this.errorMensaje = '';
+    this.linkWhatsapp = '';
     try {
       const fecha = this.formatearFechaStr(this.turnoSeleccionado.fecha);
       const hora = this.formatearHora(this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora);
       const mensaje = `Estimado cliente:\n\n📆 El turno del día *${fecha}* a las *${hora}* hs ha sido *cancelado* debido a ${this.motivoCancelacion}.\nLamentamos los inconvenientes causados.😔\n_(Si deseas reservar otro turno escribí *1* o *reservar*)_\n\nAtte. *${this.nombreNegocio}*`;
-      await fetch('https://primary-production-4f919.up.railway.app/webhook/cancelacion-turno', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: this.telefonoDe(this.turnoSeleccionado),
-          type: 'text',
-          text: { body: mensaje }
-        })
-      });
+
+      const r = await this.supabase.enviarMensajeCliente(telefono, mensaje);
+      if (!r.ok) {
+        // No salió: NO se cierra el popup. Cerrarlo con un "listo" cuando Meta
+        // rechazó el mensaje es lo mismo que el webhook viejo, que fallaba en
+        // silencio: el cliente se entera cuando llega al local.
+        this.errorMensaje = 'No se pudo enviar.';
+        this.linkWhatsapp = this.linkWhatsappDe(telefono, mensaje);
+        return;
+      }
     } catch (e) {
       console.error('Error enviando mensaje:', e);
+      this.errorMensaje = 'No se pudo enviar.';
+      return;
+    } finally {
+      this.enviandoMensaje = false;
+      this.cdr.detectChanges();
     }
-    this.enviandoMensaje = false;
     this.mostrarPopupCancelacion = false;
     this.cerrarPopup();
     await this.cargarTurnos();
     this.cdr.detectChanges();
+  }
+
+  /** WhatsApp con el mensaje ya escrito, para mandarlo a mano si Meta no lo deja. */
+  linkWhatsappDe(telefono: string, texto: string): string {
+    const digitos = (telefono || '').replace(/\D/g, '').slice(-10);
+    return `https://wa.me/549${digitos}?text=${encodeURIComponent(texto)}`;
   }
 
   cerrarPopupCancelacion() {
@@ -1233,6 +1251,8 @@ claseBloque(turno: any, mini: boolean): string {
       await this.cargarTurnos();
     } else if (confirm('¿Querés enviarle un mensaje de WhatsApp al cliente?')) {
       this.motivoPostergacion = '';
+      this.errorMensaje = '';
+      this.linkWhatsapp = '';
       this._nuevaFechaPostergacion = nuevaFecha;
       this._nuevaHoraPostergacion = nuevaHora;
       this._nuevoServicioPostergacion = nuevoServicio;
@@ -1245,24 +1265,29 @@ claseBloque(turno: any, mini: boolean): string {
   }
 
   async enviarMensajePostergacion() {
+    const telefono = this.telefonoDe(this.turnoSeleccionado);
+    if (!telefono) return;
     this.enviandoMensajePostergacion = true;
+    this.errorMensaje = '';
+    this.linkWhatsapp = '';
     try {
       const fecha = this.formatearFechaStr(this._nuevaFechaPostergacion);
-            const mensaje = `Estimado cliente:\n\n📆 Tu turno ha sido *reprogramado* para el día *${fecha}* a las *${this._nuevaHoraPostergacion}* hs (para un: *${this._nuevoServicioPostergacion}*).${this.motivoPostergacion ? this.motivoPostergacion + '.' : ''}\nLamentamos los inconvenientes causados.😔\n_(Si deseas consultar/cancelar tus turnos escribí *2* o *turnos*)_\n\nAtte. *${this.nombreNegocio}*`;
-      await fetch('https://primary-production-4f919.up.railway.app/webhook/cancelacion-turno', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: this.telefonoDe(this.turnoSeleccionado),
-          type: 'text',
-          text: { body: mensaje }
-        })
-      });
+      const mensaje = `Estimado cliente:\n\n📆 Tu turno ha sido *reprogramado* para el día *${fecha}* a las *${this._nuevaHoraPostergacion}* hs (para un: *${this._nuevoServicioPostergacion}*).${this.motivoPostergacion ? this.motivoPostergacion + '.' : ''}\nLamentamos los inconvenientes causados.😔\n_(Si deseas consultar/cancelar tus turnos escribí *2* o *turnos*)_\n\nAtte. *${this.nombreNegocio}*`;
+
+      const r = await this.supabase.enviarMensajeCliente(telefono, mensaje);
+      if (!r.ok) {
+        this.errorMensaje = 'No se pudo enviar.';
+        this.linkWhatsapp = this.linkWhatsappDe(telefono, mensaje);
+        return;
+      }
     } catch (e) {
       console.error('Error enviando mensaje:', e);
+      this.errorMensaje = 'No se pudo enviar.';
+      return;
+    } finally {
+      this.enviandoMensajePostergacion = false;
+      this.cdr.detectChanges();
     }
-    this.enviandoMensajePostergacion = false;
     this.cerrarPopupPostergacion();
     await this.cargarTurnos();
     this.cdr.detectChanges();

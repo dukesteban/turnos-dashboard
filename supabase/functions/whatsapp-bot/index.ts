@@ -43,6 +43,9 @@ const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC = Deno.env.get('ANTHROPIC_API_KEY')!;
 const WA_TOKEN = Deno.env.get('WHATSAPP_TOKEN') ?? '';
 const WA_PHONE_ID = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID') ?? '';
+// Si no esta, los audios siguen contestando el aviso de "escribinos". Asi se
+// puede prender solo en el proyecto de prueba.
+const GROQ_KEY = Deno.env.get('GROQ_API_KEY') ?? '';
 const VERIFY_TOKEN = Deno.env.get('WHATSAPP_VERIFY_TOKEN') ?? '';
 
 const sb = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
@@ -2570,6 +2573,63 @@ function textoDelMensaje(message: any): string {
   return '';
 }
 
+/**
+ * Transcribe una nota de voz de WhatsApp.
+ *
+ * Claude no escucha audios, asi que el audio se convierte en texto ANTES del
+ * modelo: el bot contesta como si la persona hubiera escrito, y puede seguir
+ * mandando links de calendario y horarios, que es justo lo que una respuesta de
+ * voz rompe.
+ *
+ * Va con Groq (whisper-large-v3-turbo) porque tiene plan gratis y la API es la
+ * misma que la de OpenAI. Si `GROQ_API_KEY` no esta cargada devuelve vacio y el
+ * bot manda el aviso de siempre: asi la funcion se prende por proyecto.
+ */
+async function transcribirAudio(mediaId: string): Promise<string> {
+  if (!GROQ_KEY || !mediaId) return '';
+
+  try {
+    // 1. Meta no manda el archivo: da una URL temporal (vence a los 5 minutos).
+    const info = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+      headers: { Authorization: `Bearer ${WA_TOKEN}` },
+    });
+    if (!info.ok) {
+      console.error('Meta no dio el audio:', await info.text());
+      return '';
+    }
+    const { url, mime_type } = await info.json();
+    if (!url) return '';
+
+    const archivo = await fetch(url, { headers: { Authorization: `Bearer ${WA_TOKEN}` } });
+    if (!archivo.ok) {
+      console.error('No se pudo bajar el audio:', archivo.status);
+      return '';
+    }
+    const bytes = await archivo.arrayBuffer();
+
+    // 2. Mismo formato multipart que OpenAI.
+    const forma = new FormData();
+    forma.append('file', new Blob([bytes], { type: mime_type ?? 'audio/ogg' }), 'audio.ogg');
+    forma.append('model', 'whisper-large-v3-turbo');
+    forma.append('response_format', 'json');
+
+    const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${GROQ_KEY}` },
+      body: forma,
+    });
+    if (!r.ok) {
+      console.error('Groq no transcribio:', await r.text());
+      return '';
+    }
+    const data = await r.json();
+    return String(data?.text ?? '').trim();
+  } catch (e) {
+    console.error('Error transcribiendo audio:', e);
+    return '';
+  }
+}
+
 /** Si en los ultimos 30 minutos ya le avisamos que escriba, no repetimos. */
 async function avisoReciente(telefono: string): Promise<boolean> {
   const { data } = await sb
@@ -2589,7 +2649,7 @@ async function mensajeSinTexto(): Promise<string> {
 
 const telefono = message.from;
   const tipo = message.type;
-  const texto = textoDelMensaje(message);
+  let texto = textoDelMensaje(message);
 
   // ─── El bot no se contesta a sí mismo ───
   // `display_phone_number` es el número desde el que envía el negocio. Cuando el
@@ -2634,14 +2694,22 @@ const telefono = message.from;
     }
   }
 
+  // ─── Nota de voz: se transcribe y sigue como si hubiera escrito ───
+  // Va despues del control de reintentos: transcribir tarda unos segundos y no
+  // queremos pagarlo dos veces si Meta reenvia el webhook.
+  if (!texto && message.audio?.id) {
+    texto = await transcribirAudio(message.audio.id);
+  }
+
   // Un like o un emoji NO es una pregunta. Contestarle "solo entiendo texto" a
   // alguien que reaccionó es hablarle al lado, y peor: si manda tres audios seguidos
   // recibe tres veces el mismo aviso. Eso se contesta UNA vez y despues se calla.
   //
   // Los audios SÍ son un problema real: en WhatsApp la gente escribe grabando, y un
   // bot que contesta "no entiendo" a una nota de voz le deja de servir justo a la
-  // mitad de sus clientas. No hay transcripcion disponible aca, asi que el aviso
-  // dice que lo escriba y con limite de uno cada media hora.
+  // mitad de sus clientas. Si `GROQ_API_KEY` esta cargada, arriba se transcriben y
+  // no se llega hasta aca. Este aviso queda para cuando falla la transcripcion o
+  // el proyecto no la tiene prendida, y sale con limite de uno cada media hora.
   if (!texto) {
     const tipoSinVoz = new Set(['reaction', 'sticker', 'unsupported', 'unknown']);
     if (!tipoSinVoz.has(tipo) && !(await avisoReciente(telefono))) {

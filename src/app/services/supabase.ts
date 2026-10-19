@@ -1473,4 +1473,27 @@ export class SupabaseService {
       .eq('id', id);
     if (error) throw error;
   }
+
+  /**
+   * Le manda un WhatsApp al cliente desde el número del negocio.
+   *
+   * Va por una función de Supabase y no directo a Meta porque el token no puede
+   * estar en el navegador. Devuelve `fuera_de_ventana` cuando Meta no deja
+   * mandar texto libre (el cliente no escribió en las últimas 24 h y no hay
+   * plantilla): en ese caso el panel ofrece abrir WhatsApp a mano.
+   */
+  async enviarMensajeCliente(
+    telefono: string,
+    texto: string,
+  ): Promise<{ ok: boolean; codigo?: string; error?: string }> {
+    try {
+      const { data, error } = await this.supabase.functions.invoke('mensaje-cliente', {
+        body: { telefono, texto },
+      });
+      if (error) return { ok: false, codigo: 'error', error: 'No se pudo conectar.' };
+      return (data as any) ?? { ok: false, codigo: 'error' };
+    } catch {
+      return { ok: false, codigo: 'error', error: 'No se pudo conectar.' };
+    }
+  }
 }

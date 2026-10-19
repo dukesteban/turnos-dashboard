@@ -515,6 +515,10 @@
           Atte. <b>{{ nombreNegocio }}</b>
           </p>
         </div>
+        <div *ngIf="errorMensaje" class="aviso-envio">
+          {{ errorMensaje }}
+          <a *ngIf="linkWhatsapp" [href]="linkWhatsapp" target="_blank" rel="noopener">Abrir WhatsApp</a>
+        </div>
       </div>
       <div class="popup-acciones">
         <button class="btn-atendido" (click)="enviarMensajeCancelacion()"
@@ -549,6 +553,10 @@
             <i>(Si deseas consultar/cancelar tus turnos escribí <b>2</b> o <b>turnos</b>)</i><br>
             Atte. <b>{{ nombreNegocio }}</b>
           </p>
+        </div>
+        <div *ngIf="errorMensaje" class="aviso-envio">
+          {{ errorMensaje }}
+          <a *ngIf="linkWhatsapp" [href]="linkWhatsapp" target="_blank" rel="noopener">Abrir WhatsApp</a>
         </div>
       </div>
       <div class="popup-acciones">

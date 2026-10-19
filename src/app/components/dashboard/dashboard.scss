@@ -639,3 +639,21 @@ tr.vencido td { background: #fff7ed; }
     th, td { padding: 9px 4px; }
   }
 }
+/* Cuando Meta no dejo mandar el mensaje: se ofrece el link a mano. */
+.aviso-envio {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 0.85rem;
+
+  a {
+    display: inline-block;
+    margin-top: 4px;
+    font-weight: 700;
+    color: #b91c1c;
+    text-decoration: underline;
+  }
+}
