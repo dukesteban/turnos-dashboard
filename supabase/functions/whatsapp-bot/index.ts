@@ -104,12 +104,24 @@ function yaEstanEnElTexto(texto: string, c: { google: string; ics: string }): bo
  */
 const OFFSET_AR = -3;
 
-function utcDesdeLocal(fechaISO: string, hhmm: string): string {
-  // "YYYY-MM-DD" + "HH:MM" -> timestamp en UTC -> "YYYYMMDDTHHMMSSZ"
+/**
+ * El momento exacto (en milisegundos) de una fecha y hora DEL LOCAL.
+ *
+ * Existe porque la funcion corre en UTC y Argentina es UTC-3: un
+ * `new Date('2026-10-19T10:00')` es el turno de las 10:00 de Argentina leido
+ * como 10:00 UTC, o sea tres horas ANTES de lo que es. Con el plazo de 12 horas
+ * esa diferencia se come tres horas de margen y el bot le dice que no a un turno
+ * que todavia se puede mover.
+ */
+function msLocales(fechaISO: string, hhmm: string): number {
   const [y, m, d] = fechaISO.split('-').map(Number);
   const [hh, mm] = hhmm.split(':').map(Number);
-  const ms = Date.UTC(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0) - OFFSET_AR * 3600 * 1000;
-  return new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  return Date.UTC(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0) - OFFSET_AR * 3600 * 1000;
+}
+
+function utcDesdeLocal(fechaISO: string, hhmm: string): string {
+  // "YYYY-MM-DD" + "HH:MM" -> timestamp en UTC -> "YYYYMMDDTHHMMSSZ"
+  return new Date(msLocales(fechaISO, hhmm)).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 }
 
 /**
@@ -349,7 +361,8 @@ const TOOLS = [
   },
   {
     name: 'buscar_turnos_cliente',
-    description: 'Busca los turnos del cliente por su numero de WhatsApp. Devuelve SOLO los de hoy en adelante y sin cancelados. Pon incluir_pasados=true solo si el cliente pidio explicitamente ver el historico.',
+    description:
+      'Busca los turnos del cliente por su numero de WhatsApp. Devuelve SOLO los que todavia no terminaron y sin cancelados; cada uno viene con se_puede_mover (si ya no se puede mover ni cancelar por el plazo, viene false y el motivo). Pon incluir_pasados=true solo si el cliente pidio explicitamente ver el historico.',
     input_schema: {
       type: 'object',
       properties: {
@@ -439,6 +452,21 @@ async function horasMinCancelar(): Promise<number> {
 }
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+/**
+ * "viernes 30 de octubre": el dia de la semana ya resuelto.
+ *
+ * Va en los resultados de las tools porque el modelo lo calculaba solo y se
+ * equivocaba: en la misma conversacion dijo "jueves 30" y despues "viernes 30"
+ * para el mismo turno. La tabla de dias del prompt alcanza para hablar del
+ * futuro, no para traducir una fecha que ya viene de la base.
+ */
+function fechaTexto(iso: string): string {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return iso;
+  const dia = DIAS_SEMANA[d.getDay()].replace('miercoles', 'miércoles').replace('sabado', 'sábado');
+  return `${dia} ${d.getDate()} de ${MESES[d.getMonth()]}`;
+}
 
 // ─── Nombre del negocio y proximos cierres, para la presentacion ───
 // El cierre se lee de `dias_cerrados`: si el lavadero carga un feriado ahi, el bot lo
@@ -1490,11 +1518,11 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         }
       }
       // 1. fecha y hora coherentes
-      const dt = new Date(fecha_hora);
-      if (isNaN(dt.getTime())) return err('fecha_invalida', fecha_hora);
-      if (dt.getTime() < Date.now()) return err('fuera_de_horario', 'La fecha/hora ya pasaron.');
-
-      const [fecha, hora] = fecha_hora.split('T');
+      const [fecha, hora] = String(fecha_hora).split('T');
+      if (!fecha || !hora || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return err('fecha_invalida', fecha_hora);
+      // La hora viene en hora del local: se compara como tal (ver msLocales), no
+      // como si fuera UTC, que es tres horas antes de lo que es.
+      if (msLocales(fecha, hora) < Date.now()) return err('fuera_de_horario', 'La fecha/hora ya pasaron.');
 
       // 2. cerrado?
       const { data: cerradosCr } = await sb.from('dias_cerrados').select('fecha, fecha_hasta, motivo');
@@ -1739,6 +1767,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         // Que se reserve. Si el modelo anuncia `hora_pedida` en vez de esta, le
         // miente al cliente en la cara: por eso van las dos y el aviso va con esta.
         fecha_reservada: fecha,
+        fecha_reservada_texto: fechaTexto(fecha),
         hora_reservada: horaReservada,
         hora_pedida: horaInicio,
         // null cuando quedo en la exacta; si no, quantos minutos se corrio y para que
@@ -1769,28 +1798,72 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       // cliente cree que tiene una agenda llena. Para ver el historico hay que
       // pedirlo explicitamente con incluir_pasados.
       const incluirPasados = input.incluir_pasados === true;
-      const hoy = new Date().toISOString().slice(0, 10);
+      // La fecha de HOY en Argentina, no en UTC: a las 22:00 el reloj UTC ya esta
+      // en el dia siguiente y el turno de hoy se caia de la lista.
+      const hoy = new Date(Date.now() + OFFSET_AR * 3600 * 1000).toISOString().slice(0, 10);
 
       let consulta = sb
         .from('turnos')
-        .select('id, fecha, hora, servicio_nombre, estado, empleado_id')
+        .select('id, fecha, hora, hora_inicio, hora_fin, servicio_nombre, estado, empleado_id, duracion_minutos')
         .eq(clienteId ? 'cliente_id' : 'cliente_telefono', clienteId ?? telefono);
 
-      // Un turno de hoy que ya paso no le sirve para nada: el cliente quiere lo que
-      // tiene por delante, no lo que ya se le fue.
       if (!incluirPasados) {
         consulta = consulta.gte('fecha', hoy).neq('estado', 'cancelado');
       }
 
-      const { data } = await consulta.order('fecha', { ascending: false }).limit(20);
-      const resultado = data ?? [];
+      const { data } = await consulta
+        .order('fecha', { ascending: !incluirPasados })
+        .order('hora', { ascending: !incluirPasados })
+        .limit(20);
+
+      // ─── Que se puede y que no, ya resuelto ───
+      //
+      // Filtrar `fecha >= hoy` NO alcanza: un turno de hoy a las 10 sigue en la
+      // lista a las 15:47, cuando ya se fue. Y al reves, el bot ofrecia moverlo o
+      // cancelarlo y recien despues la tool le contestaba que hace falta un plazo
+      // de 12 horas: o sea, le ofrecia al cliente algo que no se puede hacer.
+      //
+      // Se resuelve aca y viaja con el turno (`se_puede_mover` + `motivo`) porque
+      // el modelo no puede saberlo: el plazo esta en `configuracion` y la hora del
+      // local no es la del reloj del runtime.
+      const ahora = Date.now();
+      const minsPlazo = (await horasMinCancelar()) * 60;
+      const plazo = `${minsPlazo / 60} hs`;
+
+      const conEstado = (data ?? []).map((t: any) => {
+        const inicio = msLocales(t.fecha, t.hora_inicio ?? t.hora ?? '00:00');
+        // Si no hay hora de fin se usa la duracion: el turno sigue "en curso"
+        // mientras se esta atendiendo, no desaparece a la hora en que arranco.
+        const fin = t.hora_fin
+          ? msLocales(t.fecha, t.hora_fin)
+          : inicio + (Number(t.duracion_minutos) || 30) * 60000;
+
+        const yaPaso = fin <= ahora;
+        const minsFaltan = (inicio - ahora) / 60000;
+        const sePuedeMover = !yaPaso && minsFaltan >= minsPlazo;
+
+        return {
+          ...t,
+          fecha_texto: fechaTexto(t.fecha),
+          ya_paso: yaPaso,
+          se_puede_mover: sePuedeMover,
+          motivo: yaPaso
+            ? 'Ya paso.'
+            : sePuedeMover
+              ? null
+              : `Falta menos de lo que se pide para moverlo o cancelarlo (${plazo}).`,
+        };
+      });
+
+      const resultado = incluirPasados ? conEstado : conEstado.filter((t: any) => !t.ya_paso);
+
       return JSON.stringify({
         ok: true,
         turnos: resultado,
         total: resultado.length,
         nota: incluirPasados
-          ? 'Incluye el historico completo.'
-          : 'Solo turnos de hoy en adelante, sin cancelados.',
+          ? 'Incluye el historico completo. Los que ya pasaron vienen con se_puede_mover:false.'
+          : `Solo los turnos que todavia no terminaron, sin cancelados. Ofrecele mover o cancelar UNICAMENTE los que vienen con se_puede_mover:true. Los que vienen con false ya no se tocan: decile el motivo tal cual y seguí, sin preguntarle qué quiere hacer con ese turno (la tool te lo va a rechazar igual).`,
       });
     }
     // ─── Corregir el nombre de un cliente ───
@@ -1874,7 +1947,18 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       if (!turno) return err('turno_no_encontrado');
       if (turno.estado === 'cancelado') return err('ya_cancelado');
 
-      const minsFaltan = (new Date(turno.fecha + 'T' + turno.hora_inicio).getTime() - Date.now()) / 60000;
+      // Un turno que ya empezo no se cancela por WhatsApp: no es "falta menos de
+      // 12 horas", es que ya fue y el local lo da por atendido. Decir el plazo en
+      // ese caso suena a que con mas tiempo si se podia, y no es eso.
+      const inicio = msLocales(turno.fecha, turno.hora_inicio);
+      if (inicio <= Date.now()) {
+        return err(
+          'turno_ya_pasado',
+          `Ese turno ya fue (era el ${turno.fecha} a las ${String(turno.hora_inicio).slice(0, 5)}). No se cancela: decile que hable con el local si necesita algo.`,
+        );
+      }
+
+      const minsFaltan = (inicio - Date.now()) / 60000;
       const minsMin = (await horasMinCancelar()) * 60;
       if (minsFaltan < minsMin) return err('fuera_de_plazo', `Se cancela hasta ${minsMin / 60} hs antes.`);
 
@@ -1890,12 +1974,15 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
 
       // Un turno YA pasado no se reprograma: no da "falta menos de 12 horas" sino
       // "ese turno ya fue", que es lo unico cierto y lo que el cliente entiende.
-      const hoy = new Date().toISOString().slice(0, 10);
-      if (turno.fecha < hoy) {
-        return err('turno_ya_pasado', `El turno del ${turno.fecha} ya fue. Para algo de hoy en adelante, mejor agendá uno nuevo.`);
+      const inicio = msLocales(turno.fecha, turno.hora_inicio);
+      if (inicio <= Date.now()) {
+        return err(
+          'turno_ya_pasado',
+          `El turno del ${turno.fecha} a las ${String(turno.hora_inicio).slice(0, 5)} ya fue. Para algo de hoy en adelante, mejor agendá uno nuevo.`,
+        );
       }
 
-      const minsFaltan = (new Date(turno.fecha + 'T' + turno.hora_inicio).getTime() - Date.now()) / 60000;
+      const minsFaltan = (inicio - Date.now()) / 60000;
       const minsMin = (await horasMinCancelar()) * 60;
       if (minsFaltan < minsMin) return err('fuera_de_plazo', `Se reprograma hasta ${minsMin / 60} hs antes.`);
 
@@ -1923,11 +2010,13 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         nuevaFecha = String(turno.fecha).slice(0, 10);
         nuevaHora = String(nueva_fecha_hora).trim().slice(0, 5);
       } else {
-        const dt = new Date(nueva_fecha_hora);
-        if (isNaN(dt.getTime())) return err('fecha_invalida');
-        if (dt.getTime() < Date.now()) return err('fuera_de_horario', 'La fecha ya paso.');
-        nuevaFecha = nueva_fecha_hora.split('T')[0];
-        nuevaHora = nueva_fecha_hora.split('T')[1].slice(0, 5);
+        const [fParte, hParte] = String(nueva_fecha_hora).split('T');
+        if (!fParte || !hParte || !/^\d{4}-\d{2}-\d{2}$/.test(fParte)) return err('fecha_invalida');
+        nuevaFecha = fParte;
+        nuevaHora = hParte.slice(0, 5);
+        // La hora que manda el modelo es del local: se compara como tal, no como
+        // UTC (ver msLocales).
+        if (msLocales(nuevaFecha, nuevaHora) < Date.now()) return err('fuera_de_horario', 'La fecha ya paso.');
       }
 
       // Mismas validaciones que crear_turno: si el turno nuevo no se puede agendar,
@@ -2024,6 +2113,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         ok: true,
         turno_id,
         fecha: nuevaFecha,
+        fecha_texto: fechaTexto(nuevaFecha),
         hora: nuevaHora,
         hora_fin: minAHora(hasta),
         // Para que el modelo diga el dia completo sin deducirlo. Si el cliente pidio
@@ -2820,7 +2910,7 @@ async function obtenerSpec(): Promise<string> {
 2. Si el cliente viene por un turno nuevo, pedile el servicio. PERO si la pregunta es de GENTE ("quien trabaja mañana", "quien esta el jueves"), no le pidas servicio: llamá empleados_del_dia con la fecha y respondé quién trabaja y en qué horario. Son preguntas distintas y reconducir la segunda a la primera hace que el cliente se enrede.
 3. Cuando elija servicio, mostra los horarios libres con consultar_horarios_libres.
 4. Si elige horario, crealo con crear_turno.
-5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente. Si quiere cambiar la fecha o la hora de un turno que ya tiene, se reprograma con reprogramar_turno (primero le decis a que turno se refiere, con buscar_turnos_cliente, y le mostras el horario nuevo antes de llamar a la tool). Si el turno que quiere tocar ya paso, no se reprograma: se agenda uno nuevo.
+5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente. Cada turno que devuelve esa tool trae se_puede_mover: ofrecele mover o cancelar SOLO los que vienen con true. Los que vienen con false ya no se tocan (ya pasaron, o falta menos que el plazo de cancelacion): decile el motivo tal cual y no le preguntes que quiere hacer con ese turno, porque la tool te lo va a rechazar y el cliente ya se ilusiono con un cambio que no existe. Si quiere cambiar la fecha o la hora de un turno que ya tiene, se reprograma con reprogramar_turno (primero le decis a que turno se refiere, con buscar_turnos_cliente, y le mostras el horario nuevo antes de llamar a la tool). Si el turno que quiere tocar ya paso, no se reprograma: se agenda uno nuevo.
 
 6. Si te preguntan por la direccion, los horarios de atencion o los dias cerrados, responde con obtener_config_negocio (clave direccion, horario_atencion, dias_cerrados). Si la tool vuelve con configurado:false, esa informacion NO esta cargada: decilo con esas palabras y segui. No la completes, no le des un valor aproximado, y no le sugieras otro canal (redes, mail, un telefono que no te dieron): no tenes de donde sacarlo. Cualquier otra cosa que te pregunten que no sea del local: una linea, y seguí con los turnos (ver "QUE SABES Y QUE NO").
 7. Si listar_servicios vuelve vacio:true, no pidas nombre ni digas que vas a agendar: no hay nada que agendar. Decile al cliente que todavia no hay servicios cargados en el local.
