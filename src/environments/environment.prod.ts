@@ -11,9 +11,9 @@
  *   test-lavadero  ycrhgxwnikksmwyofzmv   la de desarrollo. Datos de prueba.
  *   ryf-lavadero   tvzfsbudhuegsptaokng   la de produccion. Datos reales.
  *
- * La app que se despliega en `turnos-dashboard-mu.vercel.app` es la de TEST.
- * La de RYF va en `turnos-ryf.vercel.app`, desde la rama `ryf`, con
- * `npm run build:ryf`, que usa `environment.ryf.ts`.
+ * La app que se despliega en `carwash-dashboard-mu.vercel.app` es la de TEST.
+ * La de produccion va en `turnos-dashboard-dukesteban-8225s-projects.vercel.app`,
+ * desde la rama `ryf`, con `npm run build:ryf`, que usa `environment.ryf.ts`.
  *
  * `sb_publishable_` es una clave PUBLICA a proposito: viaja dentro del bundle
  * y la lee cualquiera que abra la app. Lo que protege los datos es el RLS de

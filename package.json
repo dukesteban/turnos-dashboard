@@ -9,8 +9,8 @@
     "build:ryf": "ng build --configuration ryf",
     "build:test": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",
-    "deploy:test": "node scripts/deploy.mjs turnos-dashboard",
-    "deploy:ryf": "node scripts/deploy.mjs turnos-ryf",
+    "deploy:test": "node scripts/deploy.mjs turnos-dashboard-test",
+    "deploy:prod": "node scripts/deploy.mjs turnos-dashboard",
     "test": "ng test",
     "test:ci": "ng test --watch=false",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"

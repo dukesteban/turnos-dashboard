@@ -5,7 +5,7 @@
  *
  * La idea obvia seria:
  *
- *   vercel link --yes --project turnos-ryf && vercel --prod --yes ; vercel link ...
+ *   vercel link --yes --project turnos-dashboard-test && vercel --prod --yes ; vercel link ...
  *
  * Y no funciona. En Windows los scripts de npm corren en `cmd.exe`, donde `;` no es
  * separador de comandos sino separador de argumentos: el `cmd.exe` le pasa los
@@ -13,23 +13,23 @@
  * `unknown or unexpected option: --project`.
  *
  * Y con `&&` en vez de `;` tampoco se puede: si el deploy falla, el link se queda
- * en el proyecto de ryf, y el siguiente deploy desde `main` publica la app de ryf
- * DENTRO del dominio de test. Dos dominios con la misma base, sin que nadie lo haya
- * pedido, y sin ningun error en ninguna parte.
+ * en el proyecto de produccion, y el siguiente deploy desde `main` publica la app de
+ * produccion DENTRO del dominio de test. Dos dominios con la misma base, sin que nadie
+ * lo haya pedido, y sin ningun error en ninguna parte.
  *
  * Un `finally` no falla por como este el sistema operativo: el link se restaura
  * haya ido bien o mal.
  *
  * USO
  *
- *   npm run deploy:ryf      publica en turnos-ryf y deja el link en test
+ *   npm run deploy:prod     publica en produccion y deja el link en test
  *   npm run deploy:test     publica en test (el link ya esta ahi)
  */
 
 import { execSync } from 'node:child_process';
 
 const PROYECTO = process.argv[2];
-const LINK_DE_REPOSO = 'turnos-dashboard';
+const LINK_DE_REPOSO = 'turnos-dashboard-test';
 
 if (!PROYECTO) {
   console.error('Falta el proyecto. Uso: node scripts/deploy.mjs <proyecto>');

@@ -10,7 +10,7 @@ variable de entorno: Angular escribe el valor dentro del bundle.
 | | app | base de datos | rama | build |
 |---|---|---|---|---|
 | TEST | `carwash-dashboard-mu.vercel.app` | `test-lavadero` (`ycrhgxwnikksmwyofzmv`) | `main` | `npm run build` |
-| RYF | `turnos-ryf.vercel.app` | `ryf-lavadero` (`tvzfsbudhuegsptaokng`) | `ryf` | `npm run build` |
+| PROD | `turnos-dashboard-dukesteban-8225s-projects.vercel.app` | `ryf-lavadero` (`tvzfsbudhuegsptaokng`) | `ryf` | `npm run build` |
 
 Los archivos:
 
@@ -45,14 +45,15 @@ npm run typecheck
 # en la rama main, publica en carwash-dashboard-mu (TEST)
 npm run deploy:test
 
-# en la rama ryf, publica en turnos-ryf (RYF)
-npm run deploy:ryf
+# en la rama ryf, publica en produccion
+npm run deploy:prod
 ```
 
-`deploy:ryf` cambia el link local de Vercel al proyecto de ryf, despliega, y **vuelve
-a dejarlo en el de test**. El `;` y no `&&` al final es a proposito: si el deploy
-falla, el link se restaura igual. Sin eso, un deploy caido deja el repo apuntando a
-ryf y el siguiente `deploy:test` publica la app de ryf en el dominio de test.
+`deploy:prod` cambia el link local de Vercel al proyecto de produccion, despliega, y
+**vuelve a dejarlo en el de test**. El `;` y no `&&` al final es a proposito: si el
+deploy falla, el link se restaura igual. Sin eso, un deploy caido deja el repo
+apuntando a produccion y el siguiente `deploy:test` publica la app de produccion en el
+dominio de test.
 
 ## LOS DEPLOYES SON AUTOMATICOS
 
@@ -60,13 +61,13 @@ Los dos proyectos estan conectados al repo y se despliegan solos al mergear:
 
 | proyecto | production branch | buildCommand |
 |---|---|---|
-| `turnos-dashboard` (test) | `main` | default de Angular |
-| `turnos-ryf` | `ryf` | `npm run build:ryf` |
+| `turnos-dashboard-test` (test) | `main` | default de Angular |
+| `turnos-dashboard` (produccion) | `ryf` | `npm run build:ryf` |
 
 O sea: `git push origin main` publica en `carwash-dashboard-mu`, y `git push origin
-ryf` publica en `turnos-ryf`. No hay que hacer nada mas.
+ryf` publica en produccion. No hay que hacer nada mas.
 
-`npm run deploy:ryf` queda igual por si hay que republicar sin mergear nada (por
+`npm run deploy:prod` queda igual por si hay que republicar sin mergear nada (por
 ejemplo si el build de Vercel falla y hay que reintentarlo).
 
 ## LA PRODUCTION BRANCH NO SE CAMBIA DESDE EL DASHBOARD
@@ -88,7 +89,7 @@ Si alguna vez hay que cambiarla, es ese. Un `PATCH /v9/projects/{id}` con `{ "na
 
 ## EL DEPLOY HOOK VIEJO
 
-`turnos-dashboard` (test) tiene un deploy hook llamado `RyF` que apunta a la rama `ryf`
-y publica en el proyecto de TEST. Se creo antes de que existiera `turnos-ryf` y hoy es
-redundante: la rama `ryf` ya publica en el proyecto correcto. Conviene borrarlo desde
+`turnos-dashboard-test` tiene un deploy hook llamado `RyF` que apunta a la rama `ryf`
+y publica en el proyecto de TEST. Se creo antes de que existiera el proyecto de
+produccion y hoy es redundante: la rama `ryf` ya publica en el proyecto correcto. Conviene borrarlo desde
 Settings > Git > Deploy Hooks del proyecto `turnos-dashboard`.

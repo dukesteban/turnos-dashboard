@@ -12,8 +12,8 @@
  *
  * Los dos deploys de Vercel:
  *
- *   proyecto `turnos-dashboard`  rama `main`  -> TEST
- *   proyecto `turnos-ryf`        rama `ryf`   -> RYF
+ *   proyecto `turnos-dashboard-test`  rama `main`  -> TEST
+ *   proyecto `turnos-dashboard`       rama `ryf`   -> produccion
  *
  * OJO, ESTA RAMA ES LA DE RYF Y ESTE ARCHIVO TIENE LA URL DE TEST.
  *
