@@ -83,6 +83,66 @@ function yaEstanEnElTexto(texto: string, c: { google: string; ics: string }): bo
   return texto.includes(c.google) || texto.includes(c.ics);
 }
 
+/** Las URLs de un texto, sin el punto ni la coma que se pegan al final. */
+function urlsDe(texto: string): string[] {
+  // El `\` sale de `JSON.stringify`: los links dentro de los tool_result quedan
+  // como `...ics?i=806\"` y sin sacarlo la URL no coincide con la del mensaje.
+  return (String(texto ?? '').match(/https?:\/\/[^\s<>"'()*\\]+/g) ?? [])
+    .map((u) => u.replace(/[.,;:!?\\]+$/, ''))
+    .filter(Boolean);
+}
+
+/**
+ * La "huella" de un link de calendario: lo que lo ata a ESE turno.
+ *
+ * Los links reales los arma `linksDeCalendario` y siempre llevan el id del turno
+ * (`.ics?i=806`) o las fechas del evento (Google). Se compara la huella y no la URL
+ * entera porque el modelo cambia una cosa por otra al copiarla (`%20` por `+`,
+ * mayusculas) y no queremos marcar como inventado un link que si es.
+ */
+function huellaDeLink(url: string): string | null {
+  const ics = url.match(/[?&]i=(\d+)/);
+  if (ics) return `turno:${ics[1]}`;
+  const fechas = url.match(/[?&]dates=([^&]+)/);
+  if (fechas) return `fechas:${fechas[1]}`;
+  return null;
+}
+
+/**
+ * Los links de la respuesta que NO devolvio ninguna tool.
+ *
+ * Existe por un caso real y caro: la clienta acepto el horario, el modelo escribio
+ * "te dejo el turno para el miercoles 21 a las 15:15" con los dos links... sin llamar
+ * a `crear_turno`. Los links los invento (un `prod-peluqueria.turnos.app/calendar/...`
+ * y un Google `eventedit` con otra forma), el turno no existia, y dos mensajes
+ * despues el bot le dijo "no tengo ningun turno registrado para vos".
+ *
+ * El link es la unica parte de esa confirmacion que no se puede inventar sin que se
+ * note: los reales salen de la tool. Si aparece uno que no esta en la conversacion,
+ * la confirmacion tambien es inventada.
+ */
+function linksInventados(texto: string, historial: any[]): string[] {
+  const conocidos = new Set<string>();
+  for (const u of urlsDe(JSON.stringify(historial))) {
+    conocidos.add(u);
+    const h = huellaDeLink(u);
+    if (h) conocidos.add(h);
+  }
+  return urlsDe(texto).filter((u) => {
+    if (conocidos.has(u)) return false;
+    const h = huellaDeLink(u);
+    return !h || !conocidos.has(h);
+  });
+}
+
+const AVISO_LINKS_INVENTADOS =
+  '[Aviso del sistema, no lo ve el cliente] Tu respuesta anterior tenia links de calendario que ' +
+  'ninguna tool devolvio: los inventaste. Eso significa que tambien inventaste el turno. ' +
+  'Corregilo AHORA: si el cliente ya eligio servicio, dia y hora, llamá a crear_turno (o a ' +
+  'reprogramar_turno sobre el turno que corresponda) y recien despues confirmá con los links que ' +
+  'devuelva la tool. Si falta algun dato, pediselo. No escribas ningun link que no haya vuelto de ' +
+  'una tool, y no confirmes un turno que no creaste.';
+
 // ─── AGENDAR EL TURNO EN EL CALENDARIO DEL CLIENTE ───
 //
 // Después de confirmar, el cliente quiere tenerlo en su calendario, no anotado en un
@@ -2884,6 +2944,31 @@ const telefono = message.from;
     // Se vacía antes de responder: los links son de ESTE turno, no de los anteriores.
     pendientesDeCalendario = [];
     respuesta = await responderAlCliente(historialSano, telefono, spec);
+
+    // ─── Si confirmo un turno, el turno tiene que existir ───
+    //
+    // Va ANTES de `agregarLinksDeCalendario`: ahi se agregan los links de los turnos
+    // que SI se crearon, asi que un mensaje sin links no es sospechoso. Lo que si lo
+    // es un mensaje con links que ninguna tool devolvio (ver `linksInventados`).
+    const inventados = linksInventados(respuesta, historialSano);
+    if (inventados.length > 0) {
+      console.error('Links inventados por el modelo:', inventados.join(' '));
+      // Se le devuelve su propia respuesta y se le pide que corrija. El aviso NO se
+      // guarda en el historial: es una nota interna, no algo que dijo el cliente.
+      const paraReintento = [
+        ...historialSano,
+        { role: 'assistant', content: respuesta },
+        { role: 'user', content: AVISO_LINKS_INVENTADOS },
+      ];
+      respuesta = await responderAlCliente(paraReintento, telefono, spec);
+
+      // Si en la segunda tampoco llama a la tool, no se manda una confirmacion que
+      // puede ser falsa: se lo manda al telefono del local.
+      if (linksInventados(respuesta, paraReintento).length > 0) {
+        respuesta = await mensajeDeFalla();
+      }
+    }
+
     respuesta = agregarLinksDeCalendario(respuesta);
   } catch (e: any) {
     falloTecnico = true;
