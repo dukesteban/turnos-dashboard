@@ -13,7 +13,8 @@
     "deploy:prod": "node scripts/deploy.mjs turnos-dashboard",
     "test": "ng test",
     "test:ci": "ng test --watch=false",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "nuevo-cliente": "node scripts/nuevo-cliente.mjs"
   },
   "prettier": {
     "printWidth": 100,

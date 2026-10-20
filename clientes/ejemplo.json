@@ -1,0 +1,57 @@
+{
+  "slug": "peluqueria-ana",
+  "nombre_negocio": "Peluquería Ana",
+  "descripcion": "Peluquería y estética",
+  "direccion": "Av. San Martín 123, Posadas, Misiones",
+  "telefono_emergencia": "3764000000",
+  "tono": "informal",
+  "region": "sa-east-1",
+
+  "horarios": {
+    "lunes": [["08:00", "12:00"], ["14:00", "20:00"]],
+    "martes": [["08:00", "12:00"], ["14:00", "20:00"]],
+    "miercoles": [["08:00", "12:00"], ["14:00", "20:00"]],
+    "jueves": [["08:00", "12:00"], ["14:00", "20:00"]],
+    "viernes": [["08:00", "12:00"], ["14:00", "20:00"]],
+    "sabado": [["08:00", "12:00"]],
+    "domingo": []
+  },
+
+  "servicios": [
+    { "nombre": "Corte de pelo dama", "precio": 12000, "duracion_minutos": 45 },
+    { "nombre": "Corte de pelo caballero", "precio": 8000, "duracion_minutos": 30 },
+    { "nombre": "Coloración completa", "precio": 45000, "duracion_minutos": 120 },
+    { "nombre": "Manicura", "precio": 10000, "duracion_minutos": 40 }
+  ],
+
+  "empleados": [
+    {
+      "nombre": "Camila Duarte",
+      "telefono": "3764000001",
+      "comision_porcentaje": 15,
+      "jornada": {
+        "lunes": [["08:00", "14:00"]],
+        "martes": [["08:00", "14:00"]],
+        "miercoles": [["08:00", "14:00"]],
+        "jueves": [["08:00", "14:00"]],
+        "viernes": [["08:00", "14:00"]]
+      }
+    },
+    {
+      "nombre": "Sofía Ramírez",
+      "telefono": "3764000002",
+      "comision_porcentaje": 18
+    }
+  ],
+
+  "admin": {
+    "usuario": "ana",
+    "password": "cambiar-esta-clave"
+  },
+
+  "meta": {
+    "token": "EAAG...token-permanente-del-cliente",
+    "phone_number_id": "123456789012345",
+    "verify_token": "ana-verify-2026"
+  }
+}
