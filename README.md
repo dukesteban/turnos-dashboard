@@ -10,7 +10,7 @@ variable de entorno: Angular escribe el valor dentro del bundle.
 | | app | base de datos | rama | build |
 |---|---|---|---|---|
 | TEST | `carwash-dashboard-mu.vercel.app` | `test-lavadero` (`ycrhgxwnikksmwyofzmv`) | `main` | `npm run build` |
-| PROD | `turnos-dashboard-dukesteban-8225s-projects.vercel.app` | `ryf-lavadero` (`tvzfsbudhuegsptaokng`) | `ryf` | `npm run build` |
+| PROD | `turnos-dashboard.vercel.app` | `ryf-lavadero` (`tvzfsbudhuegsptaokng`) | `ryf` | `npm run build` |
 
 Los archivos:
 

@@ -12,7 +12,7 @@
  *   ryf-lavadero   tvzfsbudhuegsptaokng   la de produccion. Datos reales.
  *
  * La app que se despliega en `carwash-dashboard-mu.vercel.app` es la de TEST.
- * La de produccion va en `turnos-dashboard-dukesteban-8225s-projects.vercel.app`,
+ * La de produccion va en `turnos-dashboard.vercel.app`,
  * desde la rama `ryf`, con `npm run build:ryf`, que usa `environment.ryf.ts`.
  *
  * `sb_publishable_` es una clave PUBLICA a proposito: viaja dentro del bundle
