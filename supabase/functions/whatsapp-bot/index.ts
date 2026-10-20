@@ -878,8 +878,31 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
           .from('horarios_atencion')
           .select('dia_semana, hora_inicio, hora_fin, activo')
           .eq('activo', true)
-          .order('dia_semana', { ascending: true });
-        return JSON.stringify({ ok: true, valor: data ?? [] });
+          .order('dia_semana', { ascending: true })
+          .order('hora_inicio', { ascending: true });
+        // Un dia puede tener MAS DE UN rango: 08:00 a 12:00 y 14:00 a 20:00.
+        // Antes esto devolvia una fila por rango y el modelo leia la primera:
+        // "hoy el local cierra a las 12:00", con la tarde entera abierta.
+        const dias = [1, 2, 3, 4, 5, 6, 0]
+          .map((d) => {
+            const rangos = (data ?? [])
+              .filter((r: any) => r.dia_semana === d)
+              .map((r: any) => [sinSeg(r.hora_inicio), sinSeg(r.hora_fin)]);
+            return {
+              dia_semana: d,
+              rangos,
+              texto: rangos.map((r: string[]) => `${r[0]} a ${r[1]}`).join(' y '),
+            };
+          })
+          .filter((d) => d.rangos.length > 0);
+        return JSON.stringify({
+          ok: true,
+          valor: dias,
+          nota:
+            'Cada dia puede tener MAS DE UN rango (por ejemplo mañana y tarde). ' +
+            'Si un dia tiene dos rangos NO cierra al terminar el primero: atiende en los dos. ' +
+            'Para decir el horario de un dia, deci TODOS sus rangos ("de 8 a 12 y de 14 a 20"), nunca solo el primero.',
+        });
       }
       if (input.clave === 'dias_cerrados') {
         const { data } = await sb.from('dias_cerrados').select('fecha, motivo, fecha_hasta').order('fecha', { ascending: true });
