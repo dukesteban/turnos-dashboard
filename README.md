@@ -9,7 +9,7 @@ variable de entorno: Angular escribe el valor dentro del bundle.
 
 | | app | base de datos | rama | build |
 |---|---|---|---|---|
-| TEST | `carwash-dashboard-mu.vercel.app` | `test-lavadero` (`ycrhgxwnikksmwyofzmv`) | `main` | `npm run build` |
+| TEST | `turnos-dashboard-test.vercel.app` | `test-lavadero` (`ycrhgxwnikksmwyofzmv`) | `main` | `npm run build` |
 | PROD | `turnos-dashboard.vercel.app` | `ryf-lavadero` (`tvzfsbudhuegsptaokng`) | `ryf` | `npm run build` |
 
 Los archivos:
@@ -42,7 +42,7 @@ npm run typecheck
 ## DEPLOY
 
 ```bash
-# en la rama main, publica en carwash-dashboard-mu (TEST)
+# en la rama main, publica en turnos-dashboard-test (TEST)
 npm run deploy:test
 
 # en la rama ryf, publica en produccion
@@ -64,7 +64,7 @@ Los dos proyectos estan conectados al repo y se despliegan solos al mergear:
 | `turnos-dashboard-test` (test) | `main` | default de Angular |
 | `turnos-dashboard` (produccion) | `ryf` | `npm run build:ryf` |
 
-O sea: `git push origin main` publica en `carwash-dashboard-mu`, y `git push origin
+O sea: `git push origin main` publica en `turnos-dashboard-test`, y `git push origin
 ryf` publica en produccion. No hay que hacer nada mas.
 
 `npm run deploy:prod` queda igual por si hay que republicar sin mergear nada (por

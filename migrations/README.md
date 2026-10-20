@@ -13,8 +13,8 @@ Dos apps, cada una con su base:
 
 | URL | ramas | base |
 |-----|-------|------|
-| `carwash-dashboard-mu.vercel.app` | `main` | `turnos-test` (`ycrhgxwnikksmwyofzmv`) |
-| `turnos-ryf.vercel.app` | `ryf` | `ryf-lavadero` (`tvzfsbudhuegsptaokng`) |
+| `turnos-dashboard-test.vercel.app` | `main` | `turnos-test` (`ycrhgxwnikksmwyofzmv`) |
+| `turnos-dashboard.vercel.app` | `ryf` | `ryf-lavadero` (`tvzfsbudhuegsptaokng`) |
 
 Las dos quedaron al día con las mismas migraciones y la misma versión de la app.
 

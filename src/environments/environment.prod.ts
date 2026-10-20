@@ -11,7 +11,7 @@
  *   test-lavadero  ycrhgxwnikksmwyofzmv   la de desarrollo. Datos de prueba.
  *   ryf-lavadero   tvzfsbudhuegsptaokng   la de produccion. Datos reales.
  *
- * La app que se despliega en `carwash-dashboard-mu.vercel.app` es la de TEST.
+ * La app que se despliega en `turnos-dashboard-test.vercel.app` es la de TEST.
  * La de produccion va en `turnos-dashboard.vercel.app`,
  * desde la rama `ryf`, con `npm run build:ryf`, que usa `environment.ryf.ts`.
  *
