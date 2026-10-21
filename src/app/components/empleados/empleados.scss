@@ -227,6 +227,9 @@
   gap: 12px;
   flex-wrap: wrap;
 
+  /* Dos filas: Rol y Usuario. Sin esto quedan pegadas. */
+  & + .acceso-rol { margin-top: 10px; }
+
   .rol-actual {
     flex: 1 1 auto;
     min-width: 0;

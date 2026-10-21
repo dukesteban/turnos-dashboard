@@ -147,7 +147,7 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
     updateProveedorFicha: () => Promise.resolve(),
     // Roles de acceso: sin `empleado_id` partido, el mapa viene vacío y la pantalla
     // muestra "Sin acceso a la app", que es el estado por defecto de una ficha nueva.
-    getRolesEmpleados: () => Promise.resolve({}),
+    getAccesosEmpleados: () => Promise.resolve({}),
 
     // --- Ganancias ---
     // OJO: el real filtra `estado = 'atendido'` DENTRO de la query. Por eso los

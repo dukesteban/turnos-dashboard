@@ -54,6 +54,8 @@ export class EmpleadosComponent implements OnInit {
   // oculta). El rol no se edita desde acá: se da de alta el acceso, que es lo que
   // hace falta, y cambiar un rol después sigue siendo cosa de Configuración.
   roles: Record<number, string> = {};
+  /** El nombre de usuario con el que entra cada empleado (usuarios.usuario). */
+  usuariosDeAcceso: Record<number, string> = {};
   rolesCargados = false;
   modalAcceso = false;
   accesoUsuario = '';
@@ -100,6 +102,12 @@ export class EmpleadosComponent implements OnInit {
   get tieneAcceso(): boolean {
     const e: any = this.empleadoSeleccionado;
     return !!e && !!this.roles[e.id];
+  }
+
+  /** El usuario con el que entra este empleado, o vacio si no tiene acceso. */
+  get usuarioAcceso(): string {
+    const e: any = this.empleadoSeleccionado;
+    return e ? (this.usuariosDeAcceso[e.id] ?? '') : '';
   }
 
   /** Estado de acordeón limpio: solo "Datos" abierto. Se llama al seleccionar. */
@@ -153,7 +161,13 @@ export class EmpleadosComponent implements OnInit {
    * pantalla sigue funcionando.
    */
   private async cargarRoles() {
-    this.roles = await this.supabase.getRolesEmpleados();
+    const accesos = await this.supabase.getAccesosEmpleados();
+    this.roles = {};
+    this.usuariosDeAcceso = {};
+    for (const [id, acceso] of Object.entries(accesos)) {
+      this.roles[Number(id)] = acceso.rol;
+      this.usuariosDeAcceso[Number(id)] = acceso.usuario;
+    }
     this.rolesCargados = true;
     this.cdr.detectChanges();
   }

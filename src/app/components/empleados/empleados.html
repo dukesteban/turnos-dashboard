@@ -148,6 +148,10 @@
               🔑 Dar acceso
             </button>
           </div>
+          <div class="acceso-rol" *ngIf="tieneAcceso && usuarioAcceso">
+            <span class="label-general">Usuario</span>
+            <span class="rol-actual">{{ usuarioAcceso }}</span>
+          </div>
           <p class="texto-ayuda" *ngIf="tieneAcceso">
             Para cambiarle el rol o resetearle la clave, andá a Configuración.
           </p>

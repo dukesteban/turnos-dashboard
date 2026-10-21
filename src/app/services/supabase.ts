@@ -1082,18 +1082,20 @@ export class SupabaseService {
    * Solo la devuelve el admin y el secretario: la política de RLS de `usuarios` los
    * deja leer, al empleado no.
    */
-  async getRolesEmpleados(): Promise<Record<number, string>> {
+  async getAccesosEmpleados(): Promise<Record<number, { rol: string; usuario: string }>> {
     const { data, error } = await this.supabase
       .from('usuarios')
-      .select('empleado_id, rol')
+      .select('empleado_id, rol, usuario')
       .not('empleado_id', 'is', null);
     if (error) {
       // El rol puede faltar permiso (empleado): no es un error que rompa la pantalla.
       if (this.esSinPermiso(error)) return {};
       throw error;
     }
-    const mapa: Record<number, string> = {};
-    for (const u of data ?? []) mapa[u.empleado_id] = u.rol;
+    const mapa: Record<number, { rol: string; usuario: string }> = {};
+    for (const u of data ?? []) {
+      mapa[u.empleado_id] = { rol: u.rol, usuario: u.usuario };
+    }
     return mapa;
   }
 
