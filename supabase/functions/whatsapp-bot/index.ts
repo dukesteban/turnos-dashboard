@@ -549,10 +549,51 @@ const TONOS: Record<string, string> = {
   formal: 'Formal: trato de "usted", ustedes, más cuidado en las frases, sin apuro. Para un cliente que se queja o consulta un reclamo.',
 };
 
+/**
+ * Los horarios de atencion en una linea, agrupados por dia:
+ * "lunes a viernes de 08:00 a 12:00 y de 14:00 a 20:00, sabado de 08:00 a 12:00, domingo: cerrado".
+ *
+ * Va en la parte variable del prompt para que el bot pueda mandar los horarios en el
+ * primer mensaje sin gastar una vuelta. Antes tenia que llamar una tool, y el cliente
+ * leia "decime que necesitas" y recien en el mensaje siguiente los horarios.
+ */
+function horariosDeAtencion(filas: any[]): string | null {
+  const porDia = new Map<number, string[]>();
+  for (const h of filas ?? []) {
+    if (h.activo === false) continue;
+    const rango = `${sinSeg(h.hora_inicio)} a ${sinSeg(h.hora_fin)}`;
+    porDia.set(h.dia_semana, [...(porDia.get(h.dia_semana) ?? []), rango]);
+  }
+  if (porDia.size === 0) return null;
+
+  // Semana de lunes a domingo: es como se lee el horario de un local.
+  const orden = [1, 2, 3, 4, 5, 6, 0];
+  const tramos: Array<{ dias: number[]; texto: string }> = [];
+  for (const dia of orden) {
+    const rangos = porDia.get(dia);
+    const texto = rangos?.length ? rangos.join(' y ') : 'cerrado';
+    const ultimo = tramos[tramos.length - 1];
+    if (ultimo && ultimo.texto === texto) ultimo.dias.push(dia);
+    else tramos.push({ dias: [dia], texto });
+  }
+
+  return tramos
+    .map(({ dias, texto }) => {
+      const nombre = dias.length === 1
+        ? DIAS_SEMANA[dias[0]]
+        : `${DIAS_SEMANA[dias[0]]} a ${DIAS_SEMANA[dias[dias.length - 1]]}`;
+      if (texto === 'cerrado') return `${nombre}: cerrado`;
+      const horas = texto.split(' y ');
+      return `${nombre} de ${horas.join(' y de ')}`;
+    })
+    .join(', ');
+}
+
 async function contextoNegocio(): Promise<{
   nombre: string;
   cierres: string | null;
   diasQueNoAbre: string | null;
+  horarios: string | null;
   tono: string;
 }> {
   // El orden de la desestructuracion tiene que CALCAR con el del arreglo. Antes
@@ -562,7 +603,11 @@ async function contextoNegocio(): Promise<{
     sb.from('configuracion').select('valor').eq('clave', 'nombre_negocio').maybeSingle(),
     sb.from('dias_cerrados').select('fecha, fecha_hasta, motivo').gte('fecha', new Date().toISOString().slice(0, 10)),
     sb.from('configuracion').select('valor').eq('clave', 'tono').maybeSingle(),
-    sb.from('horarios_atencion').select('dia_semana').eq('activo', true),
+    sb.from('horarios_atencion')
+      .select('dia_semana, hora_inicio, hora_fin, activo')
+      .eq('activo', true)
+      .order('dia_semana')
+      .order('hora_inicio'),
   ]);
 
   const nombre = conf?.valor || 'el lavadero';
@@ -573,6 +618,9 @@ async function contextoNegocio(): Promise<{
   const abiertos = new Set((horarios ?? []).map((h: any) => h.dia_semana));
   const sinAbrir = DIAS_SEMANA.filter((_, i) => !abiertos.has(i));
   const diasQueNoAbre = sinAbrir.length ? sinAbrir.join(', ') : null;
+  // Los horarios viajan en la parte variable: el bot ya los tiene para el primer
+  // mensaje y no gasta una tool (ni una vuelta) en buscarlos.
+  const horariosTexto = horariosDeAtencion(horarios ?? []);
 
   const proximos = (cerrados ?? [])
     .filter((c: any) => new Date(c.fecha + 'T00:00:00').getTime() <= Date.now() + 1000 * 60 * 60 * 24 * 30)
@@ -580,7 +628,7 @@ async function contextoNegocio(): Promise<{
 
   const tono = TONOS[(tonoConf?.valor ?? '').trim()] || TONOS.informal;
 
-  if (proximos.length === 0) return { nombre, cierres: null, diasQueNoAbre, tono };
+  if (proximos.length === 0) return { nombre, cierres: null, diasQueNoAbre, horarios: horariosTexto, tono };
 
   const frases = proximos.slice(0, 2).map((c: any) => {
     const d = new Date(c.fecha + 'T00:00:00');
@@ -602,6 +650,7 @@ async function contextoNegocio(): Promise<{
     nombre,
     tono,
     diasQueNoAbre,
+    horarios: horariosTexto,
     // Sin el "recordale que" adelante: el prompt ya dice "y avisale que ...", y
     // quedaba "avisale que recordale que el 24 ...".
     cierres: frases.join(' y '),
@@ -2416,7 +2465,7 @@ CUANDO LISTES SERVICIOS, LISTALOS DE VERDAD. Si el cliente pregunta "qué servic
 
 CORREGIR EL NOMBRE DEL CLIENTE: si el cliente dice "quiero corregir mi nombre", "mi nombre esta mal", "me equivoque con el apellido" o cualquier cosa parecida, NO le prometas que lo vas a cambiar ni lo cambies de una. Primero llamá a corregir_nombre_cliente con confirmado:false: eso te devuelve el nombre que tiene ahora y el que quiere el cliente. Mostraselos y preguntas "¿lo cambiamos?". SOLO si el cliente dice que si, la llamás otra vez con confirmado:true. Si el cliente se arrepiente, no la llames con true y decile que no se cambió nada. Esto no es un detalle: se vio al bot decir "Listo, lo tengo anotado" sin llamar ninguna tool, y en la base no había ninguna ficha con ese nombre. Nunca digas que algo quedó anotado o guardado si la tool no te lo confirmó.
 
-EL NOMBRE DEL CLIENTE SIEMPRE ES NOMBRE Y APELLIDO. Si el cliente es nuevo y da un solo nombre ("soy Pamela", "me llamo Ana"), NO lo agendes: preguntale el apellido en una línea corta, "¿Y tu apellido?", y recien ahí creá el turno con los dos. No inventes un apellido, no le completes el nombre con el de otro cliente parecido, y no le preguntes "¿sos la misma Pamela que ya tenemos registrada?", que deja el problema donde estaba y además es raro. Razón: en el panel dos Pamelas son dos fichas, y si se mezclan una está viendo los turnos de la otra. Si creás el turno sin apellido, la tool te devuelve falta_apellido, y eso no es un error para Fallar: es la señal de que falta preguntarle.
+EL NOMBRE DEL CLIENTE SIEMPRE ES NOMBRE Y APELLIDO. Cuando necesites el nombre y todavia no te lo dio, pedi nombre Y apellido juntos, en la misma pregunta ("¿Me pasás tu nombre y apellido?"). Preguntar solo "¿cómo te llamás?" obliga a un segundo mensaje para el apellido, y el cliente escribe dos veces lo que podía decir de una. Si el cliente es nuevo y da un solo nombre ("soy Pamela", "me llamo Ana"), NO lo agendes: preguntale el apellido en una línea corta, "¿Y tu apellido?", y recien ahí creá el turno con los dos. No inventes un apellido, no le completes el nombre con el de otro cliente parecido, y no le preguntes "¿sos la misma Pamela que ya tenemos registrada?", que deja el problema donde estaba y además es raro. Razón: en el panel dos Pamelas son dos fichas, y si se mezclan una está viendo los turnos de la otra. Si creás el turno sin apellido, la tool te devuelve falta_apellido, y eso no es un error para Fallar: es la señal de que falta preguntarle.
 
 TURNO PARA OTRA PERSONA: si el cliente dice que el turno es para otra persona (una amiga, su hijo, su mamá), pedile el nombre Y EL APELLIDO de esa persona y pasalo en nombre_cliente de crear_turno, aunque el que escribe ya esté registrado. El turno queda a nombre de esa persona y el teléfono sigue siendo el de quien escribe, que es quien lo va a mover o cancelar. La ficha de esa persona se crea sola (sin teléfono) y aparece en Clientes. En la confirmación usá el cliente_nombre que devuelve la tool, no el que suponías. Cuando el turno es para el que escribe y ya está registrado, NO pases nombre_cliente.
 
@@ -2448,12 +2497,13 @@ NOMBRE DEL NEGOCIO: "${negocio.nombre}" es un nombre propio, va tal cual y sin t
 Fechas: hoy es ${hoyIso} (${DIAS_SEMANA[hoy.getDay()]}). Esta es la tabla de los próximos días, con el nombre de cada uno: ${tablaDeDias()}. Cuando el cliente diga un día ("el lunes", "el domingo que viene", "mañana", "el 20"), buscá la fecha en esta tabla y pasala así a las tools. NO la calcules vos: antes te equivocabas el día de la semana y el cliente recibía un horario del día equivocado. Tool de verdad antes de afirmar: nunca confirmás turno sin que crear_turno te devuelva ok, y nunca decís que un horario está libre sin antes llamar consultar_horarios_libres. Si una tool devuelve error, le explicás al cliente qué pasó y ofrecés otro camino.
 
 Cierres programados: ${negocio.cierres ? negocio.cierres + '.' : 'no hay ninguno cargado en los proximos 30 dias.'}
+Horarios de atencion: ${negocio.horarios ?? 'no hay horarios cargados'}. Cuando el cliente pregunte cuando atiende el local, usa ESTO tal cual: no lo inventes ni lo deduzcas de los horarios libres.
 Dias que el local NO abre (todas las semanas, por horario de atencion): ${negocio.diasQueNoAbre ?? 'ninguno'}. Nunca ofrezcas un dia de esta lista, ni como alternativa ni "por ejemplo": si el cliente pide uno, decile que ese dia no abre y ofrecele los dias de "dias_alternativos" que devuelve consultar_horarios_libres.
 Cuando la fecha de la que estan hablando esta a 3 dias o menos de un cierre (el dia anterior, el mismo dia o el siguiente), recordaselo con una frase corta y el motivo antes de cerrar el turno: "te aviso que el sabado 24 estamos cerrados por el feriado". Es información que el cliente necesita para organizarse, y si no se la decís se entera cuando llega. Las tools te lo devuelven en "cierre_cerca" cuando la fecha consultada esta cerca: si viene con datos, decilo aunque no te acuerdes de esta lista. No lo repitas en todos los mensajes ni lo menciones cuando la fecha no esta cerca, y si ya se lo avisaste al presentarte no lo repitas salvo que venga al caso.
 
 Si el cliente pide un dia cerrado, llamá a consultar_horarios_libres con esa fecha aunque ya sepas que esta cerrado: es la que te devuelve, en "dias_alternativos", los dias ya comprobados (abren y tienen lugar). Si la llamaste, ofrecele SOLO esos y decí el motivo del cierre. Si no la llamaste, no nombres ningun dia de reemplazo: preguntale cual le viene bien y consultalo cuando te conteste. No armes la lista con dias de la tabla de fechas: la tabla dice que dia es, no si el local abre, y asi se ofrecio un domingo en un local que no abre los domingos.
 
-Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion, asi que abri presentandote como el bot de "${negocio.nombre}"${negocio.cierres ? ` y avisale que ${negocio.cierres}` : ''}. No lo hagas en los mensajes siguientes.` : 'ya te presentaste antes, no te vuelvas a presentar.'}`;
+Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion, asi que abri presentandote como el bot de "${negocio.nombre}"${negocio.cierres ? ` y avisale que ${negocio.cierres}` : ''}. En ese MISMO mensaje, si el cliente todavia no nombro un servicio (saluda, pregunta que hay, pide un turno en general), mandale la lista COMPLETA de servicios con el precio y los horarios de atencion, y cerra preguntando que se quiere hacer: llama listar_servicios antes y armala con "Tenemos estos servicios:" y un servicio por linea, con el precio entre parentesis; los horarios van en una linea aparte, con los que estan arriba en "Horarios de atencion". No mandes un "decime que necesitas" pelado esperando que despues te pregunte los precios: ya se los das y contesta en la misma vuelta. Si el cliente YA nombro un servicio, no listes todo: anda directo a ese.` : 'ya te presentaste antes, no te vuelvas a presentar.'}`;
 
   // El `cache_control` va en el ÚLTIMO bloque, que marca dónde termina lo cacheado.
   const system: any[] = [
@@ -3092,13 +3142,13 @@ async function mensajeDeFalla(): Promise<string> {
 // ─── Spec: se puede cargar de una tabla en el futuro. Por ahora es texto fijo. ───
 async function obtenerSpec(): Promise<string> {
   return `Rotina de atencion:
-1. Cuando el cliente saluda, o antes de agendar, llama buscar_cliente. Si devuelve un nombre, saludalo por su nombre y NO le pidas el nombre otra vez: crear_turno lo resuelve solo. Si no devuelve nada, es un cliente nuevo y ahi si se lo pides.
+1. Cuando el cliente saluda, o antes de agendar, llama buscar_cliente. Si devuelve un nombre, saludalo por su nombre y NO le pidas el nombre otra vez: crear_turno lo resuelve solo. Si no devuelve nada, es un cliente nuevo y ahi si se lo pides, SIEMPRE nombre y apellido juntos ("¿Me pasás tu nombre y apellido?"), nunca solo el nombre.
 2. Si el cliente viene por un turno nuevo, pedile el servicio. PERO si la pregunta es de GENTE ("quien trabaja mañana", "quien esta el jueves"), no le pidas servicio: llamá empleados_del_dia con la fecha y respondé quién trabaja y en qué horario. Son preguntas distintas y reconducir la segunda a la primera hace que el cliente se enrede.
 3. Cuando elija servicio, mostra los horarios libres con consultar_horarios_libres.
 4. Si elige horario, crealo con crear_turno.
 5. Si quiere cancelar o reprogramar, primero buscar_turnos_cliente. Cada turno que devuelve esa tool trae se_puede_mover: ofrecele mover o cancelar SOLO los que vienen con true. Los que vienen con false ya no se tocan (ya pasaron, o falta menos que el plazo de cancelacion): decile el motivo tal cual y no le preguntes que quiere hacer con ese turno, porque la tool te lo va a rechazar y el cliente ya se ilusiono con un cambio que no existe. Si quiere cambiar la fecha o la hora de un turno que ya tiene, se reprograma con reprogramar_turno (primero le decis a que turno se refiere, con buscar_turnos_cliente, y le mostras el horario nuevo antes de llamar a la tool). Si el turno que quiere tocar ya paso, no se reprograma: se agenda uno nuevo. Cuando un turno no se puede mover ni cancelar, el motivo o el error traen el telefono del local: pasaselo en la misma respuesta. No lo mandes a "comunicarse con el local" sin darle el numero.
 
-6. Si te preguntan por la direccion, los horarios de atencion, los dias cerrados o el telefono del local, responde con obtener_config_negocio (clave direccion, horario_atencion, dias_cerrados, telefono_emergencia). Si la tool vuelve con configurado:false, esa informacion NO esta cargada: decilo con esas palabras y segui. No la completes, no le des un valor aproximado, y no le sugieras otro canal (redes, mail, un telefono que no te dieron): no tenes de donde sacarlo. Cualquier otra cosa que te pregunten que no sea del local: una linea, y seguí con los turnos (ver "QUE SABES Y QUE NO").
+6. Si te preguntan por la direccion, los dias cerrados o el telefono del local, responde con obtener_config_negocio (clave direccion, dias_cerrados, telefono_emergencia). Los horarios de atencion ya estan en tu contexto, en la linea "Horarios de atencion": usalos tal cual y no llames una tool para eso. Si la tool vuelve con configurado:false, esa informacion NO esta cargada: decilo con esas palabras y segui. No la completes, no le des un valor aproximado, y no le sugieras otro canal (redes, mail, un telefono que no te dieron): no tenes de donde sacarlo. Cualquier otra cosa que te pregunten que no sea del local: una linea, y seguí con los turnos (ver "QUE SABES Y QUE NO").
 7. Si listar_servicios vuelve vacio:true, no pidas nombre ni digas que vas a agendar: no hay nada que agendar. Decile al cliente que todavia no hay servicios cargados en el local.
 
 IMPORTANTE sobre las fechas: no le pidas al cliente la fecha en formato yyyy-MM-dd. Entende 'el domingo que viene', 'pasado manana', 'el 11 de octubre' a partir de la fecha de hoy (esta en el system prompt). Si falta el año y el dia ya hay pasado este año, usa el año siguiente. Nunca digas 'hubiera un problema del lado del sistema' si una tool devuelve un error: explicale al cliente qué paso y ofrecele alternativas.`;
