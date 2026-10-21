@@ -199,7 +199,10 @@
     align-items: center;
   }
 
-  .navbar-links a {
+  /* `>` y no un descendiente suelto: el menú de la cuenta también tiene un <a>
+     (Configuración) y con la regla general heredaba el gris y el padding del navbar,
+     así que quedaba desalineado y apagado al lado de los otros ítems. */
+  .navbar-links > a {
     color: #94a3b8;
     text-decoration: none;
     padding: 8px 12px;
@@ -209,8 +212,8 @@
     white-space: nowrap;
   }
 
-  .navbar-links a:hover { color: white; background: #334155; }
-  .navbar-links a.active { color: white; background: #3b82f6; }
+  .navbar-links > a:hover { color: white; background: #334155; }
+  .navbar-links > a.active { color: white; background: #3b82f6; }
 
   .btn-logout {
     background: none;
@@ -263,7 +266,7 @@
     position: absolute;
     right: 0;
     top: calc(100% + 12px);
-    width: 280px;
+    width: min(280px, calc(100vw - 24px));
     background: white;
     color: #1e293b;
     border-radius: 12px;
@@ -351,7 +354,7 @@
   @media (max-width: 640px) {
     .navbar { padding: 0 12px; }
     .navbar-brand { font-size: 1rem; }
-    .navbar-links a { padding: 8px; }
+    .navbar-links > a { padding: 8px; }
     .navbar-nombre { display: none; }
     .texto { display: none; }
   }
