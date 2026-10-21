@@ -771,18 +771,28 @@ export class SupabaseService {
   }
 
   async updateCliente(id: number, nombre: string) {
+    const { data: actual } = await this.supabase
+      .from('clientes')
+      .select('nombre')
+      .eq('id', id)
+      .maybeSingle();
+
     const { error } = await this.supabase
       .from('clientes')
       .update({ nombre })
       .eq('id', id);
     if (error) throw error;
 
-    // Actualizar nombre en todos los turnos del cliente
-    const { error: error2 } = await this.supabase
-      .from('turnos')
-      .update({ cliente_nombre: nombre })
-      .eq('cliente_id', id);
-    if (error2) throw error2;
+    // Solo los turnos que estan a nombre del cliente. Los que saco para otra
+    // persona (una amiga, un hijo) tienen otro `cliente_nombre` y no se tocan.
+    if (actual?.nombre) {
+      const { error: error2 } = await this.supabase
+        .from('turnos')
+        .update({ cliente_nombre: nombre })
+        .eq('cliente_id', id)
+        .eq('cliente_nombre', actual.nombre);
+      if (error2) throw error2;
+    }
   }
 
   /**

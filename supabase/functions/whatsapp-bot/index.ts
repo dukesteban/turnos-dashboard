@@ -1543,11 +1543,11 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       // confirmo "el turno de Lilian" y en la base decia "Mirta de Aguero".
       const nombreDado = typeof nombre_cliente === 'string' ? nombre_cliente.trim() : '';
       if (!previo && !nombreDado) return err('falta_nombre', 'El cliente es nuevo y no dijo su nombre.');
-      const nombreFinal = nombreDado || previo?.nombre;
+      let nombreFinal = nombreDado || previo?.nombre;
 
-      // Nombre distinto al de la ficha = el turno es para otra persona. El telefono y
-      // la ficha siguen siendo los del que escribe (es quien lo va a mover o cancelar),
-      // pero los chequeos de "esta persona ya tiene turno" son de quien se atiende.
+      // Nombre distinto al de la ficha = el turno es para otra persona. El telefono
+      // del turno sigue siendo el de quien escribe (es quien lo va a mover o
+      // cancelar), pero la ficha pasa a ser de quien se atiende.
       const plano = (s: any) =>
         String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
       const esParaOtro = !!nombreDado && !!previo && plano(nombreDado) !== plano(previo.nombre);
@@ -1787,6 +1787,30 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         }
       }
 
+      // Turno para otra persona: la ficha de quien se atiende tiene que existir
+      // igual. Si no, el turno queda con un nombre suelto que no aparece en
+      // Clientes y no hay a quien mirarle el historial. Se busca por nombre (sin
+      // acentos ni mayusculas) y, si no esta, se crea SIN telefono: el numero del
+      // turno sigue siendo el de quien escribe, que es quien lo mueve o cancela.
+      if (esParaOtro) {
+        const { data: fichas } = await sb.from('clientes').select('id, nombre');
+        const hallada = (fichas ?? []).find((c: any) => plano(c.nombre) === plano(nombreDado));
+        if (hallada) {
+          clienteIdFinal = hallada.id;
+          // Se guarda el nombre como esta en la ficha, para que el panel y el
+          // historial digan exactamente lo mismo.
+          nombreFinal = hallada.nombre;
+        } else {
+          const { data: creada, error: errCli } = await sb
+            .from('clientes')
+            .insert({ nombre: nombreDado })
+            .select('id')
+            .single();
+          if (errCli) return err('error_creando_cliente', errCli.message);
+          clienteIdFinal = creada.id;
+        }
+      }
+
       // ─── El cliente ya tiene ESTE servicio, ese dia ───
       // Una persona no se tiñe dos veces el mismo dia. Lo que aparece es siempre lo
       // mismo: el bot agendo algo, vio que el resto no entraba, ofrecio arrancar
@@ -1896,10 +1920,17 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       // en el dia siguiente y el turno de hoy se caia de la lista.
       const hoy = new Date(Date.now() + OFFSET_AR * 3600 * 1000).toISOString().slice(0, 10);
 
-      let consulta = sb
-        .from('turnos')
-        .select('id, fecha, hora, hora_inicio, hora_fin, servicio_nombre, estado, empleado_id, duracion_minutos')
-        .eq(clienteId ? 'cliente_id' : 'cliente_telefono', clienteId ?? telefono);
+      // Los turnos sacados para otra persona quedan en la ficha de esa persona,
+      // pero con el telefono de quien escribio. Se buscan por las dos cosas: si no,
+      // la clienta no ve (ni puede cancelar) el turno que saco para su amiga.
+      const columnasTurno =
+        'id, fecha, hora, hora_inicio, hora_fin, servicio_nombre, estado, empleado_id, duracion_minutos, cliente_nombre';
+      let consulta = (clienteId != null
+        ? sb
+            .from('turnos')
+            .select(columnasTurno)
+            .or(`cliente_id.eq.${clienteId},cliente_telefono.eq.${telefono}`)
+        : sb.from('turnos').select(columnasTurno).eq('cliente_telefono', telefono));
 
       if (!incluirPasados) {
         consulta = consulta.gte('fecha', hoy).neq('estado', 'cancelado');
@@ -2387,7 +2418,7 @@ CORREGIR EL NOMBRE DEL CLIENTE: si el cliente dice "quiero corregir mi nombre", 
 
 EL NOMBRE DEL CLIENTE SIEMPRE ES NOMBRE Y APELLIDO. Si el cliente es nuevo y da un solo nombre ("soy Pamela", "me llamo Ana"), NO lo agendes: preguntale el apellido en una línea corta, "¿Y tu apellido?", y recien ahí creá el turno con los dos. No inventes un apellido, no le completes el nombre con el de otro cliente parecido, y no le preguntes "¿sos la misma Pamela que ya tenemos registrada?", que deja el problema donde estaba y además es raro. Razón: en el panel dos Pamelas son dos fichas, y si se mezclan una está viendo los turnos de la otra. Si creás el turno sin apellido, la tool te devuelve falta_apellido, y eso no es un error para Fallar: es la señal de que falta preguntarle.
 
-TURNO PARA OTRA PERSONA: si el cliente dice que el turno es para otra persona (una amiga, su hijo, su mamá), pedile el nombre Y EL APELLIDO de esa persona y pasalo en nombre_cliente de crear_turno, aunque el que escribe ya esté registrado. El turno queda a nombre de esa persona y el teléfono sigue siendo el de quien escribe, que es quien lo va a mover o cancelar. En la confirmación usá el cliente_nombre que devuelve la tool, no el que suponías. Cuando el turno es para el que escribe y ya está registrado, NO pases nombre_cliente.
+TURNO PARA OTRA PERSONA: si el cliente dice que el turno es para otra persona (una amiga, su hijo, su mamá), pedile el nombre Y EL APELLIDO de esa persona y pasalo en nombre_cliente de crear_turno, aunque el que escribe ya esté registrado. El turno queda a nombre de esa persona y el teléfono sigue siendo el de quien escribe, que es quien lo va a mover o cancelar. La ficha de esa persona se crea sola (sin teléfono) y aparece en Clientes. En la confirmación usá el cliente_nombre que devuelve la tool, no el que suponías. Cuando el turno es para el que escribe y ya está registrado, NO pases nombre_cliente.
 
 NUNCA PROMETAS UNA VERIFICACIÓN QUE NO VAS A HACER. Nada de "ahí chequeo con Laura si puede atenderte", "te confirmo en un momento", "lo verifico", "un segundo y te digo". Si no lo consultaste, no lo digas: o lo consultás en este mensaje y contás lo que volvió, o no lo mencionás. Se vio pasar: el cliente pidió a Laura para el domingo, la tool contestó que el domingo el local está cerrado, y el bot respondió "ahí chequeo con Laura si puede atenderte". Laura no trabaja ahí, nadie la va a chequear, y el cliente quedó esperando una respuesta que no llega nunca. Y cuando la tool te devuelve un error, no tenés lista contra la cual comparar un nombre: decí lo que la tool dijo y no te comprometas con nada más. SI EL CLIENTE PIDE A ALGUIEN QUE NO ESTÁ EN LA LISTA, decilo. Si nombra a una persona que no aparece en "buscar_empleados" ("con Laura", "quiero que me atienda Ana"), NO le digas que sí y NO te lo saltes en silencio como si no lo escuchaste: decile que a Laura no trabaja ahí, con esas palabras, y ofrecé de la lista quién sí. Un nombre que el cliente tira al aire puede ser el de otra persona del local que no conoces, o alguien que se confundió, o alguien que ya no trabaja: en los tres casos la respuesta es "no lo tengo en la lista, los que pueden son estos", no un cambio de tema. Y si el cliente pide a alguien que SÍ está pero ese día no puede, decí quién no puede y por qué, y ofrecé los que sí pueden ese día, como en "no_disponibles". CUANDO EL CLIENTE PREGUNTE QUIÉN ATIENDE, es una pregunta directa y la respuesta está en la base: llamá a buscar_empleados con la FECHA del turno y listale los nombres, uno por línea, diciendo quién puede ese día. NUNCA contestes "te lo asigno cuando confirmes", "te atiende alguien", "después te digo quién" ni nada que suene a que se lo vas a ocultar: eso es un rodeo para no responder algo que ya podés responder, y el cliente lo lee como que le estás escondiendo la información. Si todavía no sabés la fecha, preguntá el día primero y después decile quién trabaja ese día; si ya la sabés, NO la preguntes de nuevo, usá esa. Si el turno todavía no tiene hora, alcanza con decir quién puede ese día: no hace falta que le ofrezcas todas las horas de cada uno, con los nombres alcanza para que elija. Cuando elija a quién, pasale ese empleado_id a crear_turno.
 
