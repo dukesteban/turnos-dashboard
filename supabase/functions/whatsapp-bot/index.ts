@@ -381,7 +381,8 @@ const TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        servicio_id: { type: 'number' },
+        servicio_id: { type: 'number', description: 'El id SOLO si lo leiste de listar_servicios en este mensaje. Si no, usa servicio_nombre.' },
+        servicio_nombre: { type: 'string', description: 'El nombre del servicio tal cual lo dijo el cliente (ej. "lavado con cera"). La base lo resuelve. Preferilo si no tenes el id.' },
         fecha: { type: 'string', description: 'YYYY-MM-DD' },
         hora_preferida: { type: 'string', description: 'HH:MM de lo que pidio el cliente, si dijo una' },
         empleado_id: { type: 'number', description: 'Solo si el cliente quiere un empleado concreto' },
@@ -390,7 +391,7 @@ const TOOLS = [
           description: 'Cuantos horarios queres que te devuelva. Por omision 3, que es lo que se le ofrece al cliente. Subilo solo si el cliente pide ver mas.',
         },
       },
-      required: ['servicio_id', 'fecha'],
+      required: ['fecha'],
     },
   },
   {
@@ -407,7 +408,8 @@ const TOOLS = [
       type: 'object',
       properties: {
         nombre_cliente: { type: 'string', description: 'Solo si el cliente es nuevo, o si el turno es para OTRA PERSONA (ahí va el nombre y apellido de esa persona, aunque el que escribe ya esté registrado). SIEMPRE nombre Y apellido: si el cliente dijo un solo nombre, la tool devuelve falta_apellido y hay que preguntárselo antes de agendar. No inventes el apellido.' },
-        servicio_id: { type: 'number' },
+        servicio_id: { type: 'number', description: 'El id SOLO si lo leiste de listar_servicios en este mensaje. Si no, usa servicio_nombre.' },
+        servicio_nombre: { type: 'string', description: 'El nombre del servicio tal cual lo dijo el cliente. La base lo resuelve y evita agendar otro servicio con otro precio.' },
         fecha_hora: { type: 'string', description: 'ISO 8601, zona del negocio' },
         empleado_id: { type: 'number', description: 'Solo si el cliente quiere un empleado concreto. Si no, se asigna el primero libre.' },
         aceptar_cercania_minutos: {
@@ -416,7 +418,7 @@ const TOOLS = [
             'Solo si el cliente YA ACEPTO un horario cercano porque el que pidio estaba tomado. Cuantos minutos a la redonda puede correrse la hora: 30, 60, 90. La tool elige el libre mas cercano y devuelve hora_reservada. Si no lo pones (o 0), se respeta la hora exacta y, si esta tomada, falla.',
         },
       },
-      required: ['servicio_id', 'fecha_hora'],
+      required: ['fecha_hora'],
     },
   },
   {
@@ -587,6 +589,84 @@ function horariosDeAtencion(filas: any[]): string | null {
       return `${nombre} de ${horas.join(' y de ')}`;
     })
     .join(', ');
+}
+
+/**
+ * Resuelve el servicio que pidio el cliente a partir del id o del NOMBRE.
+ *
+ * El modelo casi siempre tiene el nombre ("lavado con cera") y no el id. Cuando le
+ * pediamos solo `servicio_id`, lo inventaba: en una prueba de 10 turnos, 3 quedaron
+ * como "Lavado completo" aunque el cliente habia pedido encerado, cera y lavado y
+ * encerado. No es un error de redaccion: es un turno con otro precio y otra duracion.
+ * Aceptando el nombre, lo resuelve la base.
+ */
+async function resolverServicio(input: any): Promise<
+  | { ok: true; servicio: any }
+  | { ok: false; respuesta: string }
+> {
+  const plano = (s: any) =>
+    String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const nombre = typeof input?.servicio_nombre === 'string' ? input.servicio_nombre.trim() : '';
+  const id = Number(input?.servicio_id);
+
+  if (nombre) {
+    const { data } = await sb.from('servicios').select('id, nombre, duracion_minutos, precio, activo');
+    const lista = (data ?? []).filter((s: any) => s.activo !== false);
+    const buscado = plano(nombre);
+    let elegido = lista.find((s: any) => plano(s.nombre) === buscado);
+
+    if (!elegido) {
+      const parecidos = lista.filter((s: any) => {
+        const n = plano(s.nombre);
+        return n.includes(buscado) || buscado.includes(n);
+      });
+      if (parecidos.length === 1) {
+        elegido = parecidos[0];
+      } else if (parecidos.length > 1) {
+        return {
+          ok: false,
+          respuesta: JSON.stringify({
+            ok: false,
+            error: 'servicio_ambiguo',
+            servicios: parecidos.map((s: any) => ({ id: s.id, nombre: s.nombre })),
+            detalle: `"${nombre}" puede ser mas de uno. Preguntale al cliente cual quiere y pasa el nombre exacto en servicio_nombre.`,
+          }),
+        };
+      }
+    }
+
+    if (elegido) return { ok: true, servicio: elegido };
+
+    return {
+      ok: false,
+      respuesta: JSON.stringify({
+        ok: false,
+        error: 'servicio_no_encontrado',
+        servicios: lista.map((s: any) => ({ id: s.id, nombre: s.nombre })),
+        detalle: `No hay ningun servicio llamado "${nombre}". Usa uno de \`servicios\`; no inventes el nombre ni el id.`,
+      }),
+    };
+  }
+
+  if (Number.isFinite(id) && id > 0) {
+    const { data } = await sb
+      .from('servicios')
+      .select('id, nombre, duracion_minutos, precio')
+      .eq('id', id)
+      .maybeSingle();
+    if (data) return { ok: true, servicio: data };
+  }
+
+  const { data } = await sb.from('servicios').select('id, nombre').eq('activo', true).order('nombre');
+  return {
+    ok: false,
+    respuesta: JSON.stringify({
+      ok: false,
+      error: 'falta_servicio',
+      servicios: data ?? [],
+      detalle: 'Falta el servicio: pasa servicio_nombre con el nombre exacto o servicio_id.',
+    }),
+  };
 }
 
 async function contextoNegocio(): Promise<{
@@ -1299,7 +1379,9 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       // 0. La duracion la manda el servicio, no un slot fijo de 30 min. Va ANTES
       // de los chequeos de dia cerrado porque los dias alternativos que se
       // devuelven cuando el dia esta cerrado tambien dependen de la duracion.
-      const { data: serv } = await sb.from('servicios').select('id, nombre, duracion_minutos').eq('id', input.servicio_id).single();
+      const resServ = await resolverServicio(input);
+      if (!resServ.ok) return resServ.respuesta;
+      const serv = resServ.servicio;
       const duracion = serv?.duracion_minutos || 30;
 
       // 1. cerrado? (`fecha` es el inicio, `fecha_hasta` el final; si no hay, fue un día solo)
@@ -1579,7 +1661,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       });
     }
     case 'crear_turno': {
-      const { nombre_cliente, servicio_id, fecha_hora, empleado_id } = input;
+      const { nombre_cliente, fecha_hora, empleado_id } = input;
       // 0. resolver el cliente por numero. Si ya existe se usa su nombre de la base y no
       //    hace falta que el modelo lo haya preguntado. Si no, se crea con el nombre dado.
       const { data: yaExiste } = await sb.rpc('buscar_cliente_por_telefono', { p_telefono: telefono });
@@ -1600,6 +1682,18 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       const plano = (s: any) =>
         String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
       const esParaOtro = !!nombreDado && !!previo && plano(nombreDado) !== plano(previo.nombre);
+
+      // Nombres de relleno con los que el modelo intenta "pasar" el chequeo para crear
+      // el turno antes de preguntar el nombre. Se vio en una prueba: mando
+      // nombre_cliente: "Pendiente", creo el turno y recien despues pregunto. Un turno
+      // con ese nombre es un turno sin cliente (y los links de calendario ya salieron).
+      const DE_RELLENO = new Set([
+        'pendiente', 'cliente', 'clienta', 'cliente nuevo', 'cliente nueva',
+        'sin nombre', 'sin apellido', 'ninguno', 'ninguna', 'anonimo', 'anonima', 'nn', 'n a', 'xxx',
+      ]);
+      if (nombreDado && DE_RELLENO.has(plano(nombreDado))) {
+        return err('falta_nombre', 'No inventes un nombre para completar el turno. Pedile al cliente su nombre y apellido.');
+      }
 
       // ─── Nombre y apellido ───
       //
@@ -1672,9 +1766,10 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       const cierreCr = cierreQueCubre(cerradosCr ?? [], fecha);
       if (cierreCr) return err('fuera_de_horario', detalleCerrado(cierreCr));
 
-      // 3. servicio existe
-      const { data: serv } = await sb.from('servicios').select('id, nombre, duracion_minutos, precio').eq('id', servicio_id).single();
-      if (!serv) return err('servicio_no_encontrado');
+      // 3. servicio existe (por nombre o por id)
+      const resServ = await resolverServicio(input);
+      if (!resServ.ok) return resServ.respuesta;
+      const serv = resServ.servicio;
 
       // 4. dentro del horario de atencion, y que el servicio TERMINE antes del cierre
       //    de ALGUN bloque. El dia puede tener varios (8-12 y 14-20): antes se miraba
@@ -2462,6 +2557,8 @@ Con una línea antes que diga, corta y natural, que se los estás pasando para s
 LO QUE SE LISTA, SE LISTA EN LISTA, y hay tres cosas distintas que se listan: servicios, empleados y horarios. Todos van uno por línea, con "- " adelante, y NUNCA separados por comas en un párrafo. Diez servicios pegados con comas son un bloque de texto que el cliente tiene que leer entero para encontrar el que quería; uno por línea se escanea de arriba abajo con el pulgar.
 
 CUANDO LISTES SERVICIOS, LISTALOS DE VERDAD. Si el cliente pregunta "qué servicios tienen", "qué hacen", "cuánto sale", o pide algo que no existe en la lista, van TODOS los servicios uno por línea y con este encabezado arriba, tal cual: "Tenemos estos servicios:". Resumirlos en una categoría NO es listarlos: si le decís "solo hacemos lavado y encerado" después de que te pidieron un corte de pelo, el cliente no sabe qué opciones tiene y te tiene que volver a preguntar. El nombre exacto de cada uno es lo que le permite elegir, y para eso los necesita ver. SIEMPRE con el precio al final en el mismo renglón, entre paréntesis: "- Corte de pelo dama ($12.000)". SIEMPRE, sin excepción, aunque no lo haya pedido. El precio es la mitad de la decisión: sin él la clienta elige a ciegas, se anima con algo que no puede pagar y el problema aparece cuando ya está reservado, que es cuando más cuesta resolverlo. En un renglón no ocupa más lugar y le ahorra un mensaje de ida y vuelta. Si el cliente YA dijo qué quiere ("un corte de pelo", "una manicura"), NO le listes los diez: mostrale solo los que se le parecen a lo que pidió, también uno por línea. Listarle la peluquería entera a alguien que pidió un corte también es no escucharlo.
+
+EL SERVICIO VA POR NOMBRE. Cuando llames a consultar_horarios_libres o a crear_turno, pasa el nombre del servicio tal cual lo dijo el cliente en servicio_nombre ("lavado con cera", "encerado solo"). No inventes el servicio_id: en una prueba se agendaron tres turnos de "Lavado completo" para clientes que habian pedido cera, encerado y lavado y encerado, con el precio y la duracion de otro servicio. Solo pasa servicio_id si lo leiste de listar_servicios en ESTE mensaje, y si no coincide con lo que pidio el cliente, gana el nombre.
 
 CORREGIR EL NOMBRE DEL CLIENTE: si el cliente dice "quiero corregir mi nombre", "mi nombre esta mal", "me equivoque con el apellido" o cualquier cosa parecida, NO le prometas que lo vas a cambiar ni lo cambies de una. Primero llamá a corregir_nombre_cliente con confirmado:false: eso te devuelve el nombre que tiene ahora y el que quiere el cliente. Mostraselos y preguntas "¿lo cambiamos?". SOLO si el cliente dice que si, la llamás otra vez con confirmado:true. Si el cliente se arrepiente, no la llames con true y decile que no se cambió nada. Esto no es un detalle: se vio al bot decir "Listo, lo tengo anotado" sin llamar ninguna tool, y en la base no había ninguna ficha con ese nombre. Nunca digas que algo quedó anotado o guardado si la tool no te lo confirmó.
 
