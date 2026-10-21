@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { SwUpdate, VersionReadyEvent } from '@angular/service-worker';
 import { filter } from 'rxjs';
 import { SupabaseService } from './services/supabase';
-import { AuthService } from './services/auth';
+import { AuthService, ROLES } from './services/auth';
 
 @Component({
   selector: 'app-root',
@@ -129,6 +129,51 @@ export class App implements OnInit {
 
   get puedeVerConfig(): boolean {
     return this.auth.puedeVer('configuracion');
+  }
+
+  // ─── Menú de la cuenta ───
+  //
+  // Quién está conectado, cambiar la contraseña, Configuración y cerrar sesión viven
+  // en un solo menú (el avatar) en vez de tres íconos sueltos en el navbar.
+
+  menuUsuarioAbierto = false;
+
+  get usuarioActual(): string {
+    return this.auth.getUsuario();
+  }
+
+  get nombreRol(): string {
+    const rol = this.auth.getRol();
+    return ROLES.find((r) => r.clave === rol)?.nombre ?? rol;
+  }
+
+  /** Dos iniciales para el avatar: "Esteban Agüero" -> "EA". */
+  get inicialesUsuario(): string {
+    const partes = this.usuarioActual.trim().split(/\s+/).filter(Boolean);
+    if (!partes.length) return '?';
+    return ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase();
+  }
+
+  toggleMenuUsuario(evento: MouseEvent) {
+    // Sin esto, el click del botón llega al `document` y el menú se cierra solo.
+    evento.stopPropagation();
+    this.menuUsuarioAbierto = !this.menuUsuarioAbierto;
+  }
+
+  @HostListener('document:click')
+  @HostListener('document:keydown.escape')
+  cerrarMenuUsuario() {
+    this.menuUsuarioAbierto = false;
+  }
+
+  abrirCambioPasswordDesdeMenu() {
+    this.menuUsuarioAbierto = false;
+    this.abrirCambioPassword();
+  }
+
+  logoutDesdeMenu() {
+    this.menuUsuarioAbierto = false;
+    this.logout();
   }
 
   logout() {

@@ -34,26 +34,46 @@
     <a *ngIf="puedeVerPersonas" routerLink="/personas" routerLinkActive="active">
       <span class="icono">👥</span><span class="texto"> Personas</span>
     </a>
-    <a *ngIf="puedeVerConfig" routerLink="/configuracion" routerLinkActive="active">
-      <span class="icono">⚙️</span><span class="texto"> Config</span>
-    </a>
     <!--
-      CAMBIAR LA CONTRASEÑA PROPIA, para los tres roles.
+      LA CUENTA, EN UN SOLO LUGAR.
 
-      Estaba en Configuración, que ahora es solo del admin: el secretario se quedaba
-      sin forma de cambiar su propia contraseña. Va acá, en el candado al lado de la
-      puerta, que es donde uno la busca.
+      Antes eran tres cosas sueltas: el link "Config", el candado de cambiar la
+      contraseña y la puerta de salir. En el celular ocupaban media barra y no se
+      entendía que eran de la misma persona. Ahora es un avatar con su menú (como el
+      de Facebook): quién está conectado, cambiar la contraseña, Configuración y
+      cerrar sesión.
 
-      Es distinto del 🔑 de la pantalla de Usuarios: ese es el admin definiendo la
-      contraseña de OTRO (que no conoce la actual). Este verifica la actual, así que
-      no sirve para cambiarle la clave a nadie.
-
-      El candado cerrado y no la llave: la llave ya es el ícono del reset que hace el
-      admin en la pantalla de Usuarios. Con los dos iguales, quien administera
-      Usuarios y quien use esto no distinguen un botón del otro.
+      Configuración sigue siendo solo del admin: a los demás el ítem no les aparece.
     -->
-    <button class="btn-logout" (click)="abrirCambioPassword()" title="Cambiar mi contraseña">🔐</button>
-    <button class="btn-logout" (click)="logout()" title="Cerrar sesión">🚪</button>
+    <div class="usuario">
+      <button class="usuario-btn" (click)="toggleMenuUsuario($event)"
+              [attr.aria-expanded]="menuUsuarioAbierto" aria-haspopup="menu"
+              [attr.aria-label]="'Cuenta de ' + usuarioActual" title="Tu cuenta">
+        <span class="avatar">{{ inicialesUsuario }}</span>
+      </button>
+
+      <div class="menu-usuario" *ngIf="menuUsuarioAbierto" role="menu"
+           (click)="$event.stopPropagation()">
+        <div class="menu-cabecera">
+          <span class="avatar avatar-grande">{{ inicialesUsuario }}</span>
+          <div class="menu-datos">
+            <strong>{{ usuarioActual }}</strong>
+            <span>{{ nombreRol }}</span>
+          </div>
+        </div>
+
+        <button class="menu-item" role="menuitem" (click)="abrirCambioPasswordDesdeMenu()">
+          <span class="menu-icono">🔑</span> Cambiar contraseña
+        </button>
+        <a *ngIf="puedeVerConfig" class="menu-item" role="menuitem"
+           routerLink="/configuracion" (click)="cerrarMenuUsuario()">
+          <span class="menu-icono">⚙️</span> Configuración
+        </a>
+        <button class="menu-item menu-item-salir" role="menuitem" (click)="logoutDesdeMenu()">
+          <span class="menu-icono">🚪</span> Cerrar sesión
+        </button>
+      </div>
+    </div>
   </div>
 </nav>
 
@@ -204,6 +224,117 @@
     margin-left: 4px;
   }
   .btn-logout:hover { color: white; background: #334155; }
+
+  /* ─── Menú de la cuenta ─── */
+
+  .usuario {
+    position: relative;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+
+  .usuario-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+  }
+
+  .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #475569;
+    color: white;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  }
+
+  .usuario-btn:hover .avatar { background: #64748b; }
+
+  .menu-usuario {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 12px);
+    width: 280px;
+    background: white;
+    color: #1e293b;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+    z-index: 200;
+  }
+
+  .menu-cabecera {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .avatar-grande {
+    width: 44px;
+    height: 44px;
+    font-size: 0.95rem;
+    background: #3b82f6;
+    flex-shrink: 0;
+  }
+
+  .menu-datos {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .menu-datos strong {
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .menu-datos span {
+    font-size: 0.78rem;
+    color: #64748b;
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    text-align: left;
+    font-size: 0.9rem;
+    color: #1e293b;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .menu-item:hover { background: #f1f5f9; }
+
+  .menu-icono {
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .menu-item-salir {
+    border-top: 1px solid #e2e8f0;
+    color: #b91c1c;
+  }
+
+  .menu-item-salir:hover { background: #fef2f2; }
 
   /* `var(--chrome-app)` y no `56px`: hay que descontar del alto de la ventana todo
      lo que NO es contenido, no solo el navbar. Con `100vh - 56` el main crecia

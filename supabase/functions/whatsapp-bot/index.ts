@@ -422,7 +422,7 @@ const TOOLS = [
   {
     name: 'buscar_turnos_cliente',
     description:
-      'Busca los turnos del cliente por su numero de WhatsApp. Devuelve SOLO los que todavia no terminaron y sin cancelados; cada uno viene con se_puede_mover (si ya no se puede mover ni cancelar por el plazo, viene false y el motivo). Pon incluir_pasados=true solo si el cliente pidio explicitamente ver el historico.',
+      'Busca los turnos del cliente por su numero de WhatsApp. Devuelve SOLO los que todavia no terminaron y sin cancelados; cada uno viene con se_puede_mover (si ya no se puede mover ni cancelar por el plazo, viene false y el motivo). Cada turno trae cliente_nombre: si pregunta por los de otra persona (su hijo, una amiga), mostra solo los que tienen ese nombre. Pon incluir_pasados=true solo si el cliente pidio explicitamente ver el historico.',
     input_schema: {
       type: 'object',
       properties: {
