@@ -2615,7 +2615,7 @@ Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion,
   }));
 
   // Primer turno: Claude ve el historial y decide si llamar una tool o responder
-  let response = await llamarClaude(system, historial, tools);
+  let response = await llamarModelo(system, historial, tools);
   // Claude escribe texto ANTES de pedir una tool ("Un momento, chequeo..."). Ese
   // texto se junta con el de la respuesta final y se manda en un solo mensaje.
   const partes: string[] = [];
@@ -2674,7 +2674,7 @@ Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion,
     } as any);
     historial.push({ role: 'user', content: resultados } as any);
 
-    response = await llamarClaude(system, historial, tools);
+    response = await llamarModelo(system, historial, tools);
   }
 
   for (const b of response.content ?? []) {
@@ -2818,6 +2818,168 @@ function sinRepetir(partes: string[]): string {
   }
 
   return salida.join('\n\n') || 'Disculpá, no te entendí. ¿Querés que te mire un turno?';
+}
+
+// ── Proveedor del modelo ──
+//
+// En produccion el bot usa Claude. En test se puede cambiar con PROVEEDOR_LLM a
+// cualquier API compatible con OpenAI (Groq, Gemini, OpenRouter): el flujo, las tools
+// y la base son los mismos, cambia solo quien decide. Sirve para probar sin gastar
+// credito de Anthropic. La redaccion no es identica a la de Claude, asi que las
+// pruebas de texto fino siguen haciendose con Claude; esto es para validar el
+// circuito (que pregunte el nombre completo, que agende el servicio correcto, que no
+// invente horarios, etc.).
+//
+// Ojo con Groq: el plan gratis da 8.000 tokens por minuto y este prompt + las tools
+// rondan los 9.600, asi que Groq lo rechaza con 413 antes de contestar. Gemini free
+// (250.000 TPM) si entra.
+type ProveedorCompatible = { nombre: string; url: string; key: string; model: string };
+
+const PROVEEDOR_LLM = (Deno.env.get('PROVEEDOR_LLM') ?? 'anthropic').toLowerCase();
+
+const COMPATIBLES: Record<string, ProveedorCompatible> = {
+  groq: {
+    nombre: 'Groq',
+    url: 'https://api.groq.com/openai/v1/chat/completions',
+    key: Deno.env.get('GROQ_API_KEY') ?? '',
+    model: Deno.env.get('GROQ_CHAT_MODEL') ?? 'openai/gpt-oss-120b',
+  },
+  gemini: {
+    nombre: 'Gemini',
+    url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    key: Deno.env.get('GEMINI_API_KEY') ?? '',
+    model: Deno.env.get('GEMINI_CHAT_MODEL') ?? 'gemini-2.5-flash',
+  },
+  openrouter: {
+    nombre: 'OpenRouter',
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    key: Deno.env.get('OPENROUTER_API_KEY') ?? '',
+    model: Deno.env.get('OPENROUTER_CHAT_MODEL') ?? 'openai/gpt-oss-120b:free',
+  },
+};
+
+/** Pasa el historial interno (bloques de Claude) al formato OpenAI. */
+function historialParaGroq(historial: any[]): any[] {
+  const salida: any[] = [];
+  for (const m of historial ?? []) {
+    if (typeof m.content === 'string') {
+      salida.push({ role: m.role, content: m.content });
+      continue;
+    }
+    const bloques = Array.isArray(m.content) ? m.content : [];
+
+    // Los resultados de tools van como mensajes role:"tool", uno por cada tool_use.
+    const resultados = bloques.filter((b: any) => b.type === 'tool_result');
+    if (resultados.length) {
+      for (const r of resultados) {
+        const texto = typeof r.content === 'string'
+          ? r.content
+          : (r.content ?? []).map((c: any) => c.text ?? '').join('\n');
+        salida.push({ role: 'tool', tool_call_id: r.tool_use_id, content: texto });
+      }
+      continue;
+    }
+
+    const texto = bloques.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n');
+    const usos = bloques.filter((b: any) => b.type === 'tool_use');
+    if (m.role === 'assistant' && usos.length) {
+      salida.push({
+        role: 'assistant',
+        content: texto || null,
+        tool_calls: usos.map((u: any) => ({
+          id: u.id,
+          type: 'function',
+          function: { name: u.name, arguments: JSON.stringify(u.input ?? {}) },
+        })),
+      });
+    } else {
+      salida.push({ role: m.role, content: texto });
+    }
+  }
+  return salida;
+}
+
+/** Llama a una API compatible con OpenAI y devuelve la MISMA forma que Claude. */
+async function llamarCompatible(
+  p: ProveedorCompatible,
+  system: any,
+  historial: any[],
+  tools: any[],
+): Promise<any> {
+  const systemTexto = (system ?? []).map((b: any) => b.text ?? '').join('\n\n');
+  const mensajes = [{ role: 'system', content: systemTexto }, ...historialParaGroq(historial)];
+  const funciones = tools.map((t: any) => ({
+    type: 'function',
+    function: { name: t.name, description: t.description, parameters: t.input_schema },
+  }));
+
+  // Los planes gratis tienen tope de tokens por minuto. Si la API devuelve 429 no es
+  // un error del bot: se espera lo que dice el header y se reintenta. El que espera es
+  // el test, no el cliente.
+  const cuerpo = JSON.stringify({
+    model: p.model,
+    max_tokens: 1024,
+    temperature: 0.3,
+    messages: mensajes,
+    tools: funciones,
+    tool_choice: 'auto',
+  });
+
+  let r: Response | null = null;
+  for (let intento = 0; intento < 3; intento++) {
+    r = await fetch(p.url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${p.key}`,
+        'content-type': 'application/json',
+      },
+      body: cuerpo,
+    });
+    if (r.ok) break;
+
+    const texto = await r.text();
+    if (r.status === 429 && intento < 2) {
+      const retry = Number(r.headers.get('retry-after') ?? 0);
+      const reset = Number(String(r.headers.get('x-ratelimit-reset-tokens') ?? '').replace('s', ''));
+      const esperaSeg = retry > 0 ? retry : reset > 0 ? reset : 10;
+      await new Promise((res) => setTimeout(res, Math.min(Math.max(esperaSeg * 1000, 1000), 30000)));
+      continue;
+    }
+    throw new Error(`${p.nombre} ${r.status}: ${texto.slice(0, 200)}`);
+  }
+  if (!r || !r.ok) throw new Error(`${p.nombre}: sin respuesta`);
+
+  const data = await r.json();
+  const msg = data.choices?.[0]?.message ?? {};
+  const content: any[] = [];
+  if (typeof msg.content === 'string' && msg.content.trim()) {
+    content.push({ type: 'text', text: msg.content });
+  }
+  for (const tc of msg.tool_calls ?? []) {
+    let input: any = {};
+    try {
+      input = JSON.parse(tc.function?.arguments ?? '{}');
+    } catch {
+      // Argumentos rotos: la tool devuelve falta_... y el modelo corrige.
+    }
+    content.push({
+      type: 'tool_use',
+      id: tc.id ?? `call_${Math.random().toString(36).slice(2)}`,
+      name: tc.function?.name,
+      input,
+    });
+  }
+
+  return {
+    stop_reason: msg.tool_calls?.length ? 'tool_use' : 'end_turn',
+    content,
+  };
+}
+
+async function llamarModelo(system: any, historial: any[], tools: any[]): Promise<any> {
+  const p = COMPATIBLES[PROVEEDOR_LLM];
+  if (p?.key) return await llamarCompatible(p, system, historial, tools);
+  return await llamarClaude(system, historial, tools);
 }
 
 async function llamarClaude(system: any, historial: any[], tools: any[]): Promise<any> {
@@ -3192,10 +3354,15 @@ const telefono = message.from;
     // la respuesta, que es donde dice 401, 429 o lo que sea. Cortado a 500 porque
     // algunos errores traen HTML largo de una pasarela y esto no es un archivo de
     // log, es una fila.
+    // Upsert y no update: en el PRIMER mensaje la conversacion todavia no existe, el
+    // update no tocaba ninguna fila y el error se perdia justo cuando mas hace falta
+    // verlo (el cliente recibio "se me cayo la conexion" y en el panel no habia nada).
     await sb
       .from('conversaciones')
-      .update({ ultimo_error: String(e?.message ?? e).slice(0, 500) })
-      .eq('telefono', telefono);
+      .upsert(
+        { telefono, ultimo_error: String(e?.message ?? e).slice(0, 500) },
+        { onConflict: 'telefono' },
+      );
     // Si algo falla, al menos que el cliente tenga por donde pedir ayuda en vez de
     // quedarse mirando un "probá en unos minutos" sin salida.
     respuesta = await mensajeDeFalla();
