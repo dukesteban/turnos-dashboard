@@ -39,6 +39,19 @@ npm test
 npm run typecheck
 ```
 
+## ALTA DE UN CLIENTE NUEVO
+
+Un comando crea el proyecto en Supabase, aplica el esquema, carga los datos
+(horarios, servicios, empleados, configuracion), crea el usuario admin y despliega
+las funciones:
+
+```bash
+npm run nuevo-cliente -- clientes/ana.json
+```
+
+Los datos de cada cliente y los pasos completos estan en `clientes/README.md`.
+Primero se puede probar con `--dry-run`, que muestra los pasos sin tocar nada.
+
 ## DEPLOY
 
 ```bash

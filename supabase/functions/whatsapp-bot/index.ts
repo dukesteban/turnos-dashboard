@@ -406,7 +406,7 @@ const TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        nombre_cliente: { type: 'string', description: 'Solo si el cliente es nuevo o quiere corregirse. SIEMPRE nombre Y apellido: si el cliente dijo un solo nombre, la tool devuelve falta_apellido y hay que preguntárselo antes de agendar. No inventes el apellido.' },
+        nombre_cliente: { type: 'string', description: 'Solo si el cliente es nuevo, o si el turno es para OTRA PERSONA (ahí va el nombre y apellido de esa persona, aunque el que escribe ya esté registrado). SIEMPRE nombre Y apellido: si el cliente dijo un solo nombre, la tool devuelve falta_apellido y hay que preguntárselo antes de agendar. No inventes el apellido.' },
         servicio_id: { type: 'number' },
         fecha_hora: { type: 'string', description: 'ISO 8601, zona del negocio' },
         empleado_id: { type: 'number', description: 'Solo si el cliente quiere un empleado concreto. Si no, se asigna el primero libre.' },
@@ -1535,8 +1535,22 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       //    hace falta que el modelo lo haya preguntado. Si no, se crea con el nombre dado.
       const { data: yaExiste } = await sb.rpc('buscar_cliente_por_telefono', { p_telefono: telefono });
       const previo = (yaExiste ?? [])[0];
-      if (!previo && !nombre_cliente) return err('falta_nombre', 'El cliente es nuevo y no dijo su nombre.');
-      const nombreFinal = previo?.nombre ?? nombre_cliente;
+
+      // El nombre del turno NO es siempre el del que escribe: la clienta saca turno
+      // para una amiga, el padre para el hijo. Cuando el modelo manda nombre_cliente,
+      // ese nombre GANA sobre el de la ficha. Antes era `previo?.nombre ?? nombre_cliente`
+      // y el turno quedaba a nombre del que escribio: se vio en produccion, el bot
+      // confirmo "el turno de Lilian" y en la base decia "Mirta de Aguero".
+      const nombreDado = typeof nombre_cliente === 'string' ? nombre_cliente.trim() : '';
+      if (!previo && !nombreDado) return err('falta_nombre', 'El cliente es nuevo y no dijo su nombre.');
+      const nombreFinal = nombreDado || previo?.nombre;
+
+      // Nombre distinto al de la ficha = el turno es para otra persona. El telefono y
+      // la ficha siguen siendo los del que escribe (es quien lo va a mover o cancelar),
+      // pero los chequeos de "esta persona ya tiene turno" son de quien se atiende.
+      const plano = (s: any) =>
+        String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+      const esParaOtro = !!nombreDado && !!previo && plano(nombreDado) !== plano(previo.nombre);
 
       // ─── Nombre y apellido ───
       //
@@ -1553,7 +1567,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       //
       // Dos palabras es el minimo. "Ramirez" a secas se acepta: hay gente de un solo
       // apellido, y frenar ahi seria peor que dejar un nombre corto.
-      if (!previo && nombreFinal && !previo) {
+      if (nombreDado) {
         const palabras = String(nombreFinal).trim().split(/\s+/).filter(Boolean);
         const soloUnApellido = palabras.length === 1 && /^[A-Za-zÁ-ÿÑñ'-]+$/.test(palabras[0]);
         if (palabras.length < 2 && !soloUnApellido) {
@@ -1574,16 +1588,14 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       // apuntando a una ficha "Cliente Nuevo N": el panel nunca lo encuentra y el
       // nombre queda existiendo en dos lugares. Se corta aca y se le pregunta a la
       // persona, que es la unica que sabe si es la misma.
-      if (!previo && nombreFinal) {
+      if (!previo && nombreDado) {
         // Sin acentos: el cliente escribe "Hernan Garcia" y en la base esta
         // "Hernán Garcia". Con la comparacion literal no se cruzaban y el indice
         // unico (que SI distingue mayusculas pero no acentos) terminaba de decides.
-        const limpio = (s: string) =>
-          (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
         const { data: conEseNombre } = await sb
           .from('clientes')
           .select('id, nombre');
-        const mismo = (conEseNombre ?? []).find((h: any) => limpio(h.nombre) === limpio(nombreFinal));
+        const mismo = (conEseNombre ?? []).find((h: any) => plano(h.nombre) === plano(nombreFinal));
         if (mismo) {
           const { data: tels } = await sb.from('telefonos').select('telefono').eq('cliente_id', mismo.id);
           const finales = (tels ?? []).map((t: any) => String(t.telefono).slice(-4)).join(', ');
@@ -1725,7 +1737,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       //
       // Va DESPUES de elegir la hora, porque el aviso tiene que decir a que hora
       // choca para que el bot pueda ofrecer otra, y no un "no se puede" seco.
-      if (clienteId != null) {
+      if (clienteId != null && !esParaOtro) {
         const { data: suyos } = await sb
           .from('turnos')
           .select('id, hora_inicio, hora_fin, servicio_nombre')
@@ -1783,7 +1795,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       //
       // Services distintos el mismo dia SI se permiten: coloración y alisado juntos
       // es un pedido normal en una peluquería. El que se repite es el MISMO.
-      {
+      if (!esParaOtro) {
         const { data: yaTiene } = await sb
           .from('turnos')
           .select('id, hora_inicio, hora_fin')
@@ -2005,8 +2017,12 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
         return err('mismo_nombre', `El nombre ya es "${actual}". No hay nada que cambiar.`);
       }
 
+      // Solo los turnos que estan a nombre del cliente. Los que saco para otra
+      // persona (una amiga, su hijo) llevan otro `cliente_nombre` y no se tocan.
       const { count: turnosAfectados } = await sb
-        .from('turnos').select('id', { count: 'exact', head: true }).eq('cliente_id', cliente.id);
+        .from('turnos').select('id', { count: 'exact', head: true })
+        .eq('cliente_id', cliente.id)
+        .eq('cliente_nombre', actual);
 
       if (input.confirmado !== true) {
         return JSON.stringify({
@@ -2024,7 +2040,11 @@ async function ejecutarTool(nombre: string, input: any, telefono: string): Promi
       const { error: errCli } = await sb.from('clientes').update({ nombre: nuevo }).eq('id', cliente.id);
       if (errCli) return err('error_corriendo_nombre', errCli.message);
 
-      const { error: errTur } = await sb.from('turnos').update({ cliente_nombre: nuevo }).eq('cliente_id', cliente.id);
+      const { error: errTur } = await sb
+        .from('turnos')
+        .update({ cliente_nombre: nuevo })
+        .eq('cliente_id', cliente.id)
+        .eq('cliente_nombre', actual);
       if (errTur) return err('error_corriendo_turnos', errTur.message);
 
       return JSON.stringify({
@@ -2366,6 +2386,8 @@ CUANDO LISTES SERVICIOS, LISTALOS DE VERDAD. Si el cliente pregunta "qué servic
 CORREGIR EL NOMBRE DEL CLIENTE: si el cliente dice "quiero corregir mi nombre", "mi nombre esta mal", "me equivoque con el apellido" o cualquier cosa parecida, NO le prometas que lo vas a cambiar ni lo cambies de una. Primero llamá a corregir_nombre_cliente con confirmado:false: eso te devuelve el nombre que tiene ahora y el que quiere el cliente. Mostraselos y preguntas "¿lo cambiamos?". SOLO si el cliente dice que si, la llamás otra vez con confirmado:true. Si el cliente se arrepiente, no la llames con true y decile que no se cambió nada. Esto no es un detalle: se vio al bot decir "Listo, lo tengo anotado" sin llamar ninguna tool, y en la base no había ninguna ficha con ese nombre. Nunca digas que algo quedó anotado o guardado si la tool no te lo confirmó.
 
 EL NOMBRE DEL CLIENTE SIEMPRE ES NOMBRE Y APELLIDO. Si el cliente es nuevo y da un solo nombre ("soy Pamela", "me llamo Ana"), NO lo agendes: preguntale el apellido en una línea corta, "¿Y tu apellido?", y recien ahí creá el turno con los dos. No inventes un apellido, no le completes el nombre con el de otro cliente parecido, y no le preguntes "¿sos la misma Pamela que ya tenemos registrada?", que deja el problema donde estaba y además es raro. Razón: en el panel dos Pamelas son dos fichas, y si se mezclan una está viendo los turnos de la otra. Si creás el turno sin apellido, la tool te devuelve falta_apellido, y eso no es un error para Fallar: es la señal de que falta preguntarle.
+
+TURNO PARA OTRA PERSONA: si el cliente dice que el turno es para otra persona (una amiga, su hijo, su mamá), pedile el nombre Y EL APELLIDO de esa persona y pasalo en nombre_cliente de crear_turno, aunque el que escribe ya esté registrado. El turno queda a nombre de esa persona y el teléfono sigue siendo el de quien escribe, que es quien lo va a mover o cancelar. En la confirmación usá el cliente_nombre que devuelve la tool, no el que suponías. Cuando el turno es para el que escribe y ya está registrado, NO pases nombre_cliente.
 
 NUNCA PROMETAS UNA VERIFICACIÓN QUE NO VAS A HACER. Nada de "ahí chequeo con Laura si puede atenderte", "te confirmo en un momento", "lo verifico", "un segundo y te digo". Si no lo consultaste, no lo digas: o lo consultás en este mensaje y contás lo que volvió, o no lo mencionás. Se vio pasar: el cliente pidió a Laura para el domingo, la tool contestó que el domingo el local está cerrado, y el bot respondió "ahí chequeo con Laura si puede atenderte". Laura no trabaja ahí, nadie la va a chequear, y el cliente quedó esperando una respuesta que no llega nunca. Y cuando la tool te devuelve un error, no tenés lista contra la cual comparar un nombre: decí lo que la tool dijo y no te comprometas con nada más. SI EL CLIENTE PIDE A ALGUIEN QUE NO ESTÁ EN LA LISTA, decilo. Si nombra a una persona que no aparece en "buscar_empleados" ("con Laura", "quiero que me atienda Ana"), NO le digas que sí y NO te lo saltes en silencio como si no lo escuchaste: decile que a Laura no trabaja ahí, con esas palabras, y ofrecé de la lista quién sí. Un nombre que el cliente tira al aire puede ser el de otra persona del local que no conoces, o alguien que se confundió, o alguien que ya no trabaja: en los tres casos la respuesta es "no lo tengo en la lista, los que pueden son estos", no un cambio de tema. Y si el cliente pide a alguien que SÍ está pero ese día no puede, decí quién no puede y por qué, y ofrecé los que sí pueden ese día, como en "no_disponibles". CUANDO EL CLIENTE PREGUNTE QUIÉN ATIENDE, es una pregunta directa y la respuesta está en la base: llamá a buscar_empleados con la FECHA del turno y listale los nombres, uno por línea, diciendo quién puede ese día. NUNCA contestes "te lo asigno cuando confirmes", "te atiende alguien", "después te digo quién" ni nada que suene a que se lo vas a ocultar: eso es un rodeo para no responder algo que ya podés responder, y el cliente lo lee como que le estás escondiendo la información. Si todavía no sabés la fecha, preguntá el día primero y después decile quién trabaja ese día; si ya la sabés, NO la preguntes de nuevo, usá esa. Si el turno todavía no tiene hora, alcanza con decir quién puede ese día: no hace falta que le ofrezcas todas las horas de cada uno, con los nombres alcanza para que elija. Cuando elija a quién, pasale ese empleado_id a crear_turno.
 
