@@ -1193,12 +1193,10 @@ claseBloque(turno: any, mini: boolean): string {
         this.linkWhatsapp = '';
         this.mostrarPopupCancelacion = true;
       } else {
-        this.cerrarPopupCancelacion();
-        await this.cargarTurnos(true);
+        await this.cerrarPopupCancelacion();
       }
     } else {
-      this.cerrarPopupCancelacion();
-      await this.cargarTurnos(true);
+      await this.cerrarPopupCancelacion();
     }
     this.cdr.detectChanges();
   }
@@ -1231,9 +1229,7 @@ claseBloque(turno: any, mini: boolean): string {
       this.enviandoMensaje = false;
       this.cdr.detectChanges();
     }
-    this.mostrarPopupCancelacion = false;
-    this.cerrarPopup();
-    await this.cargarTurnos(true);
+    await this.cerrarPopupCancelacion();
     this.cdr.detectChanges();
   }
 
@@ -1256,16 +1252,23 @@ claseBloque(turno: any, mini: boolean): string {
     return tel ? `Para cualquier consulta comunicate al ${tel}.` : '';
   }
 
-  cerrarPopupCancelacion() {
+  /**
+   * Cierra el popup de cancelación y recarga los turnos.
+   *
+   * La recarga va acá y no en cada botón porque el turno YA se canceló al abrir
+   * este popup: si el usuario elige "Omitir", sin esto la agenda seguía
+   * mostrándolo como pendiente hasta recargar la página.
+   */
+  async cerrarPopupCancelacion() {
     this.mostrarPopupCancelacion = false;
     this.cerrarPopup();
+    await this.cargarTurnos(true);
   }
 
   async iniciarNotificacionPostergacion(nuevaFecha: string, nuevaHora: string, nuevoServicio: string) {
     const telefonoCliente = this.telefonoDe(this.turnoSeleccionado);
     if (!telefonoCliente) {
-      this.cerrarPopup();
-      await this.cargarTurnos(true);
+      await this.cerrarPopupPostergacion();
     } else if (confirm('¿Querés enviarle un mensaje de WhatsApp al cliente?')) {
       this.motivoPostergacion = '';
       this.errorMensaje = '';
@@ -1275,8 +1278,7 @@ claseBloque(turno: any, mini: boolean): string {
       this._nuevoServicioPostergacion = nuevoServicio;
       this.mostrarPopupPostergacion = true;
     } else {
-      this.cerrarPopup();
-      await this.cargarTurnos(true);
+      await this.cerrarPopupPostergacion();
     }
     this.cdr.detectChanges();
   }
@@ -1305,13 +1307,19 @@ claseBloque(turno: any, mini: boolean): string {
       this.enviandoMensajePostergacion = false;
       this.cdr.detectChanges();
     }
-    this.cerrarPopupPostergacion();
-    await this.cargarTurnos(true);
+    await this.cerrarPopupPostergacion();
     this.cdr.detectChanges();
   }
 
-  cerrarPopupPostergacion() {
+  /**
+   * Cierra el popup de reprogramación y recarga los turnos.
+   *
+   * Mismo motivo que en cancelación: el cambio ya se guardó antes de mostrar
+   * este popup, así que "Omitir" también tiene que refrescar la pantalla.
+   */
+  async cerrarPopupPostergacion() {
     this.mostrarPopupPostergacion = false;
     this.cerrarPopup();
+    await this.cargarTurnos(true);
   }
  }

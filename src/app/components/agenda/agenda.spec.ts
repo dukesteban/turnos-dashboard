@@ -680,6 +680,21 @@ describe('Agenda - rango de turnos', () => {
     expect(veces(mock)).toBe(antes + 1);
   });
 
+  it('cerrar con "Omitir" el popup de cancelación también refresca', async () => {
+    // El turno ya se canceló al abrir el popup: si se omite el mensaje, la
+    // pantalla tiene que reflejarlo igual.
+    const { cmp, mock } = montar();
+    await cmp.ngOnInit();
+    await settle();
+    const antes = veces(mock);
+
+    cmp.turnoSeleccionado = turno({ id: 5 });
+    await cmp.cerrarPopupCancelacion();
+    await settle();
+
+    expect(veces(mock)).toBe(antes + 1);
+  });
+
   it('reprogramar un turno vuelve a pedir los turnos aunque la zona ya esté cargada', async () => {
     const { cmp, mock } = montar();
     await cmp.ngOnInit();

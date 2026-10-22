@@ -1108,12 +1108,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.linkWhatsapp = '';
         this.mostrarPopupCancelacion = true;
       } else {
-        this.cerrarPopupCancelacion();
-        await this.cargarTurnos();
+        await this.cerrarPopupCancelacion();
       }
     } else {
-      this.cerrarPopupCancelacion();
-      await this.cargarTurnos();
+      await this.cerrarPopupCancelacion();
     }
     this.cdr.detectChanges();
   }
@@ -1146,9 +1144,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.enviandoMensaje = false;
       this.cdr.detectChanges();
     }
-    this.mostrarPopupCancelacion = false;
-    this.cerrarPopup();
-    await this.cargarTurnos();
+    await this.cerrarPopupCancelacion();
     this.cdr.detectChanges();
   }
 
@@ -1169,16 +1165,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return tel ? `Para cualquier consulta comunicate al ${tel}.` : '';
   }
 
-  cerrarPopupCancelacion() {
+  /**
+   * Cierra el popup de cancelación y recarga los turnos.
+   *
+   * El turno ya se canceló al abrir el popup: si el usuario elige "Omitir",
+   * sin esta recarga la tabla seguía mostrándolo como pendiente.
+   */
+  async cerrarPopupCancelacion() {
     this.mostrarPopupCancelacion = false;
     this.cerrarPopup();
+    await this.cargarTurnos();
   }
 
   async iniciarNotificacionPostergacion(nuevaFecha: string, nuevaHora: string, nuevoServicio: string) {
     const telefonoCliente = this.telefonoDe(this.turnoSeleccionado);
     if (!telefonoCliente) {
-      this.cerrarPopup();
-      await this.cargarTurnos();
+      await this.cerrarPopupPostergacion();
     } else if (confirm('¿Querés enviarle un mensaje de WhatsApp al cliente?')) {
       this.motivoPostergacion = '';
       this.errorMensaje = '';
@@ -1188,8 +1190,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this._nuevoServicioPostergacion = nuevoServicio;
       this.mostrarPopupPostergacion = true;
     } else {
-      this.cerrarPopup();
-      await this.cargarTurnos();
+      await this.cerrarPopupPostergacion();
     }
     this.cdr.detectChanges();
   }
@@ -1218,13 +1219,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.enviandoMensajePostergacion = false;
       this.cdr.detectChanges();
     }
-    this.cerrarPopupPostergacion();
-    await this.cargarTurnos();
+    await this.cerrarPopupPostergacion();
     this.cdr.detectChanges();
   }
 
-  cerrarPopupPostergacion() {
+  /**
+   * Cierra el popup de reprogramación y recarga los turnos: el cambio ya se
+   * guardó antes de mostrarlo, así que "Omitir" también tiene que refrescar.
+   */
+  async cerrarPopupPostergacion() {
     this.mostrarPopupPostergacion = false;
     this.cerrarPopup();
+    await this.cargarTurnos();
   }
 }
