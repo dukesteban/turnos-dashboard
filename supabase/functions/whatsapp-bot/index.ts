@@ -417,6 +417,11 @@ const TOOLS = [
         servicio_nombre: { type: 'string', description: 'El nombre del servicio tal cual lo dijo el cliente. La base lo resuelve y evita agendar otro servicio con otro precio.' },
         fecha_hora: { type: 'string', description: 'ISO 8601, zona del negocio' },
         empleado_id: { type: 'number', description: 'Solo si el cliente quiere un empleado concreto. Si no, se asigna el primero libre.' },
+        es_para_otra_persona: {
+          type: 'boolean',
+          description:
+            'true SOLO si el cliente dijo que el turno es para otra persona (su hijo, su mama, un amigo): nombre_cliente es el de esa persona, no el del que escribe. Sirve para no confundirla con una ficha que ya existe con ese nombre.',
+        },
         aceptar_cercania_minutos: {
           type: 'number',
           description:
@@ -858,7 +863,10 @@ function ausenciasQueCubren(fecha: string) {
     .from('ausencias')
     .select('empleado_id, motivo, hora_inicio, hora_fin')
     .lte('desde', fecha)
-    .or(`hasta.gte.${fecha},hasta.is.null`);
+    // `hasta` NULL es una ausencia de UN dia (asi la guarda el panel): cubre `desde`
+    // y nada mas. Con `hasta.is.null` suelto tapaba TODAS las fechas siguientes y el
+    // empleado quedaba ausente para siempre.
+    .or(`hasta.gte.${fecha},and(hasta.is.null,desde.eq.${fecha})`);
 }
 
 async function estadoDelDia(fecha: string, excluirTurnoId?: number) {
@@ -911,15 +919,16 @@ async function estadoDelDia(fecha: string, excluirTurnoId?: number) {
     agenda.set(t.empleado_id, lista);
   }
 
-  // Las ausencias sin horario son el dia entero.
+  // Las ausencias sin horario son el dia entero. Se guardan aparte para poder decir
+  // "no trabaja ese dia" en vez de "ya tiene un turno" (eran el mismo codigo).
+  const ausenciaBloques: Array<{ empleadoId: number; inicio: number; fin: number; todoElDia: boolean }> = [];
   for (const a of ausencias ?? []) {
     if (!a.empleado_id) continue;
-    const bloque: Bloque = {
-      inicio: horaAMin(a.hora_inicio ?? '00:00'),
-      fin: horaAMin(a.hora_fin ?? '23:59'),
-    };
+    const inicio = horaAMin(a.hora_inicio ?? '00:00');
+    const fin = horaAMin(a.hora_fin ?? '23:59');
+    ausenciaBloques.push({ empleadoId: a.empleado_id, inicio, fin, todoElDia: !a.hora_inicio && !a.hora_fin });
     const lista = agenda.get(a.empleado_id) ?? [];
-    lista.push(bloque);
+    lista.push({ inicio, fin });
     agenda.set(a.empleado_id, lista);
   }
 
@@ -939,9 +948,15 @@ async function estadoDelDia(fecha: string, excluirTurnoId?: number) {
     // Por que no puede: el dia que no labra y el horario ocupado son dos cosas
     // distintas y el modelo las mezclaba ("ya hay un turno a esa hora" para un
     // empleado que no trabaja ese dia). Se le da la causa exacta.
-    motivoNoPuede: (empleadoId: number): 'no_labora_ese_dia' | 'ocupado' | 'fuera_de_jornada' | null => {
+    motivoNoPuede: (empleadoId: number, desde?: number, hasta?: number): 'no_labora_ese_dia' | 'ausente' | 'ausente_parcial' | 'ocupado' | 'fuera_de_jornada' | null => {
       const j = labora.get(empleadoId);
       if (j === false) return 'no_labora_ese_dia';
+      // Ausencia: es distinto de "tiene otro turno". Antes caia en "ocupado" y el
+      // cliente escuchaba que el empleado estaba con otro auto cuando tenia el dia libre.
+      if (desde != null && hasta != null) {
+        const a = ausenciaBloques.find((b) => b.empleadoId === empleadoId && sePisan({ inicio: desde, fin: hasta }, b));
+        if (a) return a.todoElDia ? 'ausente' : 'ausente_parcial';
+      }
       if (j === null || j === undefined) return null;
       return libres(empleadoId, j.desde, j.desde + 1) ? 'fuera_de_jornada' : 'ocupado';
     },
@@ -1212,9 +1227,16 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
 
       const { data: ausencias } = await ausenciasQueCubren(fecha);
 
-      const fuera = new Map<number, string>();
+      const fuera = new Map<number, Array<{ inicio: number; fin: number; motivo: string }>>();
       for (const a of ausencias ?? []) {
-        if (a.empleado_id) fuera.set(a.empleado_id, a.motivo ?? 'ausente');
+        if (!a.empleado_id) continue;
+        const lista = fuera.get(a.empleado_id) ?? [];
+        lista.push({
+          inicio: horaAMin(a.hora_inicio ?? '00:00'),
+          fin: horaAMin(a.hora_fin ?? '23:59'),
+          motivo: a.motivo ?? 'ausente',
+        });
+        fuera.set(a.empleado_id, lista);
       }
 
       // ─── Si dijeron una hora, distinguir QUIEN TRABAJA de QUIEN ESTA LIBRE ───
@@ -1246,9 +1268,20 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
           noDisponibles.push({ id: e.id, nombre: e.nombre, motivo: 'no trabaja ese dia' });
           continue;
         }
-        if (fuera.has(e.id)) {
-          noDisponibles.push({ id: e.id, nombre: e.nombre, motivo: `ausente: ${fuera.get(e.id)}` });
-          continue;
+        const ausente = fuera.get(e.id);
+        if (ausente) {
+          // Con hora: solo molesta la ausencia que se pisa con ese horario (una
+          // ausencia de 08 a 12 no deja fuera a quien puede a las 15).
+          if (horaPedida == null) {
+            const toda = ausente.some((b) => b.inicio <= 0 && b.fin >= 1439);
+            if (toda) {
+              noDisponibles.push({ id: e.id, nombre: e.nombre, motivo: `ausente: ${ausente[0].motivo}` });
+              continue;
+            }
+          } else if (ausente.some((b) => sePisan({ inicio: horaPedida, fin: horaPedida + duracionHora }, b))) {
+            noDisponibles.push({ id: e.id, nombre: e.nombre, motivo: `ausente: ${ausente[0].motivo}` });
+            continue;
+          }
         }
         disponibles.push({
           id: e.id,
@@ -1328,9 +1361,16 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
 
       const { data: ausencias } = await ausenciasQueCubren(fecha);
 
-      const fuera = new Map<number, string>();
+      const fuera = new Map<number, Array<{ inicio: number; fin: number; motivo: string }>>();
       for (const a of ausencias ?? []) {
-        if (a.empleado_id) fuera.set(a.empleado_id, a.motivo ?? 'ausente');
+        if (!a.empleado_id) continue;
+        const lista = fuera.get(a.empleado_id) ?? [];
+        lista.push({
+          inicio: horaAMin(a.hora_inicio ?? '00:00'),
+          fin: horaAMin(a.hora_fin ?? '23:59'),
+          motivo: a.motivo ?? 'ausente',
+        });
+        fuera.set(a.empleado_id, lista);
       }
 
       const lista = [];
@@ -1589,13 +1629,17 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
         // que es falso. `estadoDelDia` ya sabe cual de los tres es.
         if (pedido != null) {
           const nombre = nombrePedido?.nombre ?? `el empleado ${pedido}`;
-          const causa = agenda.motivoNoPuede(pedido);
+          const causa = agenda.motivoNoPuede(pedido, pref, pref + duracion);
           motivo =
             causa === 'no_labora_ese_dia'
               ? `${nombre} no trabaja ese dia.`
-              : causa === 'fuera_de_jornada'
-                ? `${nombre} no termina de trabajar a esa hora.`
-                : `${nombre} ya tiene un turno a esa hora.`;
+              : causa === 'ausente'
+                ? `${nombre} no trabaja ese dia.`
+                : causa === 'ausente_parcial'
+                  ? `${nombre} no esta disponible a esa hora.`
+                  : causa === 'fuera_de_jornada'
+                    ? `${nombre} no termina de trabajar a esa hora.`
+                    : `${nombre} ya tiene un turno a esa hora.`;
         } else {
           motivo = 'A esa hora ya hay un turno.';
         }
@@ -1750,6 +1794,9 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
     }
     case 'crear_turno': {
       const { nombre_cliente, fecha_hora, empleado_id } = input;
+      // El modelo sabe si el turno es para un tercero ("para mi hijo") y lo declara.
+      // Sin ese dato no se puede distinguir de alguien que esta dando su propio nombre.
+      const paraOtro = input.es_para_otra_persona === true;
       // 0. resolver el cliente por numero. Si ya existe se usa su nombre de la base y no
       //    hace falta que el modelo lo haya preguntado. Si no, se crea con el nombre dado.
       const { data: yaExiste } = await sb.rpc('buscar_cliente_por_telefono', { p_telefono: telefono });
@@ -1769,7 +1816,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       // cancelar), pero la ficha pasa a ser de quien se atiende.
       const plano = (s: any) =>
         String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-      const esParaOtro = !!nombreDado && !!previo && plano(nombreDado) !== plano(previo.nombre);
+      const esParaOtro = paraOtro || (!!nombreDado && !!previo && plano(nombreDado) !== plano(previo.nombre));
 
       // Nombres de relleno con los que el modelo intenta "pasar" el chequeo para crear
       // el turno antes de preguntar el nombre. Se vio en una prueba: mando
@@ -1845,7 +1892,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       // apuntando a una ficha "Cliente Nuevo N": el panel nunca lo encuentra y el
       // nombre queda existiendo en dos lugares. Se corta aca y se le pregunta a la
       // persona, que es la unica que sabe si es la misma.
-      if (!previo && nombreDado) {
+      if (!previo && nombreDado && !paraOtro) {
         // Sin acentos: el cliente escribe "Hernan Garcia" y en la base esta
         // "Hernán Garcia". Con la comparacion literal no se cruzaban y el indice
         // unico (que SI distingue mayusculas pero no acentos) terminaba de decides.
@@ -2039,7 +2086,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
         });
         if (errCli) return err('error_creando_cliente', errCli.message);
         clienteIdFinal = (creado ?? [])[0]?.id ?? null;
-        if (clienteIdFinal) {
+        if (clienteIdFinal && !paraOtro) {
           // el nombre que dio el modelo es el real: pisa el "Cliente Nuevo N"
           await sb.from('clientes').update({ nombre: nombreFinal }).eq('id', clienteIdFinal);
         }
@@ -2479,12 +2526,15 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
         if (!agendaRe.libres(pedido, desde, hasta)) {
           const { data: e } = await sb.from('empleados').select('nombre').eq('id', pedido).maybeSingle();
           const nombre = e?.nombre ?? 'Ese empleado';
-          const porQue = agendaRe.motivoNoPuede(pedido);
+          const porQue = agendaRe.motivoNoPuede(pedido, desde, hasta);
           // Codigos y texto distintos por causa: el modelo repetia "ya hay un
           // turno" para un empleado que sencillamente no labra ese dia, y el
           // cliente recibe una excusa que no era.
-          if (porQue === 'no_labora_ese_dia') {
+          if (porQue === 'no_labora_ese_dia' || porQue === 'ausente') {
             return err('empleado_no_labora_ese_dia', `${nombre} no trabaja ese dia.`);
+          }
+          if (porQue === 'ausente_parcial') {
+            return err('empleado_ausente', `${nombre} no esta disponible a esa hora.`);
           }
           if (porQue === 'fuera_de_jornada') {
             return err('empleado_fuera_de_jornada', `${nombre} ese dia solo trabaja hasta otra hora.`);
@@ -2494,7 +2544,13 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
         empleadoFinal = pedido;
       } else {
         if (!agendaRe.algunoLibre(desde, hasta)) return err('horario_no_disponible', 'A esa hora no hay nadie libre.');
-        empleadoFinal = agendaRe.quienPuede(desde, hasta, turno.empleado_id ?? null) ?? turno.empleado_id ?? null;
+        // Se prefiere el empleado que ya tenia el turno, pero si ese dia no trabaja (o
+        // ya esta ocupado a la hora nueva) se pasa a otro libre: antes se quedaba con
+        // el viejo y la base rechazaba el cambio por el turno que se pisaba.
+        empleadoFinal = agendaRe.quienPuede(desde, hasta, turno.empleado_id ?? null)
+          ?? agendaRe.quienPuede(desde, hasta, null)
+          ?? turno.empleado_id
+          ?? null;
       }
 
       const { error } = await sb
@@ -2717,6 +2773,10 @@ Cuando la fecha de la que estan hablando esta a 3 dias o menos de un cierre (el 
 Si el cliente pide un dia cerrado, llamá a consultar_horarios_libres con esa fecha aunque ya sepas que esta cerrado: es la que te devuelve, en "dias_alternativos", los dias ya comprobados (abren y tienen lugar). Si la llamaste, ofrecele SOLO esos y decí el motivo del cierre. Si no la llamaste, no nombres ningun dia de reemplazo: preguntale cual le viene bien y consultalo cuando te conteste. No armes la lista con dias de la tabla de fechas: la tabla dice que dia es, no si el local abre, y asi se ofrecio un domingo en un local que no abre los domingos.
 
 SERVICIO AMBIGUO: si el cliente dice solo "un lavado", "lavar el auto" o "un encerado" y hay más de un servicio que empieza así (Lavado simple, Lavado completo, Lavado con cera), NO elijas uno por él ni pases en servicio_nombre un nombre completo que el cliente no dijo: preguntá cuál, con el precio de cada uno en el mismo renglón. Se probó y el bot tomó "un lavado" como "Lavado completo" ($20.000) sin decirlo: si el cliente contestaba que sí, le cobraba un servicio que no pidió.
+
+TURNO PARA OTRA PERSONA (CAMPO): cuando el turno es para un tercero (su hijo, su mama, un amigo), ademas de nombre_cliente pasá es_para_otra_persona: true. Ese dato hace que la tool use la ficha de esa persona aunque ya exista, sin preguntarle al que escribe si "es la misma persona", y que el telefono del turno quede en el de quien escribe. Si el turno es para el propio cliente, no mandes ese campo.
+
+SI PIDEN HABLAR CON UNA PERSONA O CON EL LOCAL: no alcanza con decir que no podes transferir. Pasales el telefono del local (obtener_config_negocio, clave telefono_emergencia) y deciles que los atienden en horario de atencion; despues ofrece seguir ayudando por aca.
 
 Presentacion: ${esPrimerMensaje ? `este es el PRIMER mensaje de la conversacion, asi que abri presentandote como el bot de "${negocio.nombre}"${negocio.cierres ? ` y avisale que ${negocio.cierres}` : ''}. En ese MISMO mensaje, si el cliente todavia no nombro un servicio (saluda, pregunta que hay, pide un turno en general), mandale la lista COMPLETA de servicios con el precio y los horarios de atencion, y cerra preguntando que se quiere hacer: llama listar_servicios antes y armala con "Tenemos estos servicios:" y un servicio por linea, con el precio entre parentesis; los horarios van en una linea aparte, con los que estan arriba en "Horarios de atencion". No mandes un "decime que necesitas" pelado esperando que despues te pregunte los precios: ya se los das y contesta en la misma vuelta. Si el cliente YA nombro un servicio, no listes todo: anda directo a ese.` : 'ya te presentaste antes, no te vuelvas a presentar.'}`;
 
