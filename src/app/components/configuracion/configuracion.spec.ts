@@ -319,7 +319,7 @@ describe('Configuración — datos del negocio', () => {
     expect(mock.llamadas).not.toContain('upsertConfiguracion');
   });
 
-  it('acepta el borde y guarda las 8 claves', async () => {
+  it('acepta el borde y guarda las 9 claves', async () => {
     const guardadas: string[] = [];
     const { cmp } = montar({
       upsertConfiguracion: (k: string) => { guardadas.push(k); return Promise.resolve(); },
@@ -329,8 +329,28 @@ describe('Configuración — datos del negocio', () => {
     expect(cmp.mensajeErrorDatos).toBe('');
     expect(guardadas).toEqual([
       'nombre_negocio', 'descripcion', 'horas_limite_cancelacion',
-      'recordatorio_cuando', 'recordatorio_hora', 'telefono_emergencia', 'direccion', 'tono',
+      'recordatorio_cuando', 'recordatorio_hora', 'telefono_emergencia',
+      'limite_aplica_reprogramacion', 'direccion', 'tono',
     ]);
+  });
+
+  it('sin la clave en la base, el límite de reprogramación arranca encendido', async () => {
+    // Es como venía funcionando el bot: el tope estaba puesto en las dos puntas.
+    const { cmp } = montar({ getConfiguracion: () => Promise.resolve([]) });
+    await cmp.cargarDatos();
+    expect(cmp.limiteReprogramacion).toBe(true);
+  });
+
+  it('el límite de reprogramación se guarda como si/no', async () => {
+    const guardadas: any[] = [];
+    const { cmp } = montar({
+      getConfiguracion: () => Promise.resolve([{ clave: 'limite_aplica_reprogramacion', valor: 'no' }]),
+      upsertConfiguracion: (k: string, v: string) => { guardadas.push([k, v]); return Promise.resolve(); },
+    });
+    await cmp.cargarDatos();
+    expect(cmp.limiteReprogramacion).toBe(false);
+    await cmp.guardarConfiguracion();
+    expect(guardadas).toContainEqual(['limite_aplica_reprogramacion', 'no']);
   });
 
   it('la direccion es OPCIONAL: vacía se guarda sin pedir nada', async () => {

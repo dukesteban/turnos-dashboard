@@ -39,6 +39,23 @@
         <input type="number" min="1" max="48" [(ngModel)]="horasLimiteCancelacion" [readonly]="!editandoDatos" (ngModelChange)="mensajeErrorDatos = ''"/>
       </div>
       <div class="campo">
+        <label>Aplicar ese límite también para reprogramar</label>
+        <!--
+          Es un toggle y no un número aparte: el límite es el mismo, lo que se
+          elige es si vale también para mover el turno. Apagado, el cliente puede
+          reprogramar hasta último momento (pero sigue sin poder cancelar).
+        -->
+        <label class="toggle">
+          <input type="checkbox" [(ngModel)]="limiteReprogramacion" [disabled]="!editandoDatos"
+                 (ngModelChange)="mensajeErrorDatos = ''"/>
+          <span class="slider"></span>
+        </label>
+        <div class="nota-ayuda-chica">
+          Si está apagado, el bot deja reprogramar hasta último momento; cancelar sigue
+          bloqueado dentro del límite de arriba.
+        </div>
+      </div>
+      <div class="campo">
         <label>Recordatorio de turno</label>
         <select [(ngModel)]="recordatorioCuando" [disabled]="!editandoDatos">
           <option value="mismo_dia">Mismo día</option>

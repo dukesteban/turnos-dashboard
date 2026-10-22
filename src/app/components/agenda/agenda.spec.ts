@@ -661,4 +661,50 @@ describe('Agenda - rango de turnos', () => {
 
     expect(veces(mock)).toBeGreaterThan(antes);
   });
+
+  // REGRESIÓN: cancelar, reprogramar y atender guardaban en la base y después
+  // llamaban a `cargarTurnos()`, que como la zona ya estaba cargada NO volvía a
+  // pedir nada. La pantalla quedaba mostrando el turno viejo hasta que el
+  // usuario recargaba la página (o esperaba al realtime).
+  it('cancelar un turno vuelve a pedir los turnos aunque la zona ya esté cargada', async () => {
+    const { cmp, mock } = montar();
+    await cmp.ngOnInit();
+    await settle();
+    const antes = veces(mock);
+
+    // Sin teléfono no aparece el popup de WhatsApp: el flujo termina y refresca.
+    cmp.turnoSeleccionado = turno({ id: 5, cliente_telefono: null });
+    await cmp.iniciarCancelacion();
+    await settle();
+
+    expect(veces(mock)).toBe(antes + 1);
+  });
+
+  it('reprogramar un turno vuelve a pedir los turnos aunque la zona ya esté cargada', async () => {
+    const { cmp, mock } = montar();
+    await cmp.ngOnInit();
+    await settle();
+    const antes = veces(mock);
+
+    cmp.turnoSeleccionado = turno({ id: 5, cliente_telefono: null });
+    await cmp.iniciarNotificacionPostergacion('2026-12-07', '16:00', 'Lavado simple');
+    await settle();
+
+    expect(veces(mock)).toBe(antes + 1);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════
+describe('Agenda - pie de los mensajes al cliente', () => {
+  it('usa el teléfono de emergencia y no los comandos viejos del bot', () => {
+    const { cmp } = montar();
+    cmp.telefonoEmergencia = '3815 55 12 74';
+    expect(cmp.lineaDeContacto()).toBe('Para cualquier consulta comunicate al 3815 55 12 74.');
+  });
+
+  it('sin teléfono cargado no inventa un renglón', () => {
+    const { cmp } = montar();
+    cmp.telefonoEmergencia = '';
+    expect(cmp.lineaDeContacto()).toBe('');
+  });
 });

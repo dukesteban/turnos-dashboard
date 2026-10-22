@@ -319,7 +319,7 @@ async function linksDeCalendario(t: {
 const TOOLS = [
   {
     name: 'obtener_config_negocio',
-    description: 'Obtiene una clave de la configuracion del negocio: nombre_negocio, descripcion, direccion, telefono_emergencia, tono, horas_limite_cancelacion, horario_atencion, dias_cerrados, recordatorio_cuando, recordatorio_hora.',
+    description: 'Obtiene una clave de la configuracion del negocio: nombre_negocio, descripcion, direccion, telefono_emergencia, tono, horas_limite_cancelacion, limite_aplica_reprogramacion, horario_atencion, dias_cerrados, recordatorio_cuando, recordatorio_hora.',
     input_schema: { type: 'object', properties: { clave: { type: 'string' } }, required: ['clave'] },
   },
   {
@@ -545,6 +545,21 @@ function detalleCerrado(cierre: { motivo?: string | null } | null): string {
 async function horasMinCancelar(): Promise<number> {
   const { data } = await sb.from('configuracion').select('valor').eq('clave', 'horas_limite_cancelacion').single();
   return Number(data?.valor) || 12;
+}
+
+/**
+ * Si el limite de horas tambien corre para REPROGRAMAR, o solo para cancelar.
+ *
+ * Lo elige el negocio desde Configuracion (`limite_aplica_reprogramacion` =
+ * 'si'/'no'). Si la clave no existe se asume 'si', que es como venia
+ * funcionando: el tope estaba puesto en las dos puntas.
+ *
+ * Se lee aca y no en el prompt a proposito: es una regla del local, no algo que
+ * el modelo tenga que acordarse de consultar antes de cada tool.
+ */
+async function limiteAplicaReprogramar(): Promise<boolean> {
+  const { data } = await sb.from('configuracion').select('valor').eq('clave', 'limite_aplica_reprogramacion').maybeSingle();
+  return (data?.valor ?? 'si') !== 'no';
 }
 
 /**
@@ -2380,7 +2395,9 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
 
       const minsFaltan = (inicio - Date.now()) / 60000;
       const minsMin = (await horasMinCancelar()) * 60;
-      if (minsFaltan < minsMin) {
+      // El tope se aplica solo si el negocio lo pidio para reprogramar: desde
+      // Configuracion se puede dejar que mover el turno no tenga esa traba.
+      if (minsFaltan < minsMin && (await limiteAplicaReprogramar())) {
         const tel = await telefonoDelLocal();
         return err(
           'fuera_de_plazo',

@@ -646,6 +646,19 @@ $h-header-semana: 72px;
   width: 100%;
   max-width: 380px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  // Mismo blindaje que el popup compartido (_popup.scss): si el contenido no
+  // entra (tablet en horizontal o con el teclado abierto), el body scrollea y
+  // los botones quedan DENTRO de la tarjeta. Antes se dibujaban afuera.
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  > div:not(.popup-header) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1 1 auto;
+  }
 }
 
 .popup-header {
@@ -672,6 +685,9 @@ $h-header-semana: 72px;
   display: flex;
   flex-direction: column;
   gap: 0;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 /* Faltaba este bloque: sin el gap de 12px las filas del popup quedan
@@ -723,9 +739,11 @@ $h-header-semana: 72px;
   display: flex;
   gap: 8px;
   padding: 12px 20px 20px;
+  flex: 0 0 auto;
 
   button {
     flex: 1;
+    min-width: 0;
     padding: 10px;
     border: none;
     border-radius: 8px;

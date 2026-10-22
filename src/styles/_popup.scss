@@ -37,6 +37,18 @@
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+  // Nada se escapa de la tarjeta: sin esto, cuando el contenido no entra (tablet
+  // en horizontal, teclado en pantalla abierto) el pie con los botones quedaba
+  // dibujado AFUERA del popup, colgando debajo del borde blanco.
+  overflow: hidden;
+  // Cada vista (los `*ngIf` que envuelven el body + las acciones) es hija
+  // directa del popup. Si no puede encogerse, empuja el pie hacia afuera.
+  > div:not(.popup-header) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1 1 auto;
+  }
   .popup-header {
     display: flex;
     justify-content: space-between;
@@ -54,6 +66,8 @@
     // Con muchos campos (3 filas) el popup se pasa de alto en un celu; el body
     // scrollea y el header queda fijo con el ✕ siempre alcanzable.
     overflow-y: auto;
+    min-height: 0;
+    flex: 1 1 auto;
   }
   .btn-cerrar {
     background: none;
@@ -128,8 +142,11 @@
   display: flex;
   gap: 8px;
   padding: 12px 20px 20px;
+  // El pie no se encoge ni se sale: el que scrollea es el body de arriba.
+  flex: 0 0 auto;
   button {
     flex: 1;
+    min-width: 0;
     padding: 10px;
     border: none;
     border-radius: 8px;

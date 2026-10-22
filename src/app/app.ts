@@ -104,6 +104,12 @@ export class App implements OnInit {
     const nombre = config.find((c: any) => c.clave === 'nombre_negocio')?.valor || 'Hola!';
     this.nombreNegocio = nombre;
     localStorage.setItem('nombre_negocio', nombre);
+    // El teléfono de emergencia lo usan los mensajes de cancelación y
+    // reprogramación de Agenda/Dashboard.
+    localStorage.setItem(
+      'telefono_emergencia',
+      config.find((c: any) => c.clave === 'telefono_emergencia')?.valor || ''
+    );
 
     // Cuando cambia la sesión (llega el token, el usuario sale), la vista tiene que
     // enterarse. Son getters que leen `sesionSubject.value`, así que si nadie dispara

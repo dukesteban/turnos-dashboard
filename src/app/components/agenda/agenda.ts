@@ -154,6 +154,10 @@ export class AgendaComponent implements OnInit, OnDestroy {
   errorMensaje = '';
   linkWhatsapp = '';
   nombreNegocio = localStorage.getItem('nombre_negocio') || '';
+  // El teléfono de emergencia va al pie de los mensajes de cancelación y
+  // reprogramación. Se cachea en localStorage igual que el nombre del negocio
+  // (lo carga app.ts al iniciar) para no pedir la config en cada envío.
+  telefonoEmergencia = localStorage.getItem('telefono_emergencia') || '';
   mostrarPopupPostergacion = false;
   motivoPostergacion = '';
   enviandoMensajePostergacion = false;
@@ -901,13 +905,13 @@ claseBloque(turno: any, mini: boolean): string {
       if (!confirmarVolverAPendiente(this.turnoSeleccionado)) return;
       const id = this.turnoSeleccionado.id;
       await this.supabase.volverAPendiente(id);
-      await this.cargarTurnos(); // cargarDatos() en dashboard
+      await this.cargarTurnos(true); // cargarDatos() en dashboard
       this.cerrarPopup();
       return;
     }
     const id = this.turnoSeleccionado.id;
     await this.supabase.updateEstadoTurno(id, estado);
-    await this.cargarTurnos();
+    await this.cargarTurnos(true);
     this.cerrarPopup();
   }
 
@@ -971,7 +975,7 @@ claseBloque(turno: any, mini: boolean): string {
         observaciones: this.atendidoObservaciones,
         empleado_id: this.atendidoEmpleadoId
       });
-      await this.cargarTurnos();
+      await this.cargarTurnos(true);
       this.comisionesPorServicio = await this.supabase.getComisionesEmpleado(this.empleados.map((e: any) => e.id));
       this.cerrarPopup();
     } catch (e) {
@@ -1165,7 +1169,7 @@ claseBloque(turno: any, mini: boolean): string {
         // reprogramaba pero se mantenía el empleado anterior.
         empleado_id: this.nuevoEmpleadoId
       });
-      await this.cargarTurnos();
+      await this.cargarTurnos(true);
       await this.iniciarNotificacionPostergacion(this.nuevaFecha, this.nuevaHora, servicio.nombre);
     } catch (e) {
       console.error('Error en confirmarEditarTurno:', e);
@@ -1190,11 +1194,11 @@ claseBloque(turno: any, mini: boolean): string {
         this.mostrarPopupCancelacion = true;
       } else {
         this.cerrarPopupCancelacion();
-        await this.cargarTurnos();
+        await this.cargarTurnos(true);
       }
     } else {
       this.cerrarPopupCancelacion();
-      await this.cargarTurnos();
+      await this.cargarTurnos(true);
     }
     this.cdr.detectChanges();
   }
@@ -1208,7 +1212,7 @@ claseBloque(turno: any, mini: boolean): string {
     try {
       const fecha = this.formatearFechaStr(this.turnoSeleccionado.fecha);
       const hora = this.formatearHora(this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora);
-      const mensaje = `Estimado cliente:\n\n📆 El turno del día *${fecha}* a las *${hora}* hs ha sido *cancelado* debido a ${this.motivoCancelacion}.\nLamentamos los inconvenientes causados.😔\n_(Si deseas reservar otro turno escribí *1* o *reservar*)_\n\nAtte. *${this.nombreNegocio}*`;
+      const mensaje = `Estimado cliente:\n\n📆 El turno del día *${fecha}* a las *${hora}* hs ha sido *cancelado* debido a ${this.motivoCancelacion}.\nLamentamos los inconvenientes causados.😔\n${this.lineaDeContacto()}\n\nAtte. *${this.nombreNegocio}*`;
 
       const r = await this.supabase.enviarMensajeCliente(telefono, mensaje);
       if (!r.ok) {
@@ -1229,7 +1233,7 @@ claseBloque(turno: any, mini: boolean): string {
     }
     this.mostrarPopupCancelacion = false;
     this.cerrarPopup();
-    await this.cargarTurnos();
+    await this.cargarTurnos(true);
     this.cdr.detectChanges();
   }
 
@@ -1237,6 +1241,19 @@ claseBloque(turno: any, mini: boolean): string {
   linkWhatsappDe(telefono: string, texto: string): string {
     const digitos = (telefono || '').replace(/\D/g, '').slice(-10);
     return `https://wa.me/549${digitos}?text=${encodeURIComponent(texto)}`;
+  }
+
+  /**
+   * El renglón de contacto del pie de los mensajes de cancelación/reprogramación.
+   *
+   * Antes decía "escribí 1 o reservar" / "escribí 2 o turnos": eran los comandos
+   * del bot viejo y hoy no aplican. Lo que sirve es el teléfono del local para
+   * cualquier consulta. Si no hay número cargado en Configuración no se inventa
+   * uno: el renglón no sale.
+   */
+  lineaDeContacto(): string {
+    const tel = (this.telefonoEmergencia || '').trim();
+    return tel ? `Para cualquier consulta comunicate al ${tel}.` : '';
   }
 
   cerrarPopupCancelacion() {
@@ -1248,7 +1265,7 @@ claseBloque(turno: any, mini: boolean): string {
     const telefonoCliente = this.telefonoDe(this.turnoSeleccionado);
     if (!telefonoCliente) {
       this.cerrarPopup();
-      await this.cargarTurnos();
+      await this.cargarTurnos(true);
     } else if (confirm('¿Querés enviarle un mensaje de WhatsApp al cliente?')) {
       this.motivoPostergacion = '';
       this.errorMensaje = '';
@@ -1259,7 +1276,7 @@ claseBloque(turno: any, mini: boolean): string {
       this.mostrarPopupPostergacion = true;
     } else {
       this.cerrarPopup();
-      await this.cargarTurnos();
+      await this.cargarTurnos(true);
     }
     this.cdr.detectChanges();
   }
@@ -1272,7 +1289,7 @@ claseBloque(turno: any, mini: boolean): string {
     this.linkWhatsapp = '';
     try {
       const fecha = this.formatearFechaStr(this._nuevaFechaPostergacion);
-      const mensaje = `Estimado cliente:\n\n📆 Tu turno ha sido *reprogramado* para el día *${fecha}* a las *${this._nuevaHoraPostergacion}* hs (para un: *${this._nuevoServicioPostergacion}*).${this.motivoPostergacion ? this.motivoPostergacion + '.' : ''}\nLamentamos los inconvenientes causados.😔\n_(Si deseas consultar/cancelar tus turnos escribí *2* o *turnos*)_\n\nAtte. *${this.nombreNegocio}*`;
+      const mensaje = `Estimado cliente:\n\n📆 Tu turno ha sido *reprogramado* para el día *${fecha}* a las *${this._nuevaHoraPostergacion}* hs (para un: *${this._nuevoServicioPostergacion}*).${this.motivoPostergacion ? this.motivoPostergacion + '.' : ''}\nLamentamos los inconvenientes causados.😔\n${this.lineaDeContacto()}\n\nAtte. *${this.nombreNegocio}*`;
 
       const r = await this.supabase.enviarMensajeCliente(telefono, mensaje);
       if (!r.ok) {
@@ -1289,7 +1306,7 @@ claseBloque(turno: any, mini: boolean): string {
       this.cdr.detectChanges();
     }
     this.cerrarPopupPostergacion();
-    await this.cargarTurnos();
+    await this.cargarTurnos(true);
     this.cdr.detectChanges();
   }
 

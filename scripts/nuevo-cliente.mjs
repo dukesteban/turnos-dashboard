@@ -209,6 +209,7 @@ function sqlConfiguracion() {
     telefono_emergencia: cfg.telefono_emergencia ?? '',
     tono: cfg.tono ?? 'informal',
     horas_limite_cancelacion: String(cfg.horas_limite_cancelacion ?? 12),
+    limite_aplica_reprogramacion: cfg.limite_aplica_reprogramacion ?? 'si',
     puestos_por_turno: '1',
     recordatorio_cuando: cfg.recordatorio_cuando ?? 'dia_anterior',
     recordatorio_hora: cfg.recordatorio_hora ?? '22:00',

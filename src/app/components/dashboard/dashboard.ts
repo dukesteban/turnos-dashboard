@@ -130,6 +130,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   errorMensaje = '';
   linkWhatsapp = '';
   nombreNegocio = localStorage.getItem('nombre_negocio') || '';
+  // El teléfono de emergencia va al pie del mensaje de cancelación /
+  // reprogramación. Se cachea en localStorage (lo carga app.ts al iniciar).
+  telefonoEmergencia = localStorage.getItem('telefono_emergencia') || '';
   atendidoEmpleadoId: number | null = null;
 
   // Editar/Postergar
@@ -1124,7 +1127,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     try {
       const fecha = this.formatearFecha(this.turnoSeleccionado.fecha);
       const hora = this.formatearHora(this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora);
-      const mensaje = `Estimado cliente:\n\n📆 El turno del día *${fecha}* a las *${hora}* hs ha sido *cancelado* debido a ${this.motivoCancelacion}.\nLamentamos los inconvenientes causados.😔\n_(Si deseas reservar otro turno escribí *1* o *reservar*)_\n\nAtte. *${this.nombreNegocio}*`;
+      const mensaje = `Estimado cliente:\n\n📆 El turno del día *${fecha}* a las *${hora}* hs ha sido *cancelado* debido a ${this.motivoCancelacion}.\nLamentamos los inconvenientes causados.😔\n${this.lineaDeContacto()}\n\nAtte. *${this.nombreNegocio}*`;
 
       const r = await this.supabase.enviarMensajeCliente(telefono, mensaje);
       if (!r.ok) {
@@ -1153,6 +1156,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
   linkWhatsappDe(telefono: string, texto: string): string {
     const digitos = (telefono || '').replace(/\D/g, '').slice(-10);
     return `https://wa.me/549${digitos}?text=${encodeURIComponent(texto)}`;
+  }
+
+  /**
+   * El renglón de contacto del pie de los mensajes de cancelación/reprogramación.
+   * Antes decía "escribí 1 o reservar" / "escribí 2 o turnos", que eran los
+   * comandos del bot viejo. Ahora va el teléfono del local; si no hay número
+   * cargado, el renglón no sale.
+   */
+  lineaDeContacto(): string {
+    const tel = (this.telefonoEmergencia || '').trim();
+    return tel ? `Para cualquier consulta comunicate al ${tel}.` : '';
   }
 
   cerrarPopupCancelacion() {
@@ -1188,7 +1202,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.linkWhatsapp = '';
     try {
       const fecha = this.formatearFecha(this._nuevaFechaPostergacion);
-      const mensaje = `Estimado cliente:\n\n📆 Tu turno ha sido *reprogramado* para el día *${fecha}* a las *${this._nuevaHoraPostergacion}* hs (para un: *${this._nuevoServicioPostergacion}*).${this.motivoPostergacion ? this.motivoPostergacion + '.' : ''}\nLamentamos los inconvenientes causados.😔\n_(Si deseas consultar/cancelar tus turnos escribí *2* o *turnos*)_\n\nAtte. *${this.nombreNegocio}*`;
+      const mensaje = `Estimado cliente:\n\n📆 Tu turno ha sido *reprogramado* para el día *${fecha}* a las *${this._nuevaHoraPostergacion}* hs (para un: *${this._nuevoServicioPostergacion}*).${this.motivoPostergacion ? this.motivoPostergacion + '.' : ''}\nLamentamos los inconvenientes causados.😔\n${this.lineaDeContacto()}\n\nAtte. *${this.nombreNegocio}*`;
 
       const r = await this.supabase.enviarMensajeCliente(telefono, mensaje);
       if (!r.ok) {
