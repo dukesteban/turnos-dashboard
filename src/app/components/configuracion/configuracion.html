@@ -35,6 +35,10 @@
                placeholder="Calle, número, piso/depto, ciudad, provincia — ej: Av. San Marcos 1234, Posadas, Misiones"/>
       </div>
       <div class="campo">
+        <label>Teléfono</label>
+        <input type="text" [(ngModel)]="telefonoEmergencia" [readonly]="!editandoDatos" placeholder="Ej: 3815 55 12 74"/>
+      </div>
+      <div class="campo">
         <label>Horas límite para cancelar turno</label>
         <input type="number" min="1" max="48" [(ngModel)]="horasLimiteCancelacion" [readonly]="!editandoDatos" (ngModelChange)="mensajeErrorDatos = ''"/>
       </div>
@@ -61,10 +65,6 @@
       <div class="campo">
         <label>Hora del recordatorio</label>
         <input type="time" [(ngModel)]="recordatorioHora" [readonly]="!editandoDatos" />
-      </div>
-      <div class="campo">
-        <label>Teléfono de emergencias</label>
-        <input type="text" [(ngModel)]="telefonoEmergencia" [readonly]="!editandoDatos" placeholder="Ej: 3815 55 12 74"/>
       </div>
       <div class="campo">
         <label>Tono del bot de WhatsApp</label>
