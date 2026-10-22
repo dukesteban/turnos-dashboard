@@ -450,6 +450,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  /**
+   * Salta a la ficha del cliente en Personas → Clientes.
+   *
+   * El popup del turno mostraba el nombre pero no habia forma de abrir la ficha
+   * desde ahi: habia que ir a Personas y buscarlo a mano.
+   */
+  irAlCliente(turno: any) {
+    if (!turno) return;
+    const id = turno.cliente_id;
+    this.router.navigate(['/personas/clientes'], id ? { queryParams: { cliente: id } } : {});
+  }
+
   cerrarPopup() {
     this.mostrarPopup = false;
     this.turnoSeleccionado = null;

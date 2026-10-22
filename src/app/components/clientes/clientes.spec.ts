@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { of } from 'rxjs';
 import { ClientesComponent } from './clientes';
 import { SupabaseService } from '../../services/supabase';
 import {
@@ -18,10 +20,19 @@ import {
  * toca nada. Es la diferencia entre "¿Eliminar?" y "se borró".
  */
 
-function montar(over: Record<string, any> = {}) {
+function montar(over: Record<string, any> = {}, query: Record<string, string> = {}) {
   const mock = crearSupabaseMock(over);
   TestBed.configureTestingModule({
-    providers: [{ provide: SupabaseService, useValue: mock }],
+    providers: [
+      { provide: SupabaseService, useValue: mock },
+      {
+        provide: ActivatedRoute,
+        useValue: {
+          snapshot: { queryParamMap: convertToParamMap(query) },
+          queryParamMap: of(convertToParamMap(query)),
+        },
+      },
+    ],
   });
   const cmp = TestBed.createComponent(ClientesComponent).componentInstance;
   return { cmp, mock };
@@ -40,6 +51,25 @@ describe('Clientes — carga y busqueda', () => {
     });
     await cmp.ngOnInit();
     expect(cmp.clientes.length).toBe(1);
+  });
+
+  it('abre la ficha del cliente que llega por ?cliente=ID', async () => {
+    // El popup del turno (Dashboard y Agenda) manda aca con el id. Sin esto el
+    // usuario caia en la lista y tenia que buscar el nombre a mano.
+    const { cmp } = montar(
+      { getClientes: () => Promise.resolve([clonarCliente(CLI_DANIEL), clonarCliente(CLI_MARIA)]) },
+      { cliente: String(CLI_MARIA.id) },
+    );
+    await cmp.ngOnInit();
+    expect(cmp.clienteSeleccionado?.id).toBe(CLI_MARIA.id);
+  });
+
+  it('sin ?cliente no abre ninguna ficha', async () => {
+    const { cmp } = montar({
+      getClientes: () => Promise.resolve([clonarCliente(CLI_DANIEL)]),
+    });
+    await cmp.ngOnInit();
+    expect(cmp.clienteSeleccionado).toBeNull();
   });
 
   it('sin busqueda devuelve la lista completa', async () => {

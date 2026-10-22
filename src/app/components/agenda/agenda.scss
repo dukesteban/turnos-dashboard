@@ -709,6 +709,33 @@ $h-header-semana: 72px;
   &:last-child { border-bottom: none; }
 }
 
+// El cliente del popup lleva a su ficha en Personas → Clientes. Se marca como
+// enlace (azul + flecha) para que se note que se puede tocar.
+.popup-fila-enlace {
+  cursor: pointer;
+  margin: 0 -8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  transition: background 0.15s;
+
+  &:hover { background: #eff6ff; }
+
+  .popup-valor-enlace {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #2563eb;
+    font-weight: 500;
+    text-align: right;
+  }
+
+  .flecha {
+    font-size: 1.15rem;
+    line-height: 1;
+    opacity: 0.75;
+  }
+}
+
 .popup-label {
   color: #64748b;
   font-weight: 500;

@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { AgendaComponent } from './agenda';
 import { SupabaseService } from '../../services/supabase';
 import {
@@ -19,14 +20,28 @@ import {
 
 function montar(over: Record<string, any> = {}) {
   const mock = crearSupabaseMock(over);
+  // El popup del turno salta a Personas → Clientes: el Router va de mentira y
+  // anota a donde se mando.
+  const navegaciones: { args: any[]; extra: any }[] = [];
   TestBed.configureTestingModule({
-    providers: [{ provide: SupabaseService, useValue: mock }],
+    providers: [
+      { provide: SupabaseService, useValue: mock },
+      {
+        provide: Router,
+        useValue: {
+          navigate: (args: any[], extra: any) => {
+            navegaciones.push({ args, extra });
+            return Promise.resolve(true);
+          },
+        },
+      },
+    ],
   });
   // Se devuelve el fixture y no solo la instancia: hay tests que necesitan
   // mirar el DOM renderizado (las bandas de columna de la vista Semana).
   const fixture = TestBed.createComponent(AgendaComponent);
   const cmp = fixture.componentInstance;
-  return { cmp, mock, fixture };
+  return { cmp, mock, fixture, navegaciones };
 }
 
 /** Deja que los `await` de ngOnInit terminen. */
@@ -721,5 +736,25 @@ describe('Agenda - pie de los mensajes al cliente', () => {
     const { cmp } = montar();
     cmp.telefonoEmergencia = '';
     expect(cmp.lineaDeContacto()).toBe('');
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════
+describe('Agenda - el cliente del popup lleva a su ficha', () => {
+  it('salta a /personas/clientes con el id del cliente', () => {
+    const { cmp, navegaciones } = montar();
+    cmp.irAlCliente({ id: 3, cliente_id: 12, cliente_nombre: 'Ana Ríos' });
+
+    expect(navegaciones.length).toBe(1);
+    expect(navegaciones[0].args).toEqual(['/personas/clientes']);
+    expect(navegaciones[0].extra).toEqual({ queryParams: { cliente: 12 } });
+  });
+
+  it('si el turno no tiene ficha, va a la lista igual', () => {
+    const { cmp, navegaciones } = montar();
+    cmp.irAlCliente({ id: 3, cliente_id: null });
+
+    expect(navegaciones[0].args).toEqual(['/personas/clientes']);
+    expect(navegaciones[0].extra).toEqual({});
   });
 });

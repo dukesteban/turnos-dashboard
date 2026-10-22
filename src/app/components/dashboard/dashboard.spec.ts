@@ -1114,3 +1114,23 @@ describe('Dashboard - la tabla del periodo', () => {
     expect(fechas).toEqual([...fechas].sort());
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════
+describe('Dashboard - el cliente del popup lleva a su ficha', () => {
+  it('salta a /personas/clientes con el id del cliente', () => {
+    const { cmp, navegaciones } = montar();
+    cmp.irAlCliente({ id: 3, cliente_id: 12, cliente_nombre: 'Ana Ríos' });
+
+    expect(navegaciones.length).toBe(1);
+    expect(navegaciones[0].args).toEqual(['/personas/clientes']);
+    expect(navegaciones[0].extra).toEqual({ queryParams: { cliente: 12 } });
+  });
+
+  it('si el turno no tiene ficha, va a la lista igual', () => {
+    const { cmp, navegaciones } = montar();
+    cmp.irAlCliente({ id: 3, cliente_id: null });
+
+    expect(navegaciones[0].args).toEqual(['/personas/clientes']);
+    expect(navegaciones[0].extra).toEqual({});
+  });
+});

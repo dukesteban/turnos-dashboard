@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { MonedaDirective } from '../../utils/moneda.directive';
 import { AuthService } from '../../services/auth';
 import { SupabaseService } from '../../services/supabase';
@@ -170,7 +171,8 @@ export class AgendaComponent implements OnInit, OnDestroy {
   constructor(
     private supabase: SupabaseService,
     private cdr: ChangeDetectorRef,
-    private auth: AuthService
+    private auth: AuthService,
+    private router: Router
   ) {}
 
   async ngOnInit() {
@@ -865,6 +867,18 @@ claseBloque(turno: any, mini: boolean): string {
   }
 
   // POPUP
+  /**
+   * Salta a la ficha del cliente en Personas → Clientes.
+   *
+   * El popup del turno mostraba el nombre pero no habia forma de abrir la ficha
+   * desde ahi: habia que ir a Personas y buscarlo a mano.
+   */
+  irAlCliente(turno: any) {
+    if (!turno) return;
+    const id = turno.cliente_id;
+    this.router.navigate(['/personas/clientes'], id ? { queryParams: { cliente: id } } : {});
+  }
+
   async abrirPopup(turno: any) {
     this.turnoSeleccionado = turno;
     this.mostrarPopup = true;

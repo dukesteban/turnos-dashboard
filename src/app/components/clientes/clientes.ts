@@ -1,6 +1,8 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
+import { skip } from 'rxjs';
 import { SupabaseService } from '../../services/supabase';
 import { problemaTelefono } from '../../utils/telefono';
 import { contiene, coincideTelefono } from '../../utils/texto';
@@ -39,11 +41,31 @@ export class ClientesComponent implements OnInit {
 
   diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-  constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
+  constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef, private route: ActivatedRoute) {}
 
   async ngOnInit() {
     await this.cargarClientes();
+    // `?cliente=ID` llega desde el popup del turno (Dashboard y Agenda): abre
+    // directo la ficha de ese cliente en vez de dejar al usuario buscandolo.
+    const idInicial = Number(this.route.snapshot.queryParamMap.get('cliente'));
+    if (idInicial) await this.abrirClientePorId(idInicial);
+    // La pestana queda montada: si ya estaba abierta, el parametro puede llegar
+    // despues (skip(1) saltea el valor que ya leimos del snapshot).
+    this.route.queryParamMap.pipe(skip(1)).subscribe((params) => {
+      const id = Number(params.get('cliente'));
+      if (id) this.abrirClientePorId(id);
+    });
     this.cdr.detectChanges();
+  }
+
+  private async abrirClientePorId(id: number) {
+    let c = this.clientes.find((x: any) => x.id === id);
+    if (!c) {
+      // La lista puede estar vieja (se abrio la app antes de que existiera la ficha).
+      await this.cargarClientes();
+      c = this.clientes.find((x: any) => x.id === id);
+    }
+    if (c) await this.seleccionarCliente(c);
   }
 
   // ─── Nuevo cliente ───
