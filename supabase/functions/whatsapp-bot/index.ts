@@ -3078,13 +3078,21 @@ async function llamarCompatible(
     if (r.ok) break;
 
     ultimoTexto = await r.text();
-    if ((r.status === 429 || r.status === 503) && intento < 3) {
+    // 429: tope de tokens por minuto del plan gratis. Se espera y se reintenta.
+    if (r.status === 429 && intento < 3) {
       const retry = Number(r.headers.get('retry-after') ?? 0);
       const reset = Number(String(r.headers.get('x-ratelimit-reset-tokens') ?? '').replace('s', ''));
       // Gemini no manda `retry-after`: el tiempo viene en el cuerpo ("retryDelay": "16s").
       const enCuerpo = /"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/.exec(ultimoTexto);
       const esperaSeg = retry > 0 ? retry : enCuerpo ? Number(enCuerpo[1]) : reset > 0 ? reset : 10;
       await new Promise((res) => setTimeout(res, Math.min(Math.max(esperaSeg * 1000, 1000), 20000)));
+      continue;
+    }
+    // 503: el modelo esta saturado. Reintentar el MISMO modelo suele dar 503 otra vez
+    // ("spikes in demand"), asi que se espera poco y se deja que `llamarModelo` pruebe
+    // otro modelo de la misma familia; si ninguno anda, ahi si es un error.
+    if (r.status === 503 && intento < 1) {
+      await new Promise((res) => setTimeout(res, 2000));
       continue;
     }
     throw new Error(`${p.nombre} ${r.status}: ${resumenError(ultimoTexto)}`);
@@ -3123,10 +3131,31 @@ async function llamarCompatible(
   };
 }
 
+// Modelos a los que se cae si el configurado esta saturado. Son de la misma familia
+// (Gemini 3), asi que las firmas de los `tool_use` del historial siguen siendo validas.
+const RESPALDO_GEMINI = ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest'];
+
 async function llamarModelo(system: any, historial: any[], tools: any[]): Promise<any> {
   const p = COMPATIBLES[PROVEEDOR_LLM];
-  if (p?.key) return await llamarCompatible(p, system, historial, tools);
-  return await llamarClaude(system, historial, tools);
+  if (!p?.key) return await llamarClaude(system, historial, tools);
+  try {
+    return await llamarCompatible(p, system, historial, tools);
+  } catch (e) {
+    // Solo en test (PROVEEDOR_LLM seteado) y solo para Gemini: el resto de los
+    // proveedores no comparte historial/firmas con otro.
+    if (PROVEEDOR_LLM !== 'gemini' || !/\b(429|503)\b/.test(String(e))) throw e;
+    for (const modelo of RESPALDO_GEMINI) {
+      if (modelo === p.model) continue;
+      try {
+        const r = await llamarCompatible({ ...p, model: modelo }, system, historial, tools);
+        console.warn(`Gemini ${p.model} fallo (${String(e).slice(0, 120)}); respondio ${modelo}.`);
+        return r;
+      } catch {
+        // Siguiente modelo.
+      }
+    }
+    throw e;
+  }
 }
 
 async function llamarClaude(system: any, historialOriginal: any[], tools: any[]): Promise<any> {
