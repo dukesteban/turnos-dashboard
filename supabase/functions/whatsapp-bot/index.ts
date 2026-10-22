@@ -1796,7 +1796,9 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       const { nombre_cliente, fecha_hora, empleado_id } = input;
       // El modelo sabe si el turno es para un tercero ("para mi hijo") y lo declara.
       // Sin ese dato no se puede distinguir de alguien que esta dando su propio nombre.
-      const paraOtro = input.es_para_otra_persona === true;
+      // Tolerante al tipo: algunos modelos mandan "true" como string.
+      const paraOtro =
+        input.es_para_otra_persona === true || input.es_para_otra_persona === 'true';
       // 0. resolver el cliente por numero. Si ya existe se usa su nombre de la base y no
       //    hace falta que el modelo lo haya preguntado. Si no, se crea con el nombre dado.
       const { data: yaExiste } = await sb.rpc('buscar_cliente_por_telefono', { p_telefono: telefono });
@@ -1910,8 +1912,11 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
             nombre_existente: mismo.nombre,
             detalle:
               `Ya tenemos a "${mismo.nombre}" con otro numero${finales ? ` (terminado en ${finales})` : ''}. ` +
-              `Preguntale al cliente si es la misma persona: si dice que si, llamá asociar_numero con ese cliente_id ` +
-              `y segui. Si dice que no, pedile el nombre como lo escribe en el DNI.`,
+              `Hay dos caminos: (1) si el turno es para OTRA persona (su hijo, su mama, un amigo), ` +
+              `NO asocies el numero: volvé a llamar crear_turno con el mismo nombre_cliente y ` +
+              `es_para_otra_persona: true, y la tool usa la ficha que ya existe. ` +
+              `(2) si el que escribe ES esa persona, preguntale si es la misma y, si dice que si, ` +
+              `llamá asociar_numero con ese cliente_id. Si dice que no, pedile el nombre como lo escribe en el DNI.`,
           });
         }
       }
