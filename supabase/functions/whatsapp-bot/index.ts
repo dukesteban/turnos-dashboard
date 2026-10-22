@@ -1061,7 +1061,17 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       const { data, error } = await sb.rpc('buscar_cliente_por_telefono', { p_telefono: telefono });
       if (error) return err('error_buscando_cliente', error.message);
       const c = (data ?? [])[0];
-      if (!c) return JSON.stringify({ ok: true, encontrado: false, nombre: null });
+      if (!c) {
+        return JSON.stringify({
+          ok: true,
+          encontrado: false,
+          nombre: null,
+          nota:
+            'Numero nuevo. Si el turno es para OTRA persona (su hijo, su mama, un amigo), no pidas ' +
+            'el nombre del que escribe: llama crear_turno con el nombre de quien se atiende y ' +
+            'es_para_otra_persona: true. Si el turno es para el que escribe, pedile nombre y apellido.',
+        });
+      }
       return JSON.stringify({ ok: true, encontrado: true, id: c.id, nombre: c.nombre, telefono: c.telefono });
     }
     case 'obtener_config_negocio': {
