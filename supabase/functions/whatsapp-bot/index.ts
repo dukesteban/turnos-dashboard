@@ -3560,7 +3560,7 @@ async function mensajeDeFalla(): Promise<string> {
   const base =
     'Uy, se me cayó la conexión y no pude terminar de responderte. Disculpá la molestia.';
   return tel
-    ? `${base} Para no hacerte esperar, llamanos al ${tel} y te atendemos al toque.`
+    ? `${base} Para no hacerte esperar, llamanos al ${tel} en horario de atención.`
     : `${base} Probá en unos minutos.`;
 }
 

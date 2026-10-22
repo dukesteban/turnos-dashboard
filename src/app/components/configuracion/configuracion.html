@@ -1,9 +1,10 @@
 <div class="config-page">
 
+  <div *ngIf="mensajeDatos" class="alerta exito">{{ mensajeDatos }}</div>
+  <div *ngIf="mensajeErrorDatos" class="alerta error">{{ mensajeErrorDatos }}</div>
+
   <!-- ── DATOS DEL NEGOCIO ── -->
   <div class="acordeon">
-    <div *ngIf="mensajeDatos" class="alerta exito">{{ mensajeDatos }}</div>
-    <div *ngIf="mensajeErrorDatos" class="alerta error">{{ mensajeErrorDatos }}</div>
     <div class="acordeon-header" (click)="acordeonDatos = !acordeonDatos">
       <span>⚙️ General</span>
       <span class="chevron" [class.abierto]="acordeonDatos">›</span>
@@ -38,17 +39,37 @@
         <label>Teléfono</label>
         <input type="text" [(ngModel)]="telefonoEmergencia" [readonly]="!editandoDatos" placeholder="Ej: 3815 55 12 74"/>
       </div>
+      <div class="botones-edicion">
+        <button *ngIf="!editandoDatos" class="btn-primary" (click)="editandoDatos = true">✏️ Editar</button>
+        <button *ngIf="editandoDatos" class="btn-primary" (click)="guardarConfiguracion()" [disabled]="guardando">
+          {{ guardando ? 'Guardando...' : '💾 Guardar' }}
+        </button>
+        <button *ngIf="editandoDatos" class="btn-secondary" (click)="cancelarConfiguracion()">↩️ Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── AGENTE WHATSAPP ── -->
+  <div class="acordeon">
+    <div class="acordeon-header" (click)="acordeonAgente = !acordeonAgente">
+      <span>🤖 Agente WhatsApp</span>
+      <span class="chevron" [class.abierto]="acordeonAgente">›</span>
+    </div>
+    <div class="acordeon-body" [class.visible]="acordeonAgente">
+      <div class="campo">
+        <label>Tono del bot de WhatsApp</label>
+        <select [(ngModel)]="tono" [disabled]="!editandoDatos">
+          <option value="informal">Informal — como un chat</option>
+          <option value="profesional">Profesional — claro y respetuoso</option>
+          <option value="formal">Formal — trato de "usted"</option>
+        </select>
+      </div>
       <div class="campo">
         <label>Horas límite para cancelar turno</label>
         <input type="number" min="1" max="48" [(ngModel)]="horasLimiteCancelacion" [readonly]="!editandoDatos" (ngModelChange)="mensajeErrorDatos = ''"/>
       </div>
       <div class="campo">
         <label>Aplicar ese límite también para reprogramar</label>
-        <!--
-          Es un toggle y no un número aparte: el límite es el mismo, lo que se
-          elige es si vale también para mover el turno. Apagado, el cliente puede
-          reprogramar hasta último momento (pero sigue sin poder cancelar).
-        -->
         <label class="toggle">
           <input type="checkbox" [(ngModel)]="limiteReprogramacion" [disabled]="!editandoDatos"
                  (ngModelChange)="mensajeErrorDatos = ''"/>
@@ -65,14 +86,6 @@
       <div class="campo">
         <label>Hora del recordatorio</label>
         <input type="time" [(ngModel)]="recordatorioHora" [readonly]="!editandoDatos" />
-      </div>
-      <div class="campo">
-        <label>Tono del bot de WhatsApp</label>
-        <select [(ngModel)]="tono" [disabled]="!editandoDatos">
-          <option value="informal">Informal — como un chat</option>
-          <option value="profesional">Profesional — claro y respetuoso</option>
-          <option value="formal">Formal — trato de "usted"</option>
-        </select>
       </div>
       <div class="botones-edicion">
         <button *ngIf="!editandoDatos" class="btn-primary" (click)="editandoDatos = true">✏️ Editar</button>

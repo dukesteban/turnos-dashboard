@@ -20,6 +20,7 @@ export class ConfiguracionComponent implements OnInit {
   // Acordeones
   // (acordeonPuestos se fue con la tabla `puestos`, migracion 011)
   acordeonDatos = true;
+  acordeonAgente = false;
   acordeonHorarios = false;
   // (acordeonPassword se fue con la seccion: la contrasena propia se cambia desde el
   //  candado del navbar, que lo ven los tres roles. Configuracion es solo del admin.)
