@@ -473,7 +473,7 @@ $h-header-semana: 72px;
   flex: 0 0 auto;
   padding: 10px 0;
   text-align: center;
-  border-left: 1px solid #f1f5f9;
+  border-left: 2px solid #93c5fd;
   box-sizing: border-box;
 
   .dia-nombre { font-size: 0.72rem; color: #64748b; text-transform: uppercase; }
@@ -517,7 +517,7 @@ $h-header-semana: 72px;
   /* Igual que el header: el ancho lo manda `anchoDeDia`, no el flex. */
   flex: 0 0 auto;
   position: relative;
-  border-left: 1px solid #f1f5f9;
+  border-left: 2px solid #93c5fd;
   box-sizing: border-box;
 }
 

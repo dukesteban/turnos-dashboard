@@ -1125,7 +1125,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     try {
       const fecha = this.formatearFecha(this.turnoSeleccionado.fecha);
       const hora = this.formatearHora(this.turnoSeleccionado.hora_inicio || this.turnoSeleccionado.hora);
-      const mensaje = `Estimado cliente:\n\n📆 El turno del día *${fecha}* a las *${hora}* hs ha sido *cancelado* debido a ${this.motivoCancelacion}.\nLamentamos los inconvenientes causados.😔\n${this.lineaDeContacto()}\n\nAtte. *${this.nombreNegocio}*`;
+      const mensaje = `Estimado cliente:\n\n📆 El turno del día *${fecha}* a las *${hora}* hs ha sido *cancelado* debido ${this.motivoCancelacion}.\nLamentamos los inconvenientes causados.😔\n${this.lineaDeContacto()}\n\nAtte. *${this.nombreNegocio}*`;
 
       const r = await this.supabase.enviarMensajeCliente(telefono, mensaje);
       if (!r.ok) {
