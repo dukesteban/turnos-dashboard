@@ -50,10 +50,6 @@
                  (ngModelChange)="mensajeErrorDatos = ''"/>
           <span class="slider"></span>
         </label>
-        <div class="nota-ayuda-chica">
-          Si está apagado, el bot deja reprogramar hasta último momento; cancelar sigue
-          bloqueado dentro del límite de arriba.
-        </div>
       </div>
       <div class="campo">
         <label>Recordatorio de turno</label>
@@ -412,10 +408,8 @@
     <div class="acordeon-body" [class.visible]="acordeonUsuarios">
 
       <p class="nota-ayuda">
-        Cada persona entra con su usuario y su contraseña. El rol define qué ve:
-        el <strong>administrador</strong> ve y modifica todo, el
-        <strong>secretario</strong> ve todo pero no escribe en Caja, y el
-        <strong>empleado</strong> solo ve Turnos y Agenda, con sus propios turnos.
+        <strong>Administrador</strong>: todo. <strong>Secretario</strong>: todo, sin
+        escribir en Caja. <strong>Empleado</strong>: solo sus turnos.
       </p>
 
       <div class="seccion-header">
