@@ -408,7 +408,7 @@ const TOOLS = [
   {
     name: 'crear_turno',
     description:
-      'Crea un turno despues de que el cliente confirmo. Si el cliente ya estaba registrado, no hace falta pasarle nombre_cliente (se resuelve solo por el numero). Si la hora exacta esta tomada pero el cliente ya acepto que le ofrezcas otra cercana, pasa tambien aceptar_cercania_minutos: la tool elige sola el horario libre mas cercano y te devuelve cual quedo en hora_reservada. Si no tiene disponibilidad, devuelve error.',
+      'Crea un turno despues de que el cliente confirmo. Si el cliente ya estaba registrado, no hace falta pasarle nombre_cliente (se resuelve solo por el numero). Si el turno es para OTRA persona (su hijo, su mama, un amigo), el que escribe no necesita estar registrado: pasá el nombre de quien se atiende y es_para_otra_persona: true. Si la hora exacta esta tomada pero el cliente ya acepto que le ofrezcas otra cercana, pasa tambien aceptar_cercania_minutos: la tool elige sola el horario libre mas cercano y te devuelve cual quedo en hora_reservada. Si no tiene disponibilidad, devuelve error.',
     input_schema: {
       type: 'object',
       properties: {
@@ -2779,7 +2779,7 @@ Si el cliente pide un dia cerrado, llamá a consultar_horarios_libres con esa fe
 
 SERVICIO AMBIGUO: si el cliente dice solo "un lavado", "lavar el auto" o "un encerado" y hay más de un servicio que empieza así (Lavado simple, Lavado completo, Lavado con cera), NO elijas uno por él ni pases en servicio_nombre un nombre completo que el cliente no dijo: preguntá cuál, con el precio de cada uno en el mismo renglón. Se probó y el bot tomó "un lavado" como "Lavado completo" ($20.000) sin decirlo: si el cliente contestaba que sí, le cobraba un servicio que no pidió.
 
-TURNO PARA OTRA PERSONA (CAMPO): cuando el turno es para un tercero (su hijo, su mama, un amigo), ademas de nombre_cliente pasá es_para_otra_persona: true. Ese dato hace que la tool use la ficha de esa persona aunque ya exista, sin preguntarle al que escribe si "es la misma persona", y que el telefono del turno quede en el de quien escribe. NO le pidas el nombre ni el apellido al que escribe: la reserva va a nombre de quien se atiende. Si el turno es para el propio cliente, no mandes ese campo.
+TURNO PARA OTRA PERSONA (CAMPO): cuando el turno es para un tercero (su hijo, su mama, un amigo), en nombre_cliente va el nombre de ESA persona y ademas pasá es_para_otra_persona: true. Ese dato hace que la tool use la ficha de esa persona aunque ya exista, sin preguntarle al que escribe si "es la misma persona", y que el telefono del turno quede en el de quien escribe. Aunque el numero sea NUEVO: no pidas el nombre ni el apellido del que escribe, no lo registres antes y no frenes la reserva por eso. Llamá directo a crear_turno con el nombre de quien se atiende; la ficha del que escribe se crea sola y sin nombre. Si el turno es para el propio cliente, no mandes ese campo.
 
 SI PIDEN HABLAR CON UNA PERSONA O CON EL LOCAL: no alcanza con decir que no podes transferir. Pasales el telefono del local (obtener_config_negocio, clave telefono_emergencia) y deciles que los atienden en horario de atencion; despues ofrece seguir ayudando por aca.
 
