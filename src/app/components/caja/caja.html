@@ -456,7 +456,9 @@
           </thead>
           <tbody>
             <tr *ngFor="let p of pagosEmpleadoActual">
-              <td *ngIf="mostrarTodos" class="celda-principal">{{ nombreDeEmpleado(p.empleado_id) }}</td>
+              <td *ngIf="mostrarTodos" class="celda-principal">
+                <span class="enlace-ficha" (click)="elegirEmpleado(p.empleado_id)">{{ nombreDeEmpleado(p.empleado_id) }}</span>
+              </td>
               <td>{{ formatearFechaCorta(p.fecha) }}</td>
               <td>${{ p.monto | number }}</td>
               <td>{{ p.metodo }}</td>
@@ -598,9 +600,7 @@
           <div class="campo">
             <label>Método</label>
             <select [(ngModel)]="nuevoPago.metodo" (ngModelChange)="mensajeErrorPagos = ''">
-              <option value="efectivo">Efectivo</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="otro">Otro</option>
+              <option *ngFor="let m of metodosPago" [value]="m.nombre">{{ m.nombre }}</option>
             </select>
           </div>
           <div class="campo">
@@ -684,9 +684,7 @@
             <label>Método</label>
             <select [(ngModel)]="nuevoPagoProveedor.metodo"
                     (ngModelChange)="mensajeErrorPagoProveedor = ''">
-              <option value="efectivo">Efectivo</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="otro">Otro</option>
+              <option *ngFor="let m of metodosPago" [value]="m.nombre">{{ m.nombre }}</option>
             </select>
           </div>
 
@@ -914,7 +912,9 @@
           </thead>
           <tbody>
             <tr *ngFor="let c of comprasProveedorActual">
-              <td *ngIf="mostrarTodos" class="celda-principal">{{ nombreDeProveedor(c.proveedor_id) }}</td>
+              <td *ngIf="mostrarTodos" class="celda-principal">
+                <span class="enlace-ficha" (click)="elegirProveedor(c.proveedor_id)">{{ nombreDeProveedor(c.proveedor_id) }}</span>
+              </td>
               <td>{{ formatearFechaCorta(c.fecha) }}</td>
               <td>{{ c.concepto }}</td>
               <td>{{ c.cantidad }}</td>
@@ -976,7 +976,9 @@
           </thead>
           <tbody>
             <tr *ngFor="let p of pagosProveedorActual">
-              <td *ngIf="mostrarTodos" class="celda-principal">{{ nombreDeProveedor(p.proveedor_id) }}</td>
+              <td *ngIf="mostrarTodos" class="celda-principal">
+                <span class="enlace-ficha" (click)="elegirProveedor(p.proveedor_id)">{{ nombreDeProveedor(p.proveedor_id) }}</span>
+              </td>
               <td>{{ formatearFechaCorta(p.fecha) }}</td>
               <td>${{ p.monto | number }}</td>
               <td>{{ p.metodo }}</td>

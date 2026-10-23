@@ -23,7 +23,7 @@ export type Rol = 'admin' | 'secretario' | 'empleado';
 
 export const ROLES: { clave: Rol; nombre: string; quePuede: string }[] = [
   { clave: 'admin', nombre: 'Administrador', quePuede: 'Ve y modifica todo, y administra los usuarios.' },
-  { clave: 'secretario', nombre: 'Secretario', quePuede: 'Ve todo, pero no escribe ni borra nada de Caja.' },
+  { clave: 'secretario', nombre: 'Secretario', quePuede: 'Ve todo, registra pagos y deudas en Caja, pero no borra ni edita lo ajeno.' },
   { clave: 'empleado', nombre: 'Empleado', quePuede: 'Solo Turnos y Agenda, y unicamente sus propios turnos.' },
 ];
 
@@ -168,11 +168,12 @@ export class AuthService {
   /**
    * ¿Puede ESCRIBIR en Caja?
    *
-   * La única diferencia entre admin y secretario: el secretario puede abrir Caja y ver
-   * los tres cuadros, pero no registra pagos ni deudas.
+   * Admin: todo. Secretario: puede registrar pagos (empleados y proveedores) y crear
+   * deudas (compras), pero NO puede borrar ni editar lo que no sea suyo.
    */
   puedeEscribirCaja(): boolean {
-    return this.getRol() === 'admin';
+    const rol = this.getRol();
+    return rol === 'admin' || rol === 'secretario';
   }
 
   /**

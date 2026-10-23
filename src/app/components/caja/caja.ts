@@ -147,6 +147,8 @@ export class CajaComponent implements OnInit {
   mostrarFormCompra = false;
   nuevaCompra: any = { proveedor_id: null, fecha: '', concepto: '', cantidad: 1, monto: null, notas: '' };
   compraEditando: any = null;
+  /** Métodos de pago activos desde la base (para selects con el nombre correcto). */
+  metodosPago: any[] = [];
   /** Pago a empleado en edición (null = alta). */
   pagoEditando: any = null;
   /** Pago a proveedor en edición (null = alta). */
@@ -350,7 +352,7 @@ export class CajaComponent implements OnInit {
     const { desde, hasta } = this.getRango();
     // Las tres pestañas en paralelo: son independientes y van a la misma base.
     // Con `await` una detrás de otra el usuario esperaría 3x lo necesario.
-    const [turnos, pagos, comisiones, compras, proveedores, empleados, comisionesServicio, pagosProveedor] = await Promise.all([
+    const [turnos, pagos, comisiones, compras, proveedores, empleados, comisionesServicio, pagosProveedor, metodosPago] = await Promise.all([
       this.supabase.getGanancias(desde, hasta),
       this.supabase.getPagosEmpleado(desde, hasta),
       this.supabase.getComisionesPeriodo(desde, hasta),
@@ -377,6 +379,9 @@ export class CajaComponent implements OnInit {
       // Una lista vacía es mucho mejor que una pantalla en blanco por
       // una tabla que todavía no existe en la base.
       this.supabase.getPagosProveedor(desde, hasta).catch(() => []),
+
+      // Métodos de pago activos, para los selects con el nombre correcto.
+      this.supabase.getMetodosPago(),
     ]);
     this.turnos = turnos;
     this.pagos = pagos;
@@ -386,6 +391,7 @@ export class CajaComponent implements OnInit {
     this.todosLosEmpleados = empleados;
     this.comisionesServicio = comisionesServicio;
     this.pagosProveedor = pagosProveedor;
+    this.metodosPago = metodosPago;
     this.armarPagosPorEmpleado();
     this.armarSaldoPorProveedor();
     this.cargando = false;

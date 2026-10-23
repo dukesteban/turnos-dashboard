@@ -833,3 +833,11 @@
   margin-left: 4px;
   vertical-align: middle;
 }
+
+// Enlaces a fichas de cliente/proveedor en tablas de Caja
+.enlace-ficha {
+  color: #475569;
+  font-weight: 600;
+  cursor: pointer;
+  &:hover { color: #1e293b; }
+}

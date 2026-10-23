@@ -103,16 +103,16 @@ describe('AuthService - permisos por rol', () => {
   });
 
   describe('escribir en Caja', () => {
-    it('solo el admin', async () => {
+    it('admin y secretario', async () => {
       expect((await conSesion('admin')).puedeEscribirCaja()).toBe(true);
-      expect((await conSesion('secretario')).puedeEscribirCaja()).toBe(false);
+      expect((await conSesion('secretario')).puedeEscribirCaja()).toBe(true);
       expect((await conSesion('empleado', 1)).puedeEscribirCaja()).toBe(false);
     });
 
-    it('el secretario puede VER caja pero no escribir: son dos preguntas distintas', async () => {
+    it('el secretario puede VER caja y escribir: son dos preguntas distintas', async () => {
       const auth = await conSesion('secretario');
       expect(auth.puedeVer('caja')).toBe(true);
-      expect(auth.puedeEscribirCaja()).toBe(false);
+      expect(auth.puedeEscribirCaja()).toBe(true);
     });
   });
 
