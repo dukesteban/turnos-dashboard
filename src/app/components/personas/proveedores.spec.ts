@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { of } from 'rxjs';
 import { ProveedoresComponent } from './proveedores';
 import { SupabaseService } from '../../services/supabase';
 import { crearSupabaseMock } from '../../testing/supabase-mock';
@@ -19,10 +21,19 @@ import { crearSupabaseMock } from '../../testing/supabase-mock';
  * los tests pasarían igual y la pantalla haría otra cosa.
  */
 
-function montar(over: Record<string, any> = {}) {
+function montar(over: Record<string, any> = {}, query: Record<string, string> = {}) {
   const mock = crearSupabaseMock(over);
   TestBed.configureTestingModule({
-    providers: [{ provide: SupabaseService, useValue: mock }],
+    providers: [
+      { provide: SupabaseService, useValue: mock },
+      {
+        provide: ActivatedRoute,
+        useValue: {
+          snapshot: { queryParamMap: convertToParamMap(query) },
+          queryParamMap: of(convertToParamMap(query)),
+        },
+      },
+    ],
   });
   const fixture = TestBed.createComponent(ProveedoresComponent);
   return { cmp: fixture.componentInstance, mock, fixture };

@@ -1,6 +1,8 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
+import { skip } from 'rxjs';
 import { SupabaseService } from '../../services/supabase';
 import { paraComparar, contiene } from '../../utils/texto';
 
@@ -68,10 +70,28 @@ export class ProveedoresComponent implements OnInit {
     { clave: 'notas', label: 'Notas', placeholder: '' },
   ];
 
-  constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
+  constructor(
+    private supabase: SupabaseService,
+    private cdr: ChangeDetectorRef,
+    private route: ActivatedRoute,
+  ) {}
 
   async ngOnInit() {
     await this.cargarDatos();
+    // `?proveedor=ID` viene del popup de Caja (Compras/Servicios, Pagos realizados):
+    // abre directo la ficha de ese proveedor en vez de dejar al usuario buscandolo.
+    this.route.queryParamMap.pipe(skip(1)).subscribe((params) => {
+      const id = Number(params.get('proveedor'));
+      if (id) this.abrirProveedorPorId(id);
+    });
+    // Primer valor (snapshot) para la carga inicial.
+    const idInicial = Number(this.route.snapshot.queryParamMap.get('proveedor'));
+    if (idInicial) await this.abrirProveedorPorId(idInicial);
+  }
+
+  private abrirProveedorPorId(id: number) {
+    const p = this.proveedores.find((x: any) => x.id === id);
+    if (p) this.seleccionarProveedor(p);
   }
 
   async cargarDatos() {
