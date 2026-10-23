@@ -385,6 +385,7 @@ export class CajaComponent implements OnInit {
     this.armarPagosPorEmpleado();
     this.armarSaldoPorProveedor();
     this.cargando = false;
+    this.cargandoNavegacion = false;
     this.cdr.detectChanges();
     this.scrollToHoy();
   }
