@@ -83,7 +83,8 @@ export class PersonasComponent {
     this.route.queryParamMap.subscribe((params) => {
       const clienteId = params.get('cliente');
       const empleadoId = params.get('empleado');
-      const queryParams = { ...params.keys.reduce((acc: any, key) => ({ ...acc, [key]: params.get(key) }), {}) };
+      // `params.keys` es un iterable, hay que pasarlo a array para usar reduce
+      const queryParams = [...params.keys].reduce((acc: any, key) => ({ ...acc, [key]: params.get(key) }), {});
       if (clienteId && this.tabActual !== 'clientes') {
         this.router.navigate(['/personas/clientes'], { queryParams, replaceUrl: true });
       } else if (empleadoId && this.tabActual !== 'empleados') {
