@@ -992,15 +992,22 @@ describe('Dashboard - saltar a una fecha', () => {
     cmp.vistasTurnos = 'semana';
     cmp.irAFechaTurnos('2026-08-12');    // semana del 10 al 16
     expect(cmp.turnosFiltrados.length).toBe(1);
+    // Orden por defecto descendente (más nuevo arriba)
     expect(cmp.turnosFiltrados[0].fecha).toBe('2026-08-10');
 
     cmp.irAFechaTurnos('2026-08-19');    // semana del 17 al 23
     expect(cmp.turnosFiltrados.length).toBe(2);
-    expect(cmp.turnosFiltrados[0].fecha).toBe('2026-08-17');
+    // El más nuevo (20) arriba
+    expect(cmp.turnosFiltrados[0].fecha).toBe('2026-08-20');
+    expect(cmp.turnosFiltrados[1].fecha).toBe('2026-08-17');
 
     cmp.vistasTurnos = 'mes';
     cmp.irAFechaTurnos('2026-08-05');    // agosto entero
     expect(cmp.turnosFiltrados.length).toBe(3);
+    // Descendente: 20, 17, 10
+    expect(cmp.turnosFiltrados[0].fecha).toBe('2026-08-20');
+    expect(cmp.turnosFiltrados[1].fecha).toBe('2026-08-17');
+    expect(cmp.turnosFiltrados[2].fecha).toBe('2026-08-10');
 
     cmp.irAFechaTurnos('2026-09-05');    // septiembre: ninguno
     expect(cmp.turnosFiltrados.length).toBe(0);

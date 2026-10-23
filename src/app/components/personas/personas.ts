@@ -1,6 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, NavigationEnd, ActivatedRoute } from '@angular/router';
 import { ClientesComponent } from '../clientes/clientes';
 import { EmpleadosComponent } from '../empleados/empleados';
 import { ProveedoresComponent } from './proveedores';
@@ -66,13 +66,28 @@ export class PersonasComponent {
   /** Las tres pestañas que existen. Cualquier otra cosa en la URL no es una. */
   private static readonly TABS = ['clientes', 'empleados', 'proveedores'];
 
-  constructor(private router: Router) {
+  constructor(private router: Router, private route: ActivatedRoute) {
     this.syncTab();
     // Cada navegación cambia la pestaña activa. Sin esto, el botón marcado se
     // queda en la anterior.
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
-      .subscribe(() => this.syncTab());
+      .subscribe(() => {
+        this.syncTab();
+        // Scroll al top al cambiar de pestaña dentro de Personas
+        // (incluye navegación desde Dashboard/Agenda con ?cliente= o ?empleado=)
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      });
+    // Si la URL trae ?cliente= o ?empleado=, fuerza la pestaña correcta
+    this.route.queryParamMap.subscribe((params) => {
+      const clienteId = params.get('cliente');
+      const empleadoId = params.get('empleado');
+      if (clienteId && this.tabActual !== 'clientes') {
+        this.router.navigate(['/personas/clientes'], { replaceUrl: true });
+      } else if (empleadoId && this.tabActual !== 'empleados') {
+        this.router.navigate(['/personas/empleados'], { replaceUrl: true });
+      }
+    });
   }
 
   /**

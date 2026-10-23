@@ -488,7 +488,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   /** Orden de la tabla del período. Se cambia tocando el encabezado. */
-  ordenPeriodo: { campo: string, asc: boolean } = { campo: 'fecha', asc: true };
+  ordenPeriodo: { campo: string, asc: boolean } = { campo: 'fecha', asc: false };
 
   ordenarPeriodo(campo: string) {
     this.ordenPeriodo = {

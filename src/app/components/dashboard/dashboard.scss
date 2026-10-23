@@ -699,11 +699,12 @@ tr.vencido td { background: #fff7ed; }
   vertical-align: middle;
 }
 
-// Nombre de cliente/empleado en las tablas: lleva a su ficha. No subrayado
-// hasta el hover para que la tabla no parezca un menú de links.
+// Nombre de cliente/empleado en las tablas: lleva a su ficha.
+// Negrita + gris medio oscuro, sin azul, para que no parezca un menú de links.
 .enlace-ficha {
-  color: #2563eb;
+  color: #475569;
+  font-weight: 600;
   cursor: pointer;
 
-  &:hover { text-decoration: underline; }
+  &:hover { color: #1e293b; }
 }
