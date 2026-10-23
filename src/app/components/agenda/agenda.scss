@@ -22,6 +22,19 @@
   height: calc(100vh - var(--chrome-app));
 }
 
+// Pantallas grandes (1920px+): la grilla se ensancha para aprovechar el ancho
+@media (min-width: 1600px) {
+  .agenda-page {
+    max-width: 1500px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .agenda-page {
+    max-width: 1700px;
+  }
+}
+
 // CONTROLES
 /* La barra de Día/Semana y la fecha se queda pegada al scrollear.
  *

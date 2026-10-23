@@ -17,6 +17,19 @@
   margin: 0 auto;
 }
 
+// Pantallas grandes (1920px+): la grilla se ensancha para aprovechar el ancho
+@media (min-width: 1600px) {
+  .caja-page {
+    max-width: 1500px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .caja-page {
+    max-width: 1700px;
+  }
+}
+
 .caja-page .seccion {
   // `hidden` y no `auto`: la tabla tiene su propio wrapper con scroll
   // (`.tabla-scroll`). Si la tarjeta scrolleara, haría scroll horizontal la

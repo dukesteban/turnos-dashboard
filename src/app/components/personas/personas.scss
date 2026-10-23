@@ -24,6 +24,17 @@
   margin: 0 auto;
 }
 
-@media (max-width: 700px) {
-  .tabs-personas { padding: 10px 14px 0; }
+// Pantallas grandes (1920px+): la grilla se ensancha para aprovechar el ancho
+@media (min-width: 1600px) {
+  .tabs-personas,
+  .tab-panel {
+    max-width: 1500px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .tabs-personas,
+  .tab-panel {
+    max-width: 1700px;
+  }
 }

@@ -22,6 +22,19 @@
   margin: 0 auto;
 }
 
+// Pantallas grandes (1920px+): la grilla se ensancha para aprovechar el ancho
+@media (min-width: 1600px) {
+  .dashboard-page {
+    max-width: 1500px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .dashboard-page {
+    max-width: 1700px;
+  }
+}
+
 // ═══ ACCESOS RÁPIDOS A CAJA ═══
 // Los tres "registrar" de Caja, siempre a mano desde la pantalla de turnos.
 //
