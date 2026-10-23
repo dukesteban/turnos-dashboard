@@ -111,20 +111,25 @@
       <table class="tabla">
         <thead>
           <tr>
-            <th>Hora</th>
-            <th>Cliente</th>
-            <th class="ocultar-movil">Servicio</th>
-            <th class="ocultar-xs">Empleado</th>
-            <th class="ocultar-movil">Precio</th>
-            <th>Estado</th>
+            <th class="th-orden" (click)="ordenarHoy('hora')">Hora<span class="flecha-orden">{{ flechaOrdenHoy('hora') }}</span></th>
+            <th class="th-orden" (click)="ordenarHoy('cliente')">Cliente<span class="flecha-orden">{{ flechaOrdenHoy('cliente') }}</span></th>
+            <th class="ocultar-movil th-orden" (click)="ordenarHoy('servicio')">Servicio<span class="flecha-orden">{{ flechaOrdenHoy('servicio') }}</span></th>
+            <th class="ocultar-xs th-orden" (click)="ordenarHoy('empleado')">Empleado<span class="flecha-orden">{{ flechaOrdenHoy('empleado') }}</span></th>
+            <th class="ocultar-movil th-orden" (click)="ordenarHoy('precio')">Precio<span class="flecha-orden">{{ flechaOrdenHoy('precio') }}</span></th>
+            <th class="th-orden" (click)="ordenarHoy('estado')">Estado<span class="flecha-orden">{{ flechaOrdenHoy('estado') }}</span></th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let turno of turnosHoyVisibles" [class.vencido]="esVencido(turno)" (click)="abrirPopup(turno)" style="cursor:pointer">
             <td>{{ turno.hora?.slice(0,5) }}</td>
-            <td [style.color]="!telefonoDe(turno) ? '#dc2626' : ''" >{{ turno.cliente_nombre }}</td>
+            <td>
+              <span class="enlace-ficha" [style.color]="!telefonoDe(turno) ? '#dc2626' : ''"
+                    (click)="irAlCliente(turno); $event.stopPropagation()">{{ turno.cliente_nombre }}</span>
+            </td>
             <td class="ocultar-movil">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</td>
-            <td class="celda-empleado ocultar-xs">{{ nombreEmpleadoDeTurno(turno) }}</td>
+            <td class="celda-empleado ocultar-xs">
+              <span class="enlace-ficha" (click)="irAlEmpleado(turno); $event.stopPropagation()">{{ nombreEmpleadoDeTurno(turno) }}</span>
+            </td>
             <td class="ocultar-movil">${{ (turno.estado === 'atendido' && turno.precio_final ? turno.precio_final : turno.precio) | number }}</td>
             <td>
               <span class="badge" [ngClass]="esVencido(turno) ? 'vencido' : turno.estado">
@@ -203,22 +208,27 @@
       <table class="tabla">
         <thead>
           <tr>
-            <th>Fecha</th>
-            <th>Hora</th>
-            <th>Cliente</th>
-            <th class="ocultar-movil">Servicio</th>
-            <th class="ocultar-xs">Empleado</th>
-            <th class="ocultar-movil">Precio</th>
-            <th>Estado</th>
+            <th class="th-orden" (click)="ordenarPeriodo('fecha')">Fecha<span class="flecha-orden">{{ flechaOrden('fecha') }}</span></th>
+            <th class="th-orden" (click)="ordenarPeriodo('hora')">Hora<span class="flecha-orden">{{ flechaOrden('hora') }}</span></th>
+            <th class="th-orden" (click)="ordenarPeriodo('cliente')">Cliente<span class="flecha-orden">{{ flechaOrden('cliente') }}</span></th>
+            <th class="ocultar-movil th-orden" (click)="ordenarPeriodo('servicio')">Servicio<span class="flecha-orden">{{ flechaOrden('servicio') }}</span></th>
+            <th class="ocultar-xs th-orden" (click)="ordenarPeriodo('empleado')">Empleado<span class="flecha-orden">{{ flechaOrden('empleado') }}</span></th>
+            <th class="ocultar-movil th-orden" (click)="ordenarPeriodo('precio')">Precio<span class="flecha-orden">{{ flechaOrden('precio') }}</span></th>
+            <th class="th-orden" (click)="ordenarPeriodo('estado')">Estado<span class="flecha-orden">{{ flechaOrden('estado') }}</span></th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let turno of turnosFiltrados" [class.vencido]="esVencido(turno)" (click)="abrirPopup(turno)" style="cursor:pointer">
             <td>{{ formatearFechaSinAnio(turno.fecha) }}</td>
             <td>{{ turno.hora?.slice(0,5) }}</td>
-            <td [style.color]="!telefonoDe(turno) ? '#dc2626' : ''" >{{ turno.cliente_nombre }}</td>
+            <td>
+              <span class="enlace-ficha" [style.color]="!telefonoDe(turno) ? '#dc2626' : ''"
+                    (click)="irAlCliente(turno); $event.stopPropagation()">{{ turno.cliente_nombre }}</span>
+            </td>
             <td class="ocultar-movil">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</td>
-            <td class="celda-empleado ocultar-xs">{{ nombreEmpleadoDeTurno(turno) }}</td>
+            <td class="celda-empleado ocultar-xs">
+              <span class="enlace-ficha" (click)="irAlEmpleado(turno); $event.stopPropagation()">{{ nombreEmpleadoDeTurno(turno) }}</span>
+            </td>
             <td class="ocultar-movil">${{ (turno.estado === 'atendido' && turno.precio_final ? turno.precio_final : turno.precio) | number }}</td>
             <td>
               <span class="badge" [ngClass]="esVencido(turno) ? 'vencido' : turno.estado">
@@ -261,7 +271,10 @@
             <div class="popup-fila"><span class="popup-label">Fecha</span><span>{{ formatearFecha(turnoSeleccionado.fecha) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Hora</span><span>{{ formatearHora(turnoSeleccionado.hora_inicio || turnoSeleccionado.hora) }}</span></div>
             <div class="popup-fila"><span class="popup-label">Duración</span><span>{{ turnoSeleccionado.duracion_minutos || 45 }} min</span></div>
-            <div class="popup-fila"><span class="popup-label">Empleado</span><span>{{ nombreEmpleadoDeTurno(turnoSeleccionado) }}</span></div>
+            <div class="popup-fila popup-fila-enlace" (click)="irAlEmpleado(turnoSeleccionado)" title="Editar la ficha del empleado">
+              <span class="popup-label">Empleado</span>
+              <span class="popup-valor-enlace">{{ nombreEmpleadoDeTurno(turnoSeleccionado) }}<span class="flecha">›</span></span>
+            </div>
             <div class="popup-fila"><span class="popup-label">Estado</span><span class="badge" [ngClass]="turnoSeleccionado.estado">{{ turnoSeleccionado.estado }}</span></div>
             <div *ngIf="turnoSeleccionado.estado === 'atendido'">
               <div class="popup-fila" *ngIf="turnoSeleccionado.metodo_pago">

@@ -684,3 +684,26 @@ tr.vencido td { background: #fff7ed; }
     text-decoration: underline;
   }
 }
+// ── ENCABEZADOS QUE ORDENAN ───────────────────────────────────────────
+.th-orden {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+
+  &:hover { color: #1d4ed8; }
+}
+
+.flecha-orden {
+  font-size: 0.62rem;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+// Nombre de cliente/empleado en las tablas: lleva a su ficha. No subrayado
+// hasta el hover para que la tabla no parezca un menú de links.
+.enlace-ficha {
+  color: #2563eb;
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
+}

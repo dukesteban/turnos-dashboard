@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { of } from 'rxjs';
 import { EmpleadosComponent } from './empleados';
 import { SupabaseService } from '../../services/supabase';
 import { AuthService } from '../../services/auth';
@@ -16,7 +18,7 @@ import { crearSupabaseMock, EMP_JUAN, EMP_ESTEBAN, cloneEmpleado, turno } from '
  * Juan = L-V. Esteban = L,M,J,V (no miércoles).
  */
 
-function montar(over: Record<string, any> = {}) {
+function montar(over: Record<string, any> = {}, query: Record<string, string> = {}) {
   const { __rol: rol, ...mockOver } = over;
   const mock = crearSupabaseMock(mockOver);
   // El componente ahora lee el rol para decidir si muestra el bloque de acceso, así
@@ -27,6 +29,13 @@ function montar(over: Record<string, any> = {}) {
     providers: [
       { provide: SupabaseService, useValue: mock },
       { provide: AuthService, useValue: auth },
+      {
+        provide: ActivatedRoute,
+        useValue: {
+          snapshot: { queryParamMap: convertToParamMap(query) },
+          queryParamMap: of(convertToParamMap(query)),
+        },
+      },
     ],
   });
   const cmp = TestBed.createComponent(EmpleadosComponent).componentInstance;

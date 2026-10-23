@@ -66,7 +66,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * arriba y también la fuente de la tabla, para no tener dos copias de lo mismo.
    */
   get turnosHoyVisibles(): any[] {
-    return soloLosTurnosDe(this.turnosHoy, this.empleadoId(this.filtroEmpleadoHoy));
+    const filas = soloLosTurnosDe(this.turnosHoy, this.empleadoId(this.filtroEmpleadoHoy));
+    const { campo, asc } = this.ordenHoy;
+    const signo = asc ? 1 : -1;
+    return [...filas].sort((a, b) => {
+      const va = this.valorDeTurno(a, campo);
+      const vb = this.valorDeTurno(b, campo);
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * signo;
+      return String(va).localeCompare(String(vb), 'es', { numeric: true }) * signo;
+    });
   }
 
   /** Nombre del empleado elegido, para el mensaje de "no hay turnos". */
@@ -367,8 +375,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Hoy ya tiene su propia tabla arriba: repetirlo aca hace que el mismo
     // turno aparezca dos veces en la misma pantalla.
     const hoy = this.fechaLocal(new Date());
-    return soloLosTurnosDe(delPeriodo, this.empleadoId(this.filtroEmpleadoPeriodo))
+    const filas = soloLosTurnosDe(delPeriodo, this.empleadoId(this.filtroEmpleadoPeriodo))
       .filter(t => t.fecha !== hoy);
+    // Orden por el encabezado tocado. `sort` es estable: con fechas repetidas
+    // se conserva el orden de la base (hora ascendente).
+    const { campo, asc } = this.ordenPeriodo;
+    const signo = asc ? 1 : -1;
+    return [...filas].sort((a, b) => {
+      const va = this.valorDeTurno(a, campo);
+      const vb = this.valorDeTurno(b, campo);
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * signo;
+      return String(va).localeCompare(String(vb), 'es', { numeric: true }) * signo;
+    });
   }
 
   cambiarVistaTurnos(v: 'semana' | 'mes') {
@@ -460,6 +478,62 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (!turno) return;
     const id = turno.cliente_id;
     this.router.navigate(['/personas/clientes'], id ? { queryParams: { cliente: id } } : {});
+  }
+
+  /** Mismo salto, del lado del empleado: Personas → Empleados. */
+  irAlEmpleado(turno: any) {
+    if (!turno) return;
+    const id = this.empleadoDeTurno(turno) ?? turno.empleado_id;
+    this.router.navigate(['/personas/empleados'], id ? { queryParams: { empleado: id } } : {});
+  }
+
+  /** Orden de la tabla del período. Se cambia tocando el encabezado. */
+  ordenPeriodo: { campo: string, asc: boolean } = { campo: 'fecha', asc: true };
+
+  ordenarPeriodo(campo: string) {
+    this.ordenPeriodo = {
+      campo,
+      asc: this.ordenPeriodo.campo === campo ? !this.ordenPeriodo.asc : true,
+    };
+  }
+
+  /** La flechita del encabezado, o vacío si esa columna no manda el orden. */
+  flechaOrden(campo: string): string {
+    if (this.ordenPeriodo.campo !== campo) return '';
+    return this.ordenPeriodo.asc ? '▲' : '▼';
+  }
+
+  /** Orden de la tabla "Turnos de hoy". */
+  ordenHoy: { campo: string, asc: boolean } = { campo: 'hora', asc: true };
+
+  ordenarHoy(campo: string) {
+    this.ordenHoy = {
+      campo,
+      asc: this.ordenHoy.campo === campo ? !this.ordenHoy.asc : true,
+    };
+  }
+
+  flechaOrdenHoy(campo: string): string {
+    if (this.ordenHoy.campo !== campo) return '';
+    return this.ordenHoy.asc ? '▲' : '▼';
+  }
+
+  /** Valor comparable de una fila para el orden por columna. */
+  private valorDeTurno(t: any, campo: string): string | number {
+    switch (campo) {
+      case 'fecha': return t.fecha || '';
+      case 'hora': return (t.hora || '').slice(0, 5);
+      case 'cliente': return t.cliente_nombre || '';
+      case 'servicio':
+        return t.estado === 'atendido' && t.servicio_nombre_final
+          ? t.servicio_nombre_final
+          : (t.servicio_nombre || '');
+      case 'empleado': return this.nombreEmpleadoDeTurno(t);
+      case 'precio':
+        return Number(t.estado === 'atendido' && t.precio_final ? t.precio_final : t.precio) || 0;
+      case 'estado': return this.esVencido(t) ? 'vencido' : (t.estado || '');
+    }
+    return '';
   }
 
   cerrarPopup() {

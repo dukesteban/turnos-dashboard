@@ -879,6 +879,13 @@ claseBloque(turno: any, mini: boolean): string {
     this.router.navigate(['/personas/clientes'], id ? { queryParams: { cliente: id } } : {});
   }
 
+  /** Mismo salto, del lado del empleado: Personas → Empleados. */
+  irAlEmpleado(turno: any) {
+    if (!turno) return;
+    const id = this.empleadoDeTurno(turno) ?? turno.empleado_id;
+    this.router.navigate(['/personas/empleados'], id ? { queryParams: { empleado: id } } : {});
+  }
+
   async abrirPopup(turno: any) {
     this.turnoSeleccionado = turno;
     this.mostrarPopup = true;

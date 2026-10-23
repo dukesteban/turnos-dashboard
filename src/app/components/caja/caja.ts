@@ -36,6 +36,62 @@ export class CajaComponent implements OnInit {
   tab: string = 'ingresos';
 
   /**
+   * Orden de cada tabla, por nombre de tabla.
+   *
+   * `{ campo, asc }` por tabla y no un solo orden global: cada tabla se ordena
+   * por su cuenta y tocar la "Fecha" de una no cambia las otras. La clave es el
+   * nombre que usa el template en `ordenar('...', '...')`.
+   *
+   * Sin entrada = orden por defecto de esa tabla (fecha ascendente en los
+   * detalles, alfabético en los resúmenes).
+   */
+  ordenes: Record<string, { campo: string, asc: boolean }> = {};
+
+  /** Toca un encabezado: mismo campo invierte, campo nuevo arranca ascendente. */
+  ordenar(tabla: string, campo: string) {
+    const actual = this.ordenes[tabla];
+    this.ordenes[tabla] = {
+      campo,
+      asc: actual && actual.campo === campo ? !actual.asc : true,
+    };
+    this.cdr.detectChanges();
+  }
+
+  /** La flechita del encabezado, o vacío si esa columna no manda el orden. */
+  flechaOrden(tabla: string, campo: string): string {
+    const o = this.ordenes[tabla];
+    if (!o || o.campo !== campo) return '';
+    return o.asc ? '▲' : '▼';
+  }
+
+  /**
+   * Devuelve una copia ordenada de `filas`.
+   *
+   * `valores` mapea cada campo clickeable a su valor comparable; `porDefecto`
+   * es el orden de la tabla cuando no se tocó ningún encabezado. Se ordena una
+   * copia para no mutar las listas originales, que otros getters comparten.
+   */
+  private ordenarFilas<T>(
+    tabla: string,
+    filas: T[],
+    valores: Record<string, (f: T) => string | number>,
+    porDefecto: (a: T, b: T) => number,
+  ): T[] {
+    const copia = [...filas];
+    const o = this.ordenes[tabla];
+    if (!o) return copia.sort(porDefecto);
+    const valor = valores[o.campo];
+    if (!valor) return copia.sort(porDefecto);
+    const signo = o.asc ? 1 : -1;
+    return copia.sort((a, b) => {
+      const va = valor(a);
+      const vb = valor(b);
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * signo;
+      return String(va ?? '').localeCompare(String(vb ?? ''), 'es', { numeric: true }) * signo;
+    });
+  }
+
+  /**
  * Granularidad del período de toda la pantalla.
  *
  * `semana` se agregó porque el bloque "total a pagar por empleado" necesita
@@ -260,6 +316,10 @@ export class CajaComponent implements OnInit {
     this.mensajePagos = '';
     this.mensajeErrorPagos = '';
     this.cdr.detectChanges();
+    // El gráfico de Ingresos se destruye al salir de la pestaña y vuelve a
+    // nacer con scroll en 0 (día 1). Al volver hay que centrarlo otra vez en
+    // hoy, igual que cuando se entra desde Agenda.
+    if (t === 'ingresos') this.scrollToHoy();
   }
 
   async cargarHorarios() {
@@ -366,7 +426,18 @@ export class CajaComponent implements OnInit {
     });
     this.saldoPorProveedor = [...porId.values()]
       .map((f: any) => ({ ...f, saldo: f.comprado - f.pagado }))
-      .sort((a: any, b: any) => b.saldo - a.saldo || b.comprado - a.comprado);
+      // Alfabético por defecto, igual que el resumen de empleados.
+      .sort((a: any, b: any) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
+  }
+
+  /** Filas del "Resumen Proveedores", con el orden que eligió el usuario. */
+  get saldoPorProveedorTabla(): any[] {
+    return this.ordenarFilas('resumenProveedores', this.saldoPorProveedor, {
+      proveedor: (p) => p.nombre || '',
+      comprado: (p) => Number(p.comprado) || 0,
+      pagado: (p) => Number(p.pagado) || 0,
+      saldo: (p) => Number(p.saldo) || 0,
+    }, (a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
   }
 
   // ── CAJA: EL NÚCLEO ────────────────────────────────────────
@@ -640,7 +711,7 @@ export class CajaComponent implements OnInit {
    */
   get comisionesDetalle(): { fecha: string, hora: string, servicio: string, precio: number, comision: number, empleado: string }[] {
     const id = this.mostrarTodos ? null : this.empleadoActual;
-    return this.turnos
+    const filas = this.turnos
       .filter((t) => t.estado === 'atendido' && (id === null || t.empleado_id === id))
       .map((t) => {
         const precio = Number(t.precio_final || t.precio) || 0;
@@ -656,8 +727,15 @@ export class CajaComponent implements OnInit {
           comision: (precio * this.porcentajeComision(t)) / 100,
           empleado: this.nombreDeEmpleado(t.empleado_id),
         };
-      })
-      .sort((a, b) => (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
+      });
+    return this.ordenarFilas('comisiones', filas, {
+      empleado: (f) => f.empleado,
+      fecha: (f) => f.fecha,
+      hora: (f) => f.hora,
+      servicio: (f) => f.servicio,
+      precio: (f) => f.precio,
+      comision: (f) => f.comision,
+    }, (a, b) => (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
   }
 
   get totalComisionesDetalle(): number {
@@ -794,9 +872,14 @@ export class CajaComponent implements OnInit {
    * pueden dejar de devolverlo.
    */
   get pagosEmpleadoActual(): any[] {
-    if (this.mostrarTodos) return this.pagos;
-    const f = this.filaEmpleadoActual;
-    return f ? f.pagos : [];
+    const filas = this.mostrarTodos ? this.pagos : (this.filaEmpleadoActual?.pagos || []);
+    return this.ordenarFilas('pagosEmpleado', filas, {
+      empleado: (p) => this.nombreDeEmpleado(p.empleado_id),
+      fecha: (p) => p.fecha || '',
+      monto: (p) => Number(p.monto) || 0,
+      metodo: (p) => p.metodo || '',
+      notas: (p) => p.notas || '',
+    }, (a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || (a.id - b.id));
   }
 
   /**
@@ -895,20 +978,32 @@ export class CajaComponent implements OnInit {
    * lugares que pueden dejar de devolverlo.
    */
   get comprasProveedorActual(): any[] {
-    if (this.mostrarTodos) {
-      return this.saldoPorProveedor.flatMap((p: any) => p.compras || []);
-    }
-    const f = this.filaProveedorActual;
-    return f ? f.compras : [];
+    const filas = this.mostrarTodos
+      ? this.saldoPorProveedor.flatMap((p: any) => p.compras || [])
+      : (this.filaProveedorActual?.compras || []);
+    return this.ordenarFilas('compras', filas, {
+      proveedor: (c) => this.nombreDeProveedor(c.proveedor_id),
+      fecha: (c) => c.fecha || '',
+      concepto: (c) => c.concepto || '',
+      cantidad: (c) => Number(c.cantidad) || 0,
+      monto: (c) => Number(c.monto) || 0,
+    }, (a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || (a.id - b.id));
   }
 
   /** Abonos del proveedor elegido, o de TODOS. */
   get pagosProveedorActual(): any[] {
-    if (this.mostrarTodos) return this.pagosProveedor;
-    if (this.proveedorActual === null) return [];
-    return this.pagosProveedor.filter(
-      (p: any) => p.proveedor_id === this.proveedorActual
-    );
+    const filas = this.mostrarTodos
+      ? this.pagosProveedor
+      : (this.proveedorActual === null ? [] : this.pagosProveedor.filter(
+          (p: any) => p.proveedor_id === this.proveedorActual
+        ));
+    return this.ordenarFilas('pagosProveedor', filas, {
+      proveedor: (p) => this.nombreDeProveedor(p.proveedor_id),
+      fecha: (p) => p.fecha || '',
+      monto: (p) => Number(p.monto) || 0,
+      metodo: (p) => p.metodo || '',
+      notas: (p) => p.notas || '',
+    }, (a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || (a.id - b.id));
   }
 
   /** El nombre de un proveedor por id, para las columnas de "Todos". */
@@ -961,10 +1056,10 @@ export class CajaComponent implements OnInit {
     return this.debeEmpleadoTotal + this.haberEmpleadoTotal;
   }
 
-  /** "Debo", "A favor", o nada si está en cero. UNA O DOS PALABRAS. */
+  /** "Debo", "Adelanto", o nada si está en cero. UNA O DOS PALABRAS. */
   get textoSaldoEmpleado(): string {
     if (this.debeEmpleadoTotal > 0) return 'Debo';
-    if (this.haberEmpleadoTotal > 0) return 'A favor';
+    if (this.haberEmpleadoTotal > 0) return 'Adelanto';
     return '';
   }
 
@@ -997,10 +1092,10 @@ export class CajaComponent implements OnInit {
     return this.debeProveedorTotal + this.haberProveedorTotal;
   }
 
-  /** "Debo", "A favor", o nada. */
+  /** "Debo", "Adelanto", o nada. */
   get textoSaldoProveedorTotal(): string {
     if (this.debeProveedorTotal > 0) return 'Debo';
-    if (this.haberProveedorTotal > 0) return 'A favor';
+    if (this.haberProveedorTotal > 0) return 'Adelanto';
     return '';
   }
 
@@ -1089,7 +1184,20 @@ export class CajaComponent implements OnInit {
       // se puede malinterpretar, y por eso el signo se invirtió junto con el
       // nombre de la columna.
       .map((f: any) => ({ ...f, faltaPagar: f.sugerido - f.pagado }))
-      .sort((a: any, b: any) => b.sugerido - a.sugerido || b.pagado - a.pagado);
+      // Alfabético por defecto, a pedido del usuario: la tabla de resumen se
+      // lee buscando a una persona, no ordenada por plata.
+      .sort((a: any, b: any) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
+  }
+
+  /** Filas del "Resumen Empleados", con el orden que eligió el usuario. */
+  get pagosPorEmpleadoTabla(): any[] {
+    return this.ordenarFilas('resumenEmpleados', this.pagosPorEmpleado, {
+      empleado: (f) => f.nombre || '',
+      turnos: (f) => Number(f.turnos) || 0,
+      sugerido: (f) => Number(f.sugerido) || 0,
+      pagado: (f) => Number(f.pagado) || 0,
+      saldo: (f) => Number(f.faltaPagar) || 0,
+    }, (a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
   }
 
   /** Solo los activos: no tiene sentido cargar una compra a un proveedor dado de baja. */

@@ -817,3 +817,19 @@
   background: transparent;
   cursor: pointer;
 }
+// ── ENCABEZADOS QUE ORDENAN ───────────────────────────────────────────
+// Cualquier 	h con 	h-orden se puede tocar para ordenar por esa columna.
+// La flechita solo aparece en la columna que manda el orden.
+.th-orden {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+
+  &:hover { color: #1d4ed8; }
+}
+
+.flecha-orden {
+  font-size: 0.62rem;
+  margin-left: 4px;
+  vertical-align: middle;
+}

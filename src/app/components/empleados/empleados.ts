@@ -1,6 +1,8 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
+import { skip } from 'rxjs';
 import { SupabaseService } from '../../services/supabase';
 import { AuthService } from '../../services/auth';
 import { problemaTelefono } from '../../utils/telefono';
@@ -145,14 +147,32 @@ export class EmpleadosComponent implements OnInit {
   /** Rol del que está usando la app, para decidir si el bloque de roles se muestra. */
   rolActual = 'empleado';
 
-  constructor(private supabase: SupabaseService, private auth: AuthService, private cdr: ChangeDetectorRef) {}
+  constructor(
+    private supabase: SupabaseService,
+    private auth: AuthService,
+    private cdr: ChangeDetectorRef,
+    private route: ActivatedRoute,
+  ) {}
 
   async ngOnInit() {
     // El rol sale del JWT, no de la base: es lo mismo que la RLS mira.
     this.rolActual = this.auth.getRol();
     // Independientes: en serie eran dos vueltas a la base antes de ver la lista.
     await Promise.all([this.cargarEmpleados(), this.cargarRoles()]);
+    // `?empleado=ID` viene del popup del turno: abre directo la ficha.
+    this.route.queryParamMap.pipe(skip(1)).subscribe((params) => {
+      const id = Number(params.get('empleado'));
+      if (id) this.abrirEmpleadoPorId(id);
+    });
+    // Primer valor (snapshot) para la carga inicial.
+    const idInicial = Number(this.route.snapshot.queryParamMap.get('empleado'));
+    if (idInicial) await this.abrirEmpleadoPorId(idInicial);
     this.cdr.detectChanges();
+  }
+
+  private async abrirEmpleadoPorId(id: number) {
+    const e = this.empleados.find((x: any) => x.id === id);
+    if (e) await this.seleccionarEmpleado(e);
   }
 
   /**

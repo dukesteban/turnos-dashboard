@@ -336,7 +336,7 @@
       <div class="stat-card azul">
         <div class="stat-icon">📋</div>
         <div class="stat-info">
-          <span class="stat-label">Le debo</span>
+          <span class="stat-label">Ganancia</span>
           <span class="stat-value">${{ deboEmpleado | number:'1.0-0' }}</span>
           <span class="stat-nota">{{ turnosEmpleadoActual }} {{ turnosEmpleadoActual === 1 ? 'turno' : 'turnos' }}</span>
         </div>
@@ -357,7 +357,7 @@
       <div class="stat-card respuesta" [ngClass]="debeEmpleadoTotal > 0 ? 'rojo' : 'verde'">
         <div class="stat-icon">{{ debeEmpleadoTotal > 0 ? '⏳' : (haberEmpleadoTotal > 0 ? '✅' : '⚪') }}</div>
         <div class="stat-info">
-          <span class="stat-label">Debe / Haber</span>
+          <span class="stat-label">Debo / Haber</span>
           <span class="stat-value">${{ saldoEmpleado | number:'1.0-0' }}</span>
           <span class="stat-nota">{{ textoSaldoEmpleado }}</span>
         </div>
@@ -391,12 +391,12 @@
             <tr>
               <!-- La columna del empleado va SOLO en "Todos": si ya elegiste uno,
                    el nombre está arriba y repetirlo en cada fila es ruido. -->
-              <th *ngIf="mostrarTodos" class="celda-principal">Empleado</th>
-              <th class="col-angosta">Fecha</th>
-              <th class="col-angosta">Hora</th>
-              <th>Servicio</th>
-              <th>Precio</th>
-              <th>Comisión</th>
+              <th *ngIf="mostrarTodos" class="celda-principal th-orden" (click)="ordenar('comisiones', 'empleado')">Empleado<span class="flecha-orden">{{ flechaOrden('comisiones', 'empleado') }}</span></th>
+              <th class="col-angosta th-orden" (click)="ordenar('comisiones', 'fecha')">Fecha<span class="flecha-orden">{{ flechaOrden('comisiones', 'fecha') }}</span></th>
+              <th class="col-angosta th-orden" (click)="ordenar('comisiones', 'hora')">Hora<span class="flecha-orden">{{ flechaOrden('comisiones', 'hora') }}</span></th>
+              <th class="th-orden" (click)="ordenar('comisiones', 'servicio')">Servicio<span class="flecha-orden">{{ flechaOrden('comisiones', 'servicio') }}</span></th>
+              <th class="th-orden" (click)="ordenar('comisiones', 'precio')">Precio<span class="flecha-orden">{{ flechaOrden('comisiones', 'precio') }}</span></th>
+              <th class="th-orden" (click)="ordenar('comisiones', 'comision')">Comisión<span class="flecha-orden">{{ flechaOrden('comisiones', 'comision') }}</span></th>
             </tr>
           </thead>
           <tbody>
@@ -450,11 +450,11 @@
         <table class="tabla">
           <thead>
             <tr>
-              <th *ngIf="mostrarTodos" class="celda-principal">Empleado</th>
-              <th class="col-angosta">Fecha</th>
-              <th>Monto</th>
-              <th>Método</th>
-              <th>Notas</th>
+              <th *ngIf="mostrarTodos" class="celda-principal th-orden" (click)="ordenar('pagosEmpleado', 'empleado')">Empleado<span class="flecha-orden">{{ flechaOrden('pagosEmpleado', 'empleado') }}</span></th>
+              <th class="col-angosta th-orden" (click)="ordenar('pagosEmpleado', 'fecha')">Fecha<span class="flecha-orden">{{ flechaOrden('pagosEmpleado', 'fecha') }}</span></th>
+              <th class="th-orden" (click)="ordenar('pagosEmpleado', 'monto')">Monto<span class="flecha-orden">{{ flechaOrden('pagosEmpleado', 'monto') }}</span></th>
+              <th class="th-orden" (click)="ordenar('pagosEmpleado', 'metodo')">Método<span class="flecha-orden">{{ flechaOrden('pagosEmpleado', 'metodo') }}</span></th>
+              <th class="th-orden" (click)="ordenar('pagosEmpleado', 'notas')">Notas<span class="flecha-orden">{{ flechaOrden('pagosEmpleado', 'notas') }}</span></th>
               <th class="col-acciones"></th>
             </tr>
           </thead>
@@ -493,7 +493,7 @@
   -->
   <div class="acordeon">
     <div class="acordeon-header" (click)="acordeonTotales = !acordeonTotales">
-      <span>👥 Todos los empleados</span>
+      <span>👥 Resumen Empleados</span>
       <span class="acordeon-total">
         {{ pagosPorEmpleado.length }}
         <span class="chevron" [class.abierto]="acordeonTotales">›</span>
@@ -509,10 +509,10 @@
         <table class="tabla">
           <thead>
             <tr>
-              <th>Empleado</th>
-              <th class="col-angosta">Turnos</th>
-              <th>Le debo</th>
-              <th>Le pagué</th>
+              <th class="th-orden" (click)="ordenar('resumenEmpleados', 'empleado')">Empleado<span class="flecha-orden">{{ flechaOrden('resumenEmpleados', 'empleado') }}</span></th>
+              <th class="col-angosta th-orden" (click)="ordenar('resumenEmpleados', 'turnos')">Turnos<span class="flecha-orden">{{ flechaOrden('resumenEmpleados', 'turnos') }}</span></th>
+              <th class="th-orden" (click)="ordenar('resumenEmpleados', 'sugerido')">Le debo<span class="flecha-orden">{{ flechaOrden('resumenEmpleados', 'sugerido') }}</span></th>
+              <th class="th-orden" (click)="ordenar('resumenEmpleados', 'pagado')">Le pagué<span class="flecha-orden">{{ flechaOrden('resumenEmpleados', 'pagado') }}</span></th>
               <!--
                 DOS columnas y NO una con signo. "Debe" es lo que le debo yo, en
                 rojo; "Haber" es lo que me deben a mí, en verde. Nunca las dos a
@@ -522,12 +522,12 @@
                 era el dinero, y era exactamente lo que el usuario no entendía.
                 Ahora cada celda dice sola de qué lado está.
               -->
-              <th class="col-debe">Debe</th>
-              <th class="col-haber">Haber</th>
+              <th class="col-debe th-orden" (click)="ordenar('resumenEmpleados', 'saldo')">Debe<span class="flecha-orden">{{ flechaOrden('resumenEmpleados', 'saldo') }}</span></th>
+              <th class="col-haber th-orden" (click)="ordenar('resumenEmpleados', 'saldo')">Haber<span class="flecha-orden">{{ flechaOrden('resumenEmpleados', 'saldo') }}</span></th>
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let f of pagosPorEmpleado"
+            <tr *ngFor="let f of pagosPorEmpleadoTabla"
                 (click)="elegirEmpleado(f.empleado_id)"
                 [class.fila-actual]="!mostrarTodos && f.empleado_id === empleadoActual">
               <td class="celda-principal">{{ f.nombre }}</td>
@@ -855,7 +855,7 @@
       <div class="stat-card azul">
         <div class="stat-icon">📦</div>
         <div class="stat-info">
-          <span class="stat-label">Le compré</span>
+          <span class="stat-label">Total Deudas</span>
           <span class="stat-value">${{ compreProveedor | number }}</span>
           <span class="stat-nota">{{ comprasProveedorActual.length }} {{ comprasProveedorActual.length === 1 ? 'deuda' : 'deudas' }}</span>
         </div>
@@ -864,7 +864,7 @@
       <div class="stat-card violeta">
         <div class="stat-icon">💸</div>
         <div class="stat-info">
-          <span class="stat-label">Le pagué</span>
+          <span class="stat-label">Total Pagado</span>
           <span class="stat-value">${{ pagueProveedor | number }}</span>
           <span class="stat-nota">{{ pagosProveedorActual.length }} {{ pagosProveedorActual.length === 1 ? 'abono' : 'abonos' }}</span>
         </div>
@@ -873,74 +873,13 @@
       <div class="stat-card respuesta" [ngClass]="debeProveedorTotal > 0 ? 'rojo' : 'verde'">
         <div class="stat-icon">{{ debeProveedorTotal > 0 ? '⏳' : (haberProveedorTotal > 0 ? '✅' : '⚪') }}</div>
         <div class="stat-info">
-          <span class="stat-label">Debe / Haber</span>
+          <span class="stat-label">Debo / Haber</span>
           <span class="stat-value">${{ saldoProveedorTotal | number }}</span>
           <span class="stat-nota">{{ textoSaldoProveedorTotal }}</span>
         </div>
       </div>
     </div>
   </ng-container>
-
-  <!-- ═══ PAGOS REALIZADOS ═══ -->
-  <div class="acordeon">
-    <div class="acordeon-header" (click)="acordeonPagosProv = !acordeonPagosProv">
-      <span>🧮 Pagos realizados</span>
-      <span class="acordeon-total">
-        {{ pagosProveedorActual.length }} · ${{ pagueProveedor | number }}
-        <span class="chevron" [class.abierto]="acordeonPagosProv">›</span>
-      </span>
-    </div>
-    <div class="acordeon-body" [class.visible]="acordeonPagosProv">
-
-      <div class="seccion-header seccion-sin-borde">
-        <span></span>
-        <button *ngIf="puedeEscribir" class="btn-primary" (click)="abrirFormPagoProveedor()">
-          ➕ Registrar pago
-        </button>
-      </div>
-
-      <div *ngIf="pagosProveedorActual.length === 0" class="vacio">
-        No le registraste ningún pago en este período
-      </div>
-
-      <div *ngIf="pagosProveedorActual.length > 0" class="tabla-wrapper">
-        <table class="tabla">
-          <thead>
-            <tr>
-              <th *ngIf="mostrarTodos" class="celda-principal">Proveedor</th>
-              <th class="col-angosta">Fecha</th>
-              <th>Monto</th>
-              <th>Método</th>
-              <th>Notas</th>
-              <th class="col-acciones"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let p of pagosProveedorActual">
-              <td *ngIf="mostrarTodos" class="celda-principal">{{ nombreDeProveedor(p.proveedor_id) }}</td>
-              <td>{{ formatearFechaCorta(p.fecha) }}</td>
-              <td>${{ p.monto | number }}</td>
-              <td>{{ p.metodo }}</td>
-              <td class="celda-tenue">{{ p.notas || '—' }}</td>
-              <td class="celda-acciones">
-                <button *ngIf="puedeEscribir" class="btn-icon" (click)="eliminarPagoProveedor(p)" title="Borrar">🗑️</button>
-              </td>
-            </tr>
-          </tbody>
-          <tfoot>
-            <tr>
-              <td *ngIf="mostrarTodos">Total</td>
-              <td>Total</td>
-              <td>${{ pagueProveedor | number }}</td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  </div>
 
   <!-- ═══ COMPRAS / SERVICIOS DEL PERÍODO ═══ -->
   <div class="acordeon">
@@ -968,11 +907,11 @@
         <table class="tabla">
           <thead>
             <tr>
-              <th *ngIf="mostrarTodos" class="celda-principal">Proveedor</th>
-              <th class="col-angosta">Fecha</th>
-              <th>Concepto</th>
-              <th class="col-angosta">Cant.</th>
-              <th>Monto</th>
+              <th *ngIf="mostrarTodos" class="celda-principal th-orden" (click)="ordenar('compras', 'proveedor')">Proveedor<span class="flecha-orden">{{ flechaOrden('compras', 'proveedor') }}</span></th>
+              <th class="col-angosta th-orden" (click)="ordenar('compras', 'fecha')">Fecha<span class="flecha-orden">{{ flechaOrden('compras', 'fecha') }}</span></th>
+              <th class="th-orden" (click)="ordenar('compras', 'concepto')">Concepto<span class="flecha-orden">{{ flechaOrden('compras', 'concepto') }}</span></th>
+              <th class="col-angosta th-orden" (click)="ordenar('compras', 'cantidad')">Cant.<span class="flecha-orden">{{ flechaOrden('compras', 'cantidad') }}</span></th>
+              <th class="th-orden" (click)="ordenar('compras', 'monto')">Monto<span class="flecha-orden">{{ flechaOrden('compras', 'monto') }}</span></th>
               <th class="col-acciones"></th>
             </tr>
           </thead>
@@ -1004,11 +943,72 @@
     </div>
   </div>
 
+  <!-- ═══ PAGOS REALIZADOS ═══ -->
+  <div class="acordeon">
+    <div class="acordeon-header" (click)="acordeonPagosProv = !acordeonPagosProv">
+      <span>🧮 Pagos realizados</span>
+      <span class="acordeon-total">
+        {{ pagosProveedorActual.length }} · ${{ pagueProveedor | number }}
+        <span class="chevron" [class.abierto]="acordeonPagosProv">›</span>
+      </span>
+    </div>
+    <div class="acordeon-body" [class.visible]="acordeonPagosProv">
+
+      <div class="seccion-header seccion-sin-borde">
+        <span></span>
+        <button *ngIf="puedeEscribir" class="btn-primary" (click)="abrirFormPagoProveedor()">
+          ➕ Registrar pago
+        </button>
+      </div>
+
+      <div *ngIf="pagosProveedorActual.length === 0" class="vacio">
+        No le registraste ningún pago en este período
+      </div>
+
+      <div *ngIf="pagosProveedorActual.length > 0" class="tabla-wrapper">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th *ngIf="mostrarTodos" class="celda-principal th-orden" (click)="ordenar('pagosProveedor', 'proveedor')">Proveedor<span class="flecha-orden">{{ flechaOrden('pagosProveedor', 'proveedor') }}</span></th>
+              <th class="col-angosta th-orden" (click)="ordenar('pagosProveedor', 'fecha')">Fecha<span class="flecha-orden">{{ flechaOrden('pagosProveedor', 'fecha') }}</span></th>
+              <th class="th-orden" (click)="ordenar('pagosProveedor', 'monto')">Monto<span class="flecha-orden">{{ flechaOrden('pagosProveedor', 'monto') }}</span></th>
+              <th class="th-orden" (click)="ordenar('pagosProveedor', 'metodo')">Método<span class="flecha-orden">{{ flechaOrden('pagosProveedor', 'metodo') }}</span></th>
+              <th class="th-orden" (click)="ordenar('pagosProveedor', 'notas')">Notas<span class="flecha-orden">{{ flechaOrden('pagosProveedor', 'notas') }}</span></th>
+              <th class="col-acciones"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of pagosProveedorActual">
+              <td *ngIf="mostrarTodos" class="celda-principal">{{ nombreDeProveedor(p.proveedor_id) }}</td>
+              <td>{{ formatearFechaCorta(p.fecha) }}</td>
+              <td>${{ p.monto | number }}</td>
+              <td>{{ p.metodo }}</td>
+              <td class="celda-tenue">{{ p.notas || '—' }}</td>
+              <td class="celda-acciones">
+                <button *ngIf="puedeEscribir" class="btn-icon" (click)="eliminarPagoProveedor(p)" title="Borrar">🗑️</button>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td *ngIf="mostrarTodos">Total</td>
+              <td>Total</td>
+              <td>${{ pagueProveedor | number }}</td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ TODOS LOS PROVEEDORES, PARA COMPARAR ═══ -->
   <!-- Al final y cerrado, igual que el de Empleados. -->
   <div class="acordeon">
     <div class="acordeon-header" (click)="acordeonSaldo = !acordeonSaldo">
-      <span>🏦 Todos los proveedores</span>
+      <span>🏦 Resumen Proveedores</span>
       <span class="acordeon-total">
         {{ saldoPorProveedor.length }}
         <span class="chevron" [class.abierto]="acordeonSaldo">›</span>
@@ -1024,16 +1024,16 @@
         <table class="tabla">
           <thead>
             <tr>
-              <th>Proveedor</th>
-              <th>Le compré</th>
-              <th>Le pagué</th>
+              <th class="th-orden" (click)="ordenar('resumenProveedores', 'proveedor')">Proveedor<span class="flecha-orden">{{ flechaOrden('resumenProveedores', 'proveedor') }}</span></th>
+              <th class="th-orden" (click)="ordenar('resumenProveedores', 'comprado')">Deudas<span class="flecha-orden">{{ flechaOrden('resumenProveedores', 'comprado') }}</span></th>
+              <th class="th-orden" (click)="ordenar('resumenProveedores', 'pagado')">Pagos<span class="flecha-orden">{{ flechaOrden('resumenProveedores', 'pagado') }}</span></th>
               <!-- Dos columnas, igual que en Empleados. -->
-              <th class="col-debe">Debe</th>
-              <th class="col-haber">Haber</th>
+              <th class="col-debe th-orden" (click)="ordenar('resumenProveedores', 'saldo')">Debo<span class="flecha-orden">{{ flechaOrden('resumenProveedores', 'saldo') }}</span></th>
+              <th class="col-haber th-orden" (click)="ordenar('resumenProveedores', 'saldo')">Haber<span class="flecha-orden">{{ flechaOrden('resumenProveedores', 'saldo') }}</span></th>
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let p of saldoPorProveedor"
+            <tr *ngFor="let p of saldoPorProveedorTabla"
                 (click)="elegirProveedor(p.proveedor_id)"
                 [class.fila-actual]="!mostrarTodos && p.proveedor_id === proveedorActual">
               <td class="celda-principal">{{ p.nombre }}</td>

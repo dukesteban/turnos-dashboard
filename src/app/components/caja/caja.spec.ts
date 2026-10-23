@@ -154,8 +154,8 @@ describe('Caja — pestañas', () => {
     // de la tabla grande de cada una, que solo existe en su pestaña.
     const marcas = [
       'Servicio más vendido',    // Ingresos
-      'Todos los empleados',     // Empleados
-      'Todos los proveedores',   // Gastos
+      'Resumen Empleados',       // Empleados
+      'Resumen Proveedores',     // Gastos
     ];
 
     for (let i = 0; i < botones.length; i++) {
@@ -427,7 +427,7 @@ describe('Caja — totales a pagar', () => {
     expect(cmp.totalPagadoEmpleados).toBe(10000);
   });
 
-  it('ordena por sugerido, de mayor a menor', async () => {
+  it('ordena alfabéticamente por nombre por defecto', async () => {
     const { cmp } = montar({
       getComisionesPeriodo: () => Promise.resolve([
         SUGERIDO(1, 'Juan', 10000),
@@ -436,7 +436,7 @@ describe('Caja — totales a pagar', () => {
       ]),
     });
     await cmp.cargarDatos();
-    expect(cmp.pagosPorEmpleado.map((f: any) => f.nombre)).toEqual(['Esteban', 'Pedro', 'Juan']);
+    expect(cmp.pagosPorEmpleado.map((f: any) => f.nombre)).toEqual(['Esteban', 'Juan', 'Pedro']);
   });
 
   it('totalSugerido es la suma de todos los sugeridos', async () => {
@@ -1906,7 +1906,7 @@ describe('Caja — los tres montos del empleado y del proveedor elegidos', () =>
     // NEGATIVO ya no existe en pantalla: se parte en dos cantidades.
     cmp.elegirEmpleado(1);
     expect(cmp.haberEmpleadoTotal).toBe(25000);
-    expect(cmp.textoSaldoEmpleado).toBe('A favor');
+    expect(cmp.textoSaldoEmpleado).toBe('Adelanto');
   });
 
   it('el cuadro de "Debe / Haber" es el mismo número que la fila de la tabla', async () => {
@@ -1978,12 +1978,12 @@ describe('Caja — los tres montos del empleado y del proveedor elegidos', () =>
     expect(cmp.haberEmpleadoTotal).toBe(0);
   });
 
-  it('la frase del cuadro es SIEMPRE Debe, A favor, o vacia', async () => {
+  it('la frase del cuadro es SIEMPRE Debo, Adelanto, o vacia', async () => {
     const { cmp } = await listo({
       getComisionesPeriodo: () => Promise.resolve([
         SUGERIDO(1, 'A', 30000, 3),   // sugerido 30.000, pagado 10.000 -> debe 20.000
         SUGERIDO(2, 'B', 20000, 2),   // sugerido 20.000, pagado 10.000 -> debe 10.000
-        SUGERIDO(3, 'C', 10000, 1),   // sugerido 10.000, pagado 20.000 -> A favor 10.000
+        SUGERIDO(3, 'C', 10000, 1),   // sugerido 10.000, pagado 20.000 -> Adelanto 10.000
       ]),
       getPagosEmpleado: () => Promise.resolve([
         PAGO_JUAN(10000),
@@ -1997,7 +1997,7 @@ describe('Caja — los tres montos del empleado y del proveedor elegidos', () =>
     cmp.elegirEmpleado(2);
     expect(cmp.textoSaldoEmpleado).toBe('Debo');
     cmp.elegirEmpleado(3);
-    expect(cmp.textoSaldoEmpleado).toBe('A favor');
+    expect(cmp.textoSaldoEmpleado).toBe('Adelanto');
   });
 
   it('la frase del lado del empleado dice Debo cuando hay que pagarle', async () => {
@@ -2187,7 +2187,7 @@ describe('Caja — los cuadros no muestran el signo negativo', () => {
 
   const norm = (t: string) => t.replace(/[.,]/g, '').trim();
 
-  it('un saldo a favor se muestra POSITIVO, con "A su favor" y sin guion', async () => {
+  it('un saldo a favor se muestra POSITIVO, con "Adelanto" y sin guion', async () => {
     // Se le pagaron 25.000 y no atendio nada: el caso del "debo 25 mil".
     const { cmp, fixture } = await listo({
       getComisionesPeriodo: () => Promise.resolve([SUGERIDO(1, 'Esteban', 0, 0)]),
@@ -2205,7 +2205,7 @@ describe('Caja — los cuadros no muestran el signo negativo', () => {
     expect(valor).toBe('$25000');
     expect(valor.includes('-')).toBe(false);
     expect(valor.includes(String.fromCharCode(0x2212))).toBe(false);
-    expect(nota).toBe('A favor');
+    expect(nota).toBe('Adelanto');
   });
 
   it('una deuda se muestra positiva, en rojo, y dice "Debo"', async () => {
@@ -2248,7 +2248,7 @@ describe('Caja — los cuadros no muestran el signo negativo', () => {
     expect(norm((tercera.querySelector('.stat-value').textContent || ''))).toBe('$0');
   });
 
-  it('en Gastos pasa lo mismo: "A favor" y sin signo', async () => {
+  it('en Gastos pasa lo mismo: "Adelanto" y sin signo', async () => {
     const { cmp, fixture } = await listo({
       getProveedores: () => Promise.resolve([{ id: 1, nombre: 'Quimicas del Sur', activo: true }]),
       getCompras: () => Promise.resolve([COMPRA(1, 1, 'Quimicas del Sur', 5000)]),
@@ -2266,7 +2266,7 @@ describe('Caja — los cuadros no muestran el signo negativo', () => {
     // Se le pagaron 12.000 sobre 5.000 comprados: 7.000 a su favor.
     expect(valor).toBe('$7000');
     expect(valor.includes(String.fromCharCode(0x2212))).toBe(false);
-    expect(norm((tercera.querySelector('.stat-nota').textContent || ''))).toBe('A favor');
+    expect(norm((tercera.querySelector('.stat-nota').textContent || ''))).toBe('Adelanto');
     expect(tercera.classList.contains('verde')).toBe(true);
   });
 
@@ -2288,8 +2288,8 @@ describe('Caja — los cuadros no muestran el signo negativo', () => {
       ]),
     });
 
-    // Las tres, y solo tres: "Debo", "A favor", y vacío en el cuadrado exacto.
-    const permitidas = ['', 'Debo', 'A favor'];
+    // Las tres, y solo tres: "Debo", "Adelanto", y vacío en el cuadrado exacto.
+    const permitidas = ['', 'Debo', 'Adelanto'];
     for (const id of [1, 2, 3]) {
       cmp.elegirEmpleado(id);
       expect(permitidas).toContain(cmp.textoSaldoEmpleado);
