@@ -190,6 +190,18 @@ export class CajaComponent implements OnInit {
     return this.auth.puedeEscribirCaja();
   }
 
+  /** Salta a la ficha del empleado en Personas → Empleados. */
+  irAlEmpleado(empleadoId: number) {
+    if (!empleadoId) return;
+    this.router.navigate(['/personas/empleados'], { queryParams: { empleado: empleadoId } });
+  }
+
+  /** Salta a la ficha del proveedor en Personas → Proveedores. */
+  irAlProveedor(proveedorId: number) {
+    if (!proveedorId) return;
+    this.router.navigate(['/personas/proveedores'], { queryParams: { proveedor: proveedorId } });
+  }
+
   /**
    * Formato de la columna "Falta pagar".
    *
@@ -742,7 +754,7 @@ export class CajaComponent implements OnInit {
    * turno no se sabe de quién es. Viene de los MISMOS `turnos` que ya están
    * cargados: no hay llamada nueva y no puede desincronizarse de los cuadros.
    */
-  get comisionesDetalle(): { fecha: string, hora: string, servicio: string, precio: number, comision: number, empleado: string }[] {
+  get comisionesDetalle(): { fecha: string, hora: string, servicio: string, precio: number, comision: number, empleado: string, empleado_id: number }[] {
     const id = this.mostrarTodos ? null : this.empleadoActual;
     const filas = this.turnos
       .filter((t) => t.estado === 'atendido' && (id === null || t.empleado_id === id))
@@ -759,6 +771,7 @@ export class CajaComponent implements OnInit {
           servicio: t.servicio_nombre_final || t.servicio_nombre || 'Sin especificar',
           comision: (precio * this.porcentajeComision(t)) / 100,
           empleado: this.nombreDeEmpleado(t.empleado_id),
+          empleado_id: t.empleado_id,
         };
       });
     return this.ordenarFilas('comisiones', filas, {

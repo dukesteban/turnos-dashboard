@@ -397,7 +397,9 @@
           </thead>
           <tbody>
             <tr *ngFor="let c of comisionesDetalle">
-              <td *ngIf="mostrarTodos" class="celda-principal">{{ c.empleado }}</td>
+              <td *ngIf="mostrarTodos" class="celda-principal">
+                <span class="enlace-ficha" (click)="irAlEmpleado(c.empleado_id)">{{ c.empleado }}</span>
+              </td>
               <td>{{ formatearFechaCorta(c.fecha) }}</td>
               <td>{{ c.hora }}</td>
               <td>{{ c.servicio }}</td>
@@ -457,7 +459,7 @@
           <tbody>
             <tr *ngFor="let p of pagosEmpleadoActual">
               <td *ngIf="mostrarTodos" class="celda-principal">
-                <span class="enlace-ficha" (click)="elegirEmpleado(p.empleado_id)">{{ nombreDeEmpleado(p.empleado_id) }}</span>
+                <span class="enlace-ficha" (click)="irAlEmpleado(p.empleado_id)">{{ nombreDeEmpleado(p.empleado_id) }}</span>
               </td>
               <td>{{ formatearFechaCorta(p.fecha) }}</td>
               <td>${{ p.monto | number }}</td>
@@ -913,7 +915,7 @@
           <tbody>
             <tr *ngFor="let c of comprasProveedorActual">
               <td *ngIf="mostrarTodos" class="celda-principal">
-                <span class="enlace-ficha" (click)="elegirProveedor(c.proveedor_id)">{{ nombreDeProveedor(c.proveedor_id) }}</span>
+                <span class="enlace-ficha" (click)="irAlProveedor(c.proveedor_id)">{{ nombreDeProveedor(c.proveedor_id) }}</span>
               </td>
               <td>{{ formatearFechaCorta(c.fecha) }}</td>
               <td>{{ c.concepto }}</td>
@@ -977,7 +979,7 @@
           <tbody>
             <tr *ngFor="let p of pagosProveedorActual">
               <td *ngIf="mostrarTodos" class="celda-principal">
-                <span class="enlace-ficha" (click)="elegirProveedor(p.proveedor_id)">{{ nombreDeProveedor(p.proveedor_id) }}</span>
+                <span class="enlace-ficha" (click)="irAlProveedor(p.proveedor_id)">{{ nombreDeProveedor(p.proveedor_id) }}</span>
               </td>
               <td>{{ formatearFechaCorta(p.fecha) }}</td>
               <td>${{ p.monto | number }}</td>
