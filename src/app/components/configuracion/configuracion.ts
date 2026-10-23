@@ -233,7 +233,7 @@ export class ConfiguracionComponent implements OnInit {
     this.limiteReprogramacion = (config.find((c: any) => c.clave === 'limite_aplica_reprogramacion')?.valor ?? 'si') !== 'no';
     this.direccion = config.find((c: any) => c.clave === 'direccion')?.valor || '';
     this.tono = config.find((c: any) => c.clave === 'tono')?.valor || 'informal';
-    this.diasCerrados = diasCerrados;
+    this.diasCerrados = diasCerrados.sort((a, b) => b.fecha.localeCompare(a.fecha));
     this.horarios = (horariosDB || []).map((h: any) => ({
       ...h,
       hora_inicio: h.hora_inicio?.slice(0, 5) || '',
@@ -440,8 +440,9 @@ export class ConfiguracionComponent implements OnInit {
         this.nuevoDiaCerrado.fecha_hasta || null,
         this.nuevoDiaCerrado.motivo
       );
-      this.diasCerrados.push(nuevo);
-      this.diasCerrados.sort((a, b) => a.fecha.localeCompare(b.fecha));
+      // La base ya devuelve orden descendente (más nuevo primero).
+      // Insertamos al principio para que quede arriba sin reordenar todo.
+      this.diasCerrados.unshift(nuevo);
       this.mostrarFormDiaCerrado = false;
       this.nuevoDiaCerrado = { fecha: '', fecha_hasta: '', motivo: '' };
       this.mostrarMensaje('✅ Día/período de cierre agregado.', 'diasCerrados');

@@ -817,7 +817,7 @@ export class EmpleadosComponent implements OnInit {
         })
         .filter((t: any) => !!t)
         .sort((a: any, b: any) =>
-          `${a.fecha}${a.hora_inicio}`.localeCompare(`${b.fecha}${b.hora_inicio}`)
+          `${b.fecha}${b.hora_inicio}`.localeCompare(`${a.fecha}${a.hora_inicio}`)
         );
     } catch (e: any) {
       // No romper la pantalla de empleados si esta consulta falla.

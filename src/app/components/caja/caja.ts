@@ -739,7 +739,7 @@ export class CajaComponent implements OnInit {
       servicio: (f) => f.servicio,
       precio: (f) => f.precio,
       comision: (f) => f.comision,
-    }, (a, b) => (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
+    }, (a, b) => (b.fecha + b.hora).localeCompare(a.fecha + a.hora));
   }
 
   get totalComisionesDetalle(): number {
@@ -883,7 +883,7 @@ export class CajaComponent implements OnInit {
       monto: (p) => Number(p.monto) || 0,
       metodo: (p) => p.metodo || '',
       notas: (p) => p.notas || '',
-    }, (a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || (a.id - b.id));
+    }, (a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')) || (b.id - a.id));
   }
 
   /**
@@ -991,7 +991,7 @@ export class CajaComponent implements OnInit {
       concepto: (c) => c.concepto || '',
       cantidad: (c) => Number(c.cantidad) || 0,
       monto: (c) => Number(c.monto) || 0,
-    }, (a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || (a.id - b.id));
+    }, (a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')) || (b.id - a.id));
   }
 
   /** Abonos del proveedor elegido, o de TODOS. */
@@ -1007,7 +1007,7 @@ export class CajaComponent implements OnInit {
       monto: (p) => Number(p.monto) || 0,
       metodo: (p) => p.metodo || '',
       notas: (p) => p.notas || '',
-    }, (a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || (a.id - b.id));
+    }, (a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')) || (b.id - a.id));
   }
 
   /** El nombre de un proveedor por id, para las columnas de "Todos". */

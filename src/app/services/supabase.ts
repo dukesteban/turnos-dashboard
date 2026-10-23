@@ -683,7 +683,7 @@ export class SupabaseService {
       const { data, error } = await this.supabase
         .from('dias_cerrados')
         .select('*')
-        .order('fecha', { ascending: true });
+        .order('fecha', { ascending: false });
       if (error) throw error;
       return data;
     });
