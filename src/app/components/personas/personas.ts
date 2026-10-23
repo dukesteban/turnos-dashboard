@@ -79,13 +79,15 @@ export class PersonasComponent {
         window.scrollTo({ top: 0, behavior: 'auto' });
       });
     // Si la URL trae ?cliente= o ?empleado=, fuerza la pestaña correcta
+    // Preservamos los query params para que el componente hijo (Clientes/Empleados) los lea.
     this.route.queryParamMap.subscribe((params) => {
       const clienteId = params.get('cliente');
       const empleadoId = params.get('empleado');
+      const queryParams = { ...params.keys.reduce((acc: any, key) => ({ ...acc, [key]: params.get(key) }), {}) };
       if (clienteId && this.tabActual !== 'clientes') {
-        this.router.navigate(['/personas/clientes'], { replaceUrl: true });
+        this.router.navigate(['/personas/clientes'], { queryParams, replaceUrl: true });
       } else if (empleadoId && this.tabActual !== 'empleados') {
-        this.router.navigate(['/personas/empleados'], { replaceUrl: true });
+        this.router.navigate(['/personas/empleados'], { queryParams, replaceUrl: true });
       }
     });
   }

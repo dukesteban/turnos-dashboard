@@ -451,7 +451,7 @@
               <th class="th-orden" (click)="ordenar('pagosEmpleado', 'monto')">Monto<span class="flecha-orden">{{ flechaOrden('pagosEmpleado', 'monto') }}</span></th>
               <th class="th-orden" (click)="ordenar('pagosEmpleado', 'metodo')">Método<span class="flecha-orden">{{ flechaOrden('pagosEmpleado', 'metodo') }}</span></th>
               <th class="th-orden" (click)="ordenar('pagosEmpleado', 'notas')">Notas<span class="flecha-orden">{{ flechaOrden('pagosEmpleado', 'notas') }}</span></th>
-              <th class="col-acciones">Acciones</th>
+              <th *ngIf="puedeEscribir" class="col-acciones">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -461,9 +461,9 @@
               <td>${{ p.monto | number }}</td>
               <td>{{ p.metodo }}</td>
               <td class="celda-tenue">{{ p.notas || '—' }}</td>
-              <td class="celda-acciones">
-                <button *ngIf="puedeEscribir" class="btn-icon" (click)="abrirFormPago(p)" title="Editar">✏️</button>
-                <button *ngIf="puedeEscribir" class="btn-icon" (click)="eliminarPago(p)" title="Borrar">🗑️</button>
+              <td *ngIf="puedeEscribir" class="celda-acciones">
+                <button class="btn-icon" (click)="abrirFormPago(p)" title="Editar">✏️</button>
+                <button class="btn-icon" (click)="eliminarPago(p)" title="Borrar">🗑️</button>
               </td>
             </tr>
           </tbody>
@@ -474,7 +474,7 @@
               <td>${{ pagueEmpleado | number }}</td>
               <td></td>
               <td></td>
-              <td></td>
+              <td *ngIf="puedeEscribir"></td>
             </tr>
           </tfoot>
         </table>
@@ -909,7 +909,7 @@
               <th class="th-orden" (click)="ordenar('compras', 'concepto')">Concepto<span class="flecha-orden">{{ flechaOrden('compras', 'concepto') }}</span></th>
               <th class="col-angosta th-orden" (click)="ordenar('compras', 'cantidad')">Cant.<span class="flecha-orden">{{ flechaOrden('compras', 'cantidad') }}</span></th>
               <th class="th-orden" (click)="ordenar('compras', 'monto')">Monto<span class="flecha-orden">{{ flechaOrden('compras', 'monto') }}</span></th>
-              <th class="col-acciones"></th>
+              <th *ngIf="puedeEscribir" class="col-acciones">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -919,9 +919,9 @@
               <td>{{ c.concepto }}</td>
               <td>{{ c.cantidad }}</td>
               <td>${{ c.monto | number }}</td>
-              <td class="celda-acciones">
-                <button *ngIf="puedeEscribir" class="btn-icon" (click)="abrirFormCompra(c)" title="Editar">✏️</button>
-                <button *ngIf="puedeEscribir" class="btn-icon" (click)="eliminarCompra(c)" title="Borrar">🗑️</button>
+              <td *ngIf="puedeEscribir" class="celda-acciones">
+                <button class="btn-icon" (click)="abrirFormCompra(c)" title="Editar">✏️</button>
+                <button class="btn-icon" (click)="eliminarCompra(c)" title="Borrar">🗑️</button>
               </td>
             </tr>
           </tbody>
@@ -932,7 +932,7 @@
               <td></td>
               <td></td>
               <td>${{ compreProveedor | number }}</td>
-              <td></td>
+              <td *ngIf="puedeEscribir"></td>
             </tr>
           </tfoot>
         </table>
@@ -971,7 +971,7 @@
               <th class="th-orden" (click)="ordenar('pagosProveedor', 'monto')">Monto<span class="flecha-orden">{{ flechaOrden('pagosProveedor', 'monto') }}</span></th>
               <th class="th-orden" (click)="ordenar('pagosProveedor', 'metodo')">Método<span class="flecha-orden">{{ flechaOrden('pagosProveedor', 'metodo') }}</span></th>
               <th class="th-orden" (click)="ordenar('pagosProveedor', 'notas')">Notas<span class="flecha-orden">{{ flechaOrden('pagosProveedor', 'notas') }}</span></th>
-              <th class="col-acciones">Acciones</th>
+              <th *ngIf="puedeEscribir" class="col-acciones">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -981,9 +981,9 @@
               <td>${{ p.monto | number }}</td>
               <td>{{ p.metodo }}</td>
               <td class="celda-tenue">{{ p.notas || '—' }}</td>
-              <td class="celda-acciones">
-                <button *ngIf="puedeEscribir" class="btn-icon" (click)="abrirFormPagoProveedor(p)" title="Editar">✏️</button>
-                <button *ngIf="puedeEscribir" class="btn-icon" (click)="eliminarPagoProveedor(p)" title="Borrar">🗑️</button>
+              <td *ngIf="puedeEscribir" class="celda-acciones">
+                <button class="btn-icon" (click)="abrirFormPagoProveedor(p)" title="Editar">✏️</button>
+                <button class="btn-icon" (click)="eliminarPagoProveedor(p)" title="Borrar">🗑️</button>
               </td>
             </tr>
           </tbody>
@@ -994,7 +994,7 @@
               <td>${{ pagueProveedor | number }}</td>
               <td></td>
               <td></td>
-              <td></td>
+              <td *ngIf="puedeEscribir"></td>
             </tr>
           </tfoot>
         </table>
