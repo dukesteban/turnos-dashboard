@@ -451,7 +451,7 @@
               <th class="th-orden" (click)="ordenar('pagosEmpleado', 'monto')">Monto<span class="flecha-orden">{{ flechaOrden('pagosEmpleado', 'monto') }}</span></th>
               <th class="th-orden" (click)="ordenar('pagosEmpleado', 'metodo')">Método<span class="flecha-orden">{{ flechaOrden('pagosEmpleado', 'metodo') }}</span></th>
               <th class="th-orden" (click)="ordenar('pagosEmpleado', 'notas')">Notas<span class="flecha-orden">{{ flechaOrden('pagosEmpleado', 'notas') }}</span></th>
-              <th class="col-acciones"></th>
+              <th class="col-acciones">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -462,6 +462,7 @@
               <td>{{ p.metodo }}</td>
               <td class="celda-tenue">{{ p.notas || '—' }}</td>
               <td class="celda-acciones">
+                <button *ngIf="puedeEscribir" class="btn-icon" (click)="abrirFormPago(p)" title="Editar">✏️</button>
                 <button *ngIf="puedeEscribir" class="btn-icon" (click)="eliminarPago(p)" title="Borrar">🗑️</button>
               </td>
             </tr>
@@ -970,7 +971,7 @@
               <th class="th-orden" (click)="ordenar('pagosProveedor', 'monto')">Monto<span class="flecha-orden">{{ flechaOrden('pagosProveedor', 'monto') }}</span></th>
               <th class="th-orden" (click)="ordenar('pagosProveedor', 'metodo')">Método<span class="flecha-orden">{{ flechaOrden('pagosProveedor', 'metodo') }}</span></th>
               <th class="th-orden" (click)="ordenar('pagosProveedor', 'notas')">Notas<span class="flecha-orden">{{ flechaOrden('pagosProveedor', 'notas') }}</span></th>
-              <th class="col-acciones"></th>
+              <th class="col-acciones">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -981,6 +982,7 @@
               <td>{{ p.metodo }}</td>
               <td class="celda-tenue">{{ p.notas || '—' }}</td>
               <td class="celda-acciones">
+                <button *ngIf="puedeEscribir" class="btn-icon" (click)="abrirFormPagoProveedor(p)" title="Editar">✏️</button>
                 <button *ngIf="puedeEscribir" class="btn-icon" (click)="eliminarPagoProveedor(p)" title="Borrar">🗑️</button>
               </td>
             </tr>

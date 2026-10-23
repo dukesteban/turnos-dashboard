@@ -147,6 +147,10 @@ export class CajaComponent implements OnInit {
   mostrarFormCompra = false;
   nuevaCompra: any = { proveedor_id: null, fecha: '', concepto: '', cantidad: 1, monto: null, notas: '' };
   compraEditando: any = null;
+  /** Pago a empleado en edición (null = alta). */
+  pagoEditando: any = null;
+  /** Pago a proveedor en edición (null = alta). */
+  pagoProveedorEditando: any = null;
   // Buscador de proveedor del popup, igual que el de cliente de "Nuevo turno":
   // se escribe, sale la lista, y si no hay resultados se crea ahí mismo.
   //
@@ -583,16 +587,29 @@ export class CajaComponent implements OnInit {
    * lista. Mismo criterio que `abrirFormPago`: el botón está dentro del detalle
    * de ESE proveedor, así que el formulario es de ESE. Con el combo en "Todos"
    * no hay nadie elegido y entra el primero activo.
+   *
+   * Sin argumento = alta nueva. Con un pago = editar ese.
    */
-  abrirFormPagoProveedor() {
-    const elegido = this.proveedorParaPagoPorDefecto();
-    this.nuevoPagoProveedor = {
-      proveedor_id: elegido ? elegido.id : null,
-      fecha: this.hoyISO(),
-      monto: null,
-      metodo: 'transferencia',
-      notas: '',
-    };
+  abrirFormPagoProveedor(p: any = null) {
+    this.pagoProveedorEditando = p;
+    if (p) {
+      this.nuevoPagoProveedor = {
+        proveedor_id: p.proveedor_id,
+        fecha: p.fecha,
+        monto: Number(p.monto),
+        metodo: p.metodo || 'transferencia',
+        notas: p.notas || '',
+      };
+    } else {
+      const elegido = this.proveedorParaPagoPorDefecto();
+      this.nuevoPagoProveedor = {
+        proveedor_id: elegido ? elegido.id : null,
+        fecha: this.hoyISO(),
+        monto: null,
+        metodo: 'transferencia',
+        notas: '',
+      };
+    }
     this.mensajeErrorPagoProveedor = '';
     this.mostrarFormPagoProveedor = true;
     this.cdr.detectChanges();
@@ -600,6 +617,7 @@ export class CajaComponent implements OnInit {
 
   cerrarFormPagoProveedor() {
     this.mostrarFormPagoProveedor = false;
+    this.pagoProveedorEditando = null;
     this.mensajeErrorPagoProveedor = '';
     this.cdr.detectChanges();
   }
@@ -651,15 +669,20 @@ export class CajaComponent implements OnInit {
 
     this.guardandoPagoProveedor = true;
     try {
-      await this.supabase.crearPagoProveedor({
+      const datos = {
         proveedor_id: Number(p.proveedor_id),
         fecha: p.fecha,
         monto: Number(p.monto),
         metodo: p.metodo,
         notas: p.notas || null,
-      });
-      this.mensajePagoProveedor = '✅ Pago a proveedor registrado.';
-      this.mostrarFormPagoProveedor = false;
+      };
+      if (this.pagoProveedorEditando) {
+        await this.supabase.actualizarPagoProveedor(this.pagoProveedorEditando.id, datos);
+      } else {
+        await this.supabase.crearPagoProveedor(datos);
+      }
+      this.mensajePagoProveedor = this.pagoProveedorEditando ? '✅ Pago actualizado.' : '✅ Pago a proveedor registrado.';
+      this.cerrarFormPagoProveedor();
       await this.cargarDatos();
     } catch (e: any) {
       // El mensaje mas común acá: la migración 013 no está aplicada en este
@@ -1311,6 +1334,8 @@ export class CajaComponent implements OnInit {
   /**
    * Abrir el popup de pago a EMPLEADO.
    *
+   * Sin argumento = alta nueva. Con un pago = editar ese.
+   *
    * Viene preseleccionado el empleado del selector de arriba, y no un "Elegí..."
    * vacío. La razón es que el botón "Registrar pago" está DENTRO del detalle de
    * ese empleado: si leés "Pagos que le hiciste — Juan Pérez" y tocás el botón,
@@ -1321,15 +1346,24 @@ export class CajaComponent implements OnInit {
    * En "Todos" no hay nadie elegido, así que el combo arranca con el primero de
    * la lista. Es un default, no una decisión: el popup igual muestra el nombre.
    */
-  abrirFormPago() {
+  abrirFormPago(p: any = null) {
     this.mensajeErrorPagos = '';
-    this.nuevoPago = {
-      empleado_id: this.empleadoParaPagoPorDefecto(),
-      fecha: this.hoyISO(),
-      monto: null,
-      metodo: 'efectivo',
-      notas: '',
-    };
+    this.pagoEditando = p;
+    this.nuevoPago = p
+      ? {
+          empleado_id: p.empleado_id,
+          fecha: p.fecha,
+          monto: Number(p.monto),
+          metodo: p.metodo || 'efectivo',
+          notas: p.notas || '',
+        }
+      : {
+          empleado_id: this.empleadoParaPagoPorDefecto(),
+          fecha: this.hoyISO(),
+          monto: null,
+          metodo: 'efectivo',
+          notas: '',
+        };
     this.mostrarFormPago = true;
     this.cdr.detectChanges();
   }
@@ -1547,17 +1581,22 @@ export class CajaComponent implements OnInit {
     }
     this.guardandoPago = true;
     try {
-      await this.supabase.crearPagoEmpleado({
+      const datos = {
         empleado_id: Number(this.nuevoPago.empleado_id),
         fecha: this.nuevoPago.fecha,
         monto: Number(this.nuevoPago.monto),
         metodo: this.nuevoPago.metodo || 'efectivo',
         notas: this.nuevoPago.notas || null,
-      });
+      };
+      if (this.pagoEditando) {
+        await this.supabase.actualizarPagoEmpleado(this.pagoEditando.id, datos);
+      } else {
+        await this.supabase.crearPagoEmpleado(datos);
+      }
       this.nuevoPago = { empleado_id: null, fecha: '', monto: null, metodo: 'efectivo', notas: '' };
       this.cerrarFormPago();
       await this.cargarDatos();
-      this.mostrarMensajePagos('✅ Pago registrado.');
+      this.mostrarMensajePagos(this.pagoEditando ? '✅ Pago actualizado.' : '✅ Pago registrado.');
     } catch (e) {
       this.mensajeErrorPagos = '❌ No se pudo guardar el pago.';
     }
