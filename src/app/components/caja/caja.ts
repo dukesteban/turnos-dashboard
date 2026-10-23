@@ -102,6 +102,9 @@ export class CajaComponent implements OnInit {
   fechaActual = new Date();
   turnos: any[] = [];
   cargando = false;
+  /** true solo mientras navega (cambia día/semana/mes), no en carga inicial. */
+  cargandoNavegacion = false;
+
   @ViewChild('graficoRef') graficoRef!: ElementRef;
 
   horaInicio = 8;
@@ -1839,11 +1842,15 @@ export class CajaComponent implements OnInit {
       const dia = Math.min(this.fechaActual.getDate(), ultimoDestino);
       this.fechaActual = new Date(y, m, dia);
     }
+    this.cargandoNavegacion = true; // muestra guiones al toque
+    this.cdr.detectChanges();
     this.cargarDatos();
   }
 
   irHoy() {
     this.fechaActual = new Date();
+    this.cargandoNavegacion = true;
+    this.cdr.detectChanges();
     this.cargarDatos();
   }
 
@@ -1869,12 +1876,16 @@ export class CajaComponent implements OnInit {
     const d = fechaDesdeISO(iso);
     if (!d) return;
     this.fechaActual = d;
+    this.cargandoNavegacion = true;
+    this.cdr.detectChanges();
     this.cargarDatos();
   }
 
   cambiarVista(v: 'dia' | 'semana' | 'mes') {
     this.vista = v;
     this.fechaActual = new Date();
+    this.cargandoNavegacion = true;
+    this.cdr.detectChanges();
     this.cargarDatos();
   }
 

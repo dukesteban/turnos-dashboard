@@ -107,7 +107,7 @@
       <div class="stat-icon">💰</div>
       <div class="stat-info">
         <span class="stat-label">Ingresos</span>
-        <span class="stat-value">${{ totalIngresos | number }}</span>
+        <span class="stat-value">{{ cargandoNavegacion ? '—' : ('$' + (totalIngresos | number)) }}</span>
         <span class="stat-nota stat-nota-vacia">&nbsp;</span>
       </div>
     </div>
@@ -116,8 +116,7 @@
       <div class="stat-icon">👷</div>
       <div class="stat-info">
         <span class="stat-label">Pagos a empleados</span>
-        <!-- Sin signo y sin frase, siempre. -->
-        <span class="stat-value">${{ totalPagadoEmpleados | number }}</span>
+        <span class="stat-value">{{ cargandoNavegacion ? '—' : ('$' + (totalPagadoEmpleados | number)) }}</span>
         <span class="stat-nota stat-nota-vacia">&nbsp;</span>
       </div>
     </div>
@@ -125,11 +124,8 @@
     <div class="stat-card" [ngClass]="totalPagadoProveedores > 0 ? 'rojo' : 'verde'">
       <div class="stat-icon">🧾</div>
       <div class="stat-info">
-        <!-- El nombre corto, y el número es lo PAGADO, no lo comprado. Comprar
-             no es pagar: si compraste y no abonaste, no debés nada. El detalle
-             de qué se compró y qué se pagó está en la pestaña Gastos. -->
         <span class="stat-label">Gastos</span>
-        <span class="stat-value">${{ totalPagadoProveedores | number }}</span>
+        <span class="stat-value">{{ cargandoNavegacion ? '—' : ('$' + (totalPagadoProveedores | number)) }}</span>
         <span class="stat-nota stat-nota-vacia">&nbsp;</span>
       </div>
     </div>
@@ -171,7 +167,7 @@
       <div class="stat-icon">✅</div>
       <div class="stat-info">
         <span class="stat-label">Turnos atendidos</span>
-        <span class="stat-value">{{ totalAtendidos }}</span>
+        <span class="stat-value">{{ cargandoNavegacion ? '—' : totalAtendidos }}</span>
         <span class="stat-nota stat-nota-vacia">&nbsp;</span>
       </div>
     </div>
@@ -179,7 +175,7 @@
       <div class="stat-icon">⭐</div>
       <div class="stat-info">
         <span class="stat-label">Servicio más vendido</span>
-        <span class="stat-value stat-value-sm">{{ servicioMasVendido }}</span>
+        <span class="stat-value stat-value-sm">{{ cargandoNavegacion ? '—' : servicioMasVendido }}</span>
         <span class="stat-nota stat-nota-vacia">&nbsp;</span>
       </div>
     </div>
@@ -187,7 +183,7 @@
       <div class="stat-icon">💳</div>
       <div class="stat-info">
         <span class="stat-label">Pago más usado</span>
-        <span class="stat-value stat-value-sm">{{ metodoPagoMasUsado }}</span>
+        <span class="stat-value stat-value-sm">{{ cargandoNavegacion ? '—' : metodoPagoMasUsado }}</span>
         <span class="stat-nota stat-nota-vacia">&nbsp;</span>
       </div>
     </div>
@@ -337,29 +333,29 @@
         <div class="stat-icon">📋</div>
         <div class="stat-info">
           <span class="stat-label">Ganancia</span>
-          <span class="stat-value">${{ deboEmpleado | number:'1.0-0' }}</span>
-          <span class="stat-nota">{{ turnosEmpleadoActual }} {{ turnosEmpleadoActual === 1 ? 'turno' : 'turnos' }}</span>
+          <span class="stat-value">{{ cargandoNavegacion ? '—' : ('$' + (deboEmpleado | number:'1.0-0')) }}</span>
+          <span class="stat-nota">{{ cargandoNavegacion ? '' : (turnosEmpleadoActual + ' ' + (turnosEmpleadoActual === 1 ? 'turno' : 'turnos')) }}</span>
         </div>
       </div>
 
       <div class="stat-card violeta">
         <div class="stat-icon">💸</div>
         <div class="stat-info">
-          <span class="stat-label">Le pagué</span>
-          <span class="stat-value">${{ pagueEmpleado | number:'1.0-0' }}</span>
-          <span class="stat-nota">{{ pagosEmpleadoActual.length }} {{ pagosEmpleadoActual.length === 1 ? 'pago' : 'pagos' }}</span>
+          <span class="stat-label">Pagado</span>
+          <span class="stat-value">{{ cargandoNavegacion ? '—' : ('$' + (pagueEmpleado | number:'1.0-0')) }}</span>
+          <span class="stat-nota">{{ cargandoNavegacion ? '' : (pagosEmpleadoActual.length + ' ' + (pagosEmpleadoActual.length === 1 ? 'pago' : 'pagos')) }}</span>
         </div>
       </div>
 
       <!-- El número y el color salen de los MISMOS getters que llenan las dos
            columnas de la tabla de abajo, así que el cuadro y la fila no pueden
            contradecirse. -->
-      <div class="stat-card respuesta" [ngClass]="debeEmpleadoTotal > 0 ? 'rojo' : 'verde'">
-        <div class="stat-icon">{{ debeEmpleadoTotal > 0 ? '⏳' : (haberEmpleadoTotal > 0 ? '✅' : '⚪') }}</div>
+      <div class="stat-card respuesta" [ngClass]="cargandoNavegacion ? 'verde' : (debeEmpleadoTotal > 0 ? 'rojo' : 'verde')">
+        <div class="stat-icon">{{ cargandoNavegacion ? '⚪' : (debeEmpleadoTotal > 0 ? '⏳' : (haberEmpleadoTotal > 0 ? '✅' : '⚪')) }}</div>
         <div class="stat-info">
           <span class="stat-label">Debo / Haber</span>
-          <span class="stat-value">${{ saldoEmpleado | number:'1.0-0' }}</span>
-          <span class="stat-nota">{{ textoSaldoEmpleado }}</span>
+          <span class="stat-value">{{ cargandoNavegacion ? '—' : ('$' + (saldoEmpleado | number:'1.0-0')) }}</span>
+          <span class="stat-nota">{{ cargandoNavegacion ? '' : textoSaldoEmpleado }}</span>
         </div>
       </div>
     </div>
@@ -856,8 +852,8 @@
         <div class="stat-icon">📦</div>
         <div class="stat-info">
           <span class="stat-label">Total Deudas</span>
-          <span class="stat-value">${{ compreProveedor | number }}</span>
-          <span class="stat-nota">{{ comprasProveedorActual.length }} {{ comprasProveedorActual.length === 1 ? 'deuda' : 'deudas' }}</span>
+          <span class="stat-value">{{ cargandoNavegacion ? '—' : ('$' + (compreProveedor | number)) }}</span>
+          <span class="stat-nota">{{ cargandoNavegacion ? '' : (comprasProveedorActual.length + ' ' + (comprasProveedorActual.length === 1 ? 'deuda' : 'deudas')) }}</span>
         </div>
       </div>
 
@@ -865,17 +861,17 @@
         <div class="stat-icon">💸</div>
         <div class="stat-info">
           <span class="stat-label">Total Pagado</span>
-          <span class="stat-value">${{ pagueProveedor | number }}</span>
-          <span class="stat-nota">{{ pagosProveedorActual.length }} {{ pagosProveedorActual.length === 1 ? 'abono' : 'abonos' }}</span>
+          <span class="stat-value">{{ cargandoNavegacion ? '—' : ('$' + (pagueProveedor | number)) }}</span>
+          <span class="stat-nota">{{ cargandoNavegacion ? '' : (pagosProveedorActual.length + ' ' + (pagosProveedorActual.length === 1 ? 'abono' : 'abonos')) }}</span>
         </div>
       </div>
 
-      <div class="stat-card respuesta" [ngClass]="debeProveedorTotal > 0 ? 'rojo' : 'verde'">
-        <div class="stat-icon">{{ debeProveedorTotal > 0 ? '⏳' : (haberProveedorTotal > 0 ? '✅' : '⚪') }}</div>
+      <div class="stat-card respuesta" [ngClass]="cargandoNavegacion ? 'verde' : (debeProveedorTotal > 0 ? 'rojo' : 'verde')">
+        <div class="stat-icon">{{ cargandoNavegacion ? '⚪' : (debeProveedorTotal > 0 ? '⏳' : (haberProveedorTotal > 0 ? '✅' : '⚪')) }}</div>
         <div class="stat-info">
           <span class="stat-label">Debo / Haber</span>
-          <span class="stat-value">${{ saldoProveedorTotal | number }}</span>
-          <span class="stat-nota">{{ textoSaldoProveedorTotal }}</span>
+          <span class="stat-value">{{ cargandoNavegacion ? '—' : ('$' + (saldoProveedorTotal | number)) }}</span>
+          <span class="stat-nota">{{ cargandoNavegacion ? '' : textoSaldoProveedorTotal }}</span>
         </div>
       </div>
     </div>
