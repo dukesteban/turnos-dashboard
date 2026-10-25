@@ -22,14 +22,14 @@
   margin: 0 auto;
 }
 
-// Pantallas grandes (1920px+): la grilla se ensancha para aprovechar el ancho
-@media (min-width: 1600px) {
+// Pantallas grandes: la grilla se ensancha para aprovechar el ancho
+@media (min-width: 1500px) {
   .dashboard-page {
     max-width: 1500px;
   }
 }
 
-@media (min-width: 1920px) {
+@media (min-width: 1800px) {
   .dashboard-page {
     max-width: 1700px;
   }

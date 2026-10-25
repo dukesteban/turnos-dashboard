@@ -22,14 +22,14 @@
   height: calc(100vh - var(--chrome-app));
 }
 
-// Pantallas grandes (1920px+): la grilla se ensancha para aprovechar el ancho
-@media (min-width: 1600px) {
+// Pantallas grandes: la grilla se ensancha para aprovechar el ancho
+@media (min-width: 1500px) {
   .agenda-page {
     max-width: 1500px;
   }
 }
 
-@media (min-width: 1920px) {
+@media (min-width: 1800px) {
   .agenda-page {
     max-width: 1700px;
   }
