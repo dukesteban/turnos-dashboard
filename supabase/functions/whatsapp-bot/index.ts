@@ -872,7 +872,7 @@ function ausenciasQueCubren(fecha: string) {
 async function estadoDelDia(fecha: string, excluirTurnoId?: number) {
   const diaSemana = new Date(fecha + 'T00:00:00').getDay();
   const [{ data: empleados }, { data: turnos }, { data: ausencias }] = await Promise.all([
-    sb.from('empleados').select('id, nombre, jornada').eq('activo', true).order('nombre'),
+    sb.from('empleados').select('id, nombre, jornada').eq('activo', true).eq('atiende', true).order('nombre'),
     sb.from('turnos')
       .select('id, hora_inicio, hora_fin, duracion_minutos, empleado_id')
       .eq('fecha', fecha)
@@ -1145,7 +1145,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
     }
     case 'buscar_empleados': {
       const { data: todos } = await sb
-        .from('empleados').select('id, nombre, jornada').eq('activo', true).order('nombre');
+        .from('empleados').select('id, nombre, jornada').eq('activo', true).eq('atiende', true).order('nombre');
 
       const fecha = input.fecha;
 
@@ -1367,6 +1367,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
         .from('empleados')
         .select('id, nombre, jornada')
         .eq('activo', true)
+        .eq('atiende', true)
         .order('nombre');
 
       const { data: ausencias } = await ausenciasQueCubren(fecha);

@@ -65,6 +65,7 @@ export class EmpleadosComponent implements OnInit {
   accesoRol = 'empleado';
   accesoError = '';
   accesoGuardando = false;
+  guardandoAtiende = false;
 
   private readonly ROLES = [
     { valor: 'admin', etiqueta: 'Administrador' },
@@ -649,6 +650,37 @@ export class EmpleadosComponent implements OnInit {
     } catch (e) {
       this.mostrarError('❌ Error al inactivar.');
     }
+  }
+
+  /**
+   * Prende o apaga si este empleado toma turnos.
+   *
+   * No se borra ni se inactiva: sigue existiendo para Caja y para los turnos
+   * viejos. Solo deja de ofrecerse en Agenda, en los selectores de turno y en
+   * el bot. Se guarda al instante porque es un switch, no un formulario.
+   */
+  async guardarAtiende(atiende: boolean) {
+    const emp = this.empleadoSeleccionado;
+    if (!emp || this.guardandoAtiende) return;
+    const anterior = emp.atiende !== false;
+    if (anterior === atiende) return;
+
+    emp.atiende = atiende;
+    const fila = this.empleados.find(e => e.id === emp.id);
+    if (fila) fila.atiende = atiende;
+
+    this.guardandoAtiende = true;
+    this.cdr.detectChanges();
+    try {
+      await this.supabase.updateEmpleado(emp.id, { atiende });
+      this.mostrarMensaje(atiende ? '✅ Ahora atiende turnos.' : '✅ Ya no atiende turnos.');
+    } catch (e) {
+      emp.atiende = anterior;
+      if (fila) fila.atiende = anterior;
+      this.mostrarError('❌ No se pudo guardar.');
+    }
+    this.guardandoAtiende = false;
+    this.cdr.detectChanges();
   }
 
   // COMISIONES

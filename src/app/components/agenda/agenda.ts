@@ -472,6 +472,9 @@ export class AgendaComponent implements OnInit, OnDestroy {
     // El orden alfabetico se aplica ACÁ y no se delega en el ORDER BY del
     // servicio: es una decision de la pantalla, no una casualidad de la query.
     const empleados = [...(this.empleados || [])]
+      // Quien no atiende turnos (ej. un secretario) no tiene columna: la Agenda
+      // es para ver y mover turnos, no el organigrama del local.
+      .filter((e: any) => e.atiende !== false)
       .sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
 
     const cols = empleados
@@ -906,7 +909,7 @@ claseBloque(turno: any, mini: boolean): string {
     this.modoEditarTurno = false;
     this.errorEditarTurno = '';
     this.empleadoReprogramarNoPuede = false;
-    this.empleadosReprogramar = this.empleados;
+    this.empleadosReprogramar = this.empleadosQueAtienden;
     this.cdr.detectChanges();
   }
 
@@ -1044,7 +1047,7 @@ claseBloque(turno: any, mini: boolean): string {
    */
   async actualizarEmpleadosReprogramar() {
     if (!this.nuevaFecha) {
-      this.empleadosReprogramar = this.empleados;
+      this.empleadosReprogramar = this.empleadosQueAtienden;
       this.empleadoReprogramarNoPuede = false;
       return;
     }
@@ -1066,12 +1069,17 @@ claseBloque(turno: any, mini: boolean): string {
     this.cdr.detectChanges();
   }
 
+  /** Empleados que toman turnos, para los selectores de la Agenda. */
+  get empleadosQueAtienden(): any[] {
+    return (this.empleados || []).filter((e: any) => e.atiende !== false);
+  }
+
   /** Sale del form de reprogramar limpiando todos los carteles. */
   salirDeEditarTurno() {
     this.modoEditarTurno = false;
     this.errorEditarTurno = '';
     this.empleadoReprogramarNoPuede = false;
-    this.empleadosReprogramar = this.empleados;
+    this.empleadosReprogramar = this.empleadosQueAtienden;
     this.cdr.detectChanges();
   }
 

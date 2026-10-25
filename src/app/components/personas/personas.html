@@ -8,13 +8,13 @@
 <div class="personas-page">
 
   <nav class="tabs tabs-personas">
-    <a routerLink="/personas/clientes" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">
+    <a routerLink="/personas/clientes" [class.activo]="esClientes">
       👤 Clientes
     </a>
-    <a routerLink="/personas/empleados" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">
+    <a routerLink="/personas/empleados" [class.activo]="esEmpleados">
       🧑‍🔧 Empleados
     </a>
-    <a routerLink="/personas/proveedores" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">
+    <a routerLink="/personas/proveedores" [class.activo]="esProveedores">
       📦 Proveedores
     </a>
   </nav>

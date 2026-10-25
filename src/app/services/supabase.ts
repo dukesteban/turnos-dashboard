@@ -529,7 +529,8 @@ export class SupabaseService {
         .select('empleado_id, hora_inicio, hora_fin')
         .eq('fecha', fecha)
         .neq('estado', 'cancelado'),
-      this.getEmpleados(),
+      // Solo quien atiende puede quedar asignado a un turno nuevo.
+      this.getEmpleados(true, true),
     ]);
 
     const ini = horaInicio.length === 5 ? horaInicio + ':00' : horaInicio;
@@ -1014,12 +1015,16 @@ export class SupabaseService {
    * Si se saca el `.eq('activo', true)` sin el parametro, los selectores
    * empiezan a ofrecer empleados dados de baja.
    */
-  async getEmpleados(soloActivos = true) {
+  async getEmpleados(soloActivos = true, soloAtienden = false) {
     let q = this.supabase
       .from('empleados')
       .select('*')
       .order('nombre', { ascending: true });
     if (soloActivos) q = q.eq('activo', true);
+    // `atiende = false` es para quien trabaja en el local pero no toma turnos
+    // (un secretario, por ejemplo). Sigue apareciendo en Empleados y en Caja,
+    // pero no en la Agenda ni en los selectores de turnos.
+    if (soloAtienden) q = q.eq('atiende', true);
     const { data, error } = await q;
     if (error) throw error;
     return data;

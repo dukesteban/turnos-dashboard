@@ -189,6 +189,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Empleados para los filtros de la pantalla: solo quien toma turnos.
+   * Los secretarios siguen existiendo (y cobrando en Caja), pero no ensucian
+   * una lista que se usa para buscar turnos.
+   */
+  get empleadosQueAtienden(): any[] {
+    return (this.empleados || []).filter((e: any) => e.atiende !== false);
+  }
+
+  /**
    * ID del empleado del turno. Es OBLIGATORIO: define la columna de la agenda
    * y es quien cobra la comisión. Ya no se deriva del puesto.
    */
@@ -546,7 +555,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.editandoTurno = false;
     this.errorEditarTurno = '';
     this.empleadoReprogramarNoPuede = false;
-    this.empleadosReprogramar = this.empleados;
+    this.empleadosReprogramar = this.empleadosQueAtienden;
     this.cdr.detectChanges();
   }
 
@@ -975,7 +984,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   async actualizarEmpleadosReprogramar() {
     if (!this.nuevaFecha) {
-      this.empleadosReprogramar = this.empleados;
+      this.empleadosReprogramar = this.empleadosQueAtienden;
       this.empleadoReprogramarNoPuede = false;
       return;
     }
@@ -1006,7 +1015,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.editandoTurno = false;
     this.errorEditarTurno = '';
     this.empleadoReprogramarNoPuede = false;
-    this.empleadosReprogramar = this.empleados;
+    this.empleadosReprogramar = this.empleadosQueAtienden;
     this.cdr.detectChanges();
   }
 

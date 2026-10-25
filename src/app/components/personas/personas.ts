@@ -84,16 +84,38 @@ export class PersonasComponent {
       const clienteId = params.get('cliente');
       const empleadoId = params.get('empleado');
       const proveedorId = params.get('proveedor');
-      // `params.keys` es un iterable, hay que pasarlo a array para usar reduce
-      const queryParams = [...params.keys].reduce((acc: any, key) => ({ ...acc, [key]: params.get(key) }), {});
       if (clienteId && this.tabActual !== 'clientes') {
-        this.router.navigate(['/personas/clientes'], { queryParams, replaceUrl: true });
+        this.tabActual = 'clientes';
+        this.visitados['clientes'] = true;
       } else if (empleadoId && this.tabActual !== 'empleados') {
-        this.router.navigate(['/personas/empleados'], { queryParams, replaceUrl: true });
+        this.tabActual = 'empleados';
+        this.visitados['empleados'] = true;
       } else if (proveedorId && this.tabActual !== 'proveedores') {
-        this.router.navigate(['/personas/proveedores'], { queryParams, replaceUrl: true });
+        this.tabActual = 'proveedores';
+        this.visitados['proveedores'] = true;
       }
+      // Forzar syncTab por si el router no disparó NavigationEnd (navegación misma ruta con query params)
+      this.syncTab();
     });
+  }
+
+  ngOnInit() {
+    // Leer query params del snapshot al iniciar (para navegación directa con query params)
+    const params = this.route.snapshot.queryParamMap;
+    const clienteId = params.get('cliente');
+    const empleadoId = params.get('empleado');
+    const proveedorId = params.get('proveedor');
+    if (clienteId && this.tabActual !== 'clientes') {
+      this.tabActual = 'clientes';
+      this.visitados['clientes'] = true;
+    } else if (empleadoId && this.tabActual !== 'empleados') {
+      this.tabActual = 'empleados';
+      this.visitados['empleados'] = true;
+    } else if (proveedorId && this.tabActual !== 'proveedores') {
+      this.tabActual = 'proveedores';
+      this.visitados['proveedores'] = true;
+    }
+    this.syncTab();
   }
 
   /**

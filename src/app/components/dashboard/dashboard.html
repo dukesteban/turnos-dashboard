@@ -103,7 +103,7 @@
               (ngModelChange)="onFiltroHoyChange($event)"
               aria-label="Filtrar los turnos de hoy por empleado">
         <option [value]="SIN_FILTRO">Todos los empleados</option>
-        <option *ngFor="let e of empleados" [value]="'' + e.id">{{ e.nombre }}</option>
+        <option *ngFor="let e of empleadosQueAtienden" [value]="'' + e.id">{{ e.nombre }}</option>
       </select>
     </div>
 
@@ -201,7 +201,7 @@
               (ngModelChange)="onFiltroPeriodoChange($event)"
               aria-label="Filtrar los turnos del período por empleado">
         <option [value]="SIN_FILTRO">Todos los empleados</option>
-        <option *ngFor="let e of empleados" [value]="'' + e.id">{{ e.nombre }}</option>
+        <option *ngFor="let e of empleadosQueAtienden" [value]="'' + e.id">{{ e.nombre }}</option>
       </select>
     </div>
     <div class="tabla-wrapper">
