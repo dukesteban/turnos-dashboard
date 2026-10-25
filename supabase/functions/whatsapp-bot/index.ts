@@ -935,6 +935,10 @@ async function estadoDelDia(fecha: string, excluirTurnoId?: number) {
   // Que este libre ademas de la jornada: si el empleado no labra ese dia, o corta
   // antes de que termine el turno, no puede tomarlo.
   const libres = (empleadoId: number, desde: number, hasta: number): boolean => {
+    // Si no esta en la lista (no atiende turnos, o no existe), no esta libre.
+    // Sin este corte, un id que no figuraba en `labora` pasaba como libre y el
+    // bot podia asignarle un turno a un secretario por id.
+    if (!labora.has(empleadoId)) return false;
     const j = labora.get(empleadoId);
     if (j === false) return false;
     if (j && (desde < j.desde || hasta > j.hasta)) return false;
@@ -948,7 +952,10 @@ async function estadoDelDia(fecha: string, excluirTurnoId?: number) {
     // Por que no puede: el dia que no labra y el horario ocupado son dos cosas
     // distintas y el modelo las mezclaba ("ya hay un turno a esa hora" para un
     // empleado que no trabaja ese dia). Se le da la causa exacta.
-    motivoNoPuede: (empleadoId: number, desde?: number, hasta?: number): 'no_labora_ese_dia' | 'ausente' | 'ausente_parcial' | 'ocupado' | 'fuera_de_jornada' | null => {
+    motivoNoPuede: (empleadoId: number, desde?: number, hasta?: number): 'no_atiende' | 'no_labora_ese_dia' | 'ausente' | 'ausente_parcial' | 'ocupado' | 'fuera_de_jornada' | null => {
+      // No atiende turnos (ej. secretario) o no existe: no es "ese dia no
+      // trabaja", es que no toma turnos nunca.
+      if (!labora.has(empleadoId)) return 'no_atiende';
       const j = labora.get(empleadoId);
       if (j === false) return 'no_labora_ese_dia';
       // Ausencia: es distinto de "tiene otro turno". Antes caia en "ocupado" y el
@@ -1642,7 +1649,9 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
           const nombre = nombrePedido?.nombre ?? `el empleado ${pedido}`;
           const causa = agenda.motivoNoPuede(pedido, pref, pref + duracion);
           motivo =
-            causa === 'no_labora_ese_dia'
+            causa === 'no_atiende'
+              ? `${nombre} no atiende turnos.`
+              : causa === 'no_labora_ese_dia'
               ? `${nombre} no trabaja ese dia.`
               : causa === 'ausente'
                 ? `${nombre} no trabaja ese dia.`
@@ -2024,7 +2033,10 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       // que "ya hay un turno a esa hora".
       if (empId == null) {
         if (empleado_id != null) {
-          const { data: e } = await sb.from('empleados').select('nombre').eq('id', empleado_id).maybeSingle();
+          const { data: e } = await sb.from('empleados').select('nombre, atiende').eq('id', empleado_id).maybeSingle();
+          if (e && e.atiende === false) {
+            return err('empleado_no_atiende', `${e.nombre} no atiende turnos.`);
+          }
           const cerca = radio > 0 ? ` ni en los ${radio} minutos de alrededor` : '';
           return err('empleado_no_disponible', `${e?.nombre ?? 'Ese empleado'} no esta libre a esa hora${cerca}.`);
         }
@@ -2546,6 +2558,9 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
           // Codigos y texto distintos por causa: el modelo repetia "ya hay un
           // turno" para un empleado que sencillamente no labra ese dia, y el
           // cliente recibe una excusa que no era.
+          if (porQue === 'no_atiende') {
+            return err('empleado_no_atiende', `${nombre} no atiende turnos.`);
+          }
           if (porQue === 'no_labora_ese_dia' || porQue === 'ausente') {
             return err('empleado_no_labora_ese_dia', `${nombre} no trabaja ese dia.`);
           }
