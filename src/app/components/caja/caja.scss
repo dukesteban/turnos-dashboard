@@ -203,6 +203,13 @@
   @media (max-width: 700px) { grid-template-columns: 1fr; }
 }
 
+// Los dos acordeones de Ingresos (Por servicio / Por método de pago) viven
+// dentro del grid, que ya separa con `gap`. El `margin-bottom` que trae el
+// acordeón para apilarse con otros sumaría 12px de más acá.
+.grid-inferior .acordeon {
+  margin-bottom: 0;
+}
+
 // GRAFICO
 .grafico {
   display: flex;

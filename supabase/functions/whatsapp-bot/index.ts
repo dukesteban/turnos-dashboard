@@ -1171,18 +1171,37 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       if (pedido) {
         const limpio = pedido.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
         // Primero nombre o apellido, por si el cliente dijo solo uno de los dos.
-        const coincide = (todos ?? []).find((e: any) => {
+        const parece = (e: any) => {
           const partes = String(e.nombre).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/);
           return partes.includes(limpio) || String(e.nombre).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === limpio;
-        });
-        nombreResuelto = coincide
-          ? { nombre: pedido, encontrado: true, id: coincide.id, nombre_real: coincide.nombre }
-          : {
-              nombre: pedido,
-              encontrado: false,
-              detalle: `${pedido} no trabaja en este local.`,
-              quien_si: (todos ?? []).map((e: any) => e.nombre),
-            };
+        };
+        const coincide = (todos ?? []).find(parece);
+        if (coincide) {
+          nombreResuelto = { nombre: pedido, encontrado: true, id: coincide.id, nombre_real: coincide.nombre };
+        } else {
+          // Antes de decir "no trabaja en este local" hay que distinguir dos cosas
+          // que no son lo mismo: no existir, y existir pero no tomar turnos (un
+          // secretario). Decirle a un cliente que el secretario "no trabaja aca" es
+          // falso, y ademas el local lo tiene en la puerta.
+          const { data: noAtienden } = await sb
+            .from('empleados').select('id, nombre').eq('activo', true).eq('atiende', false);
+          const otro = (noAtienden ?? []).find(parece);
+          nombreResuelto = otro
+            ? {
+                nombre: pedido,
+                encontrado: true,
+                atiende_turnos: false,
+                nombre_real: otro.nombre,
+                detalle: `${otro.nombre} trabaja en el local pero no atiende turnos.`,
+                nota: 'Trabaja en el local pero NO toma turnos. Decilo con esas palabras: no digas que no trabaja aca.',
+              }
+            : {
+                nombre: pedido,
+                encontrado: false,
+                detalle: `${pedido} no trabaja en este local.`,
+                quien_si: (todos ?? []).map((e: any) => e.nombre),
+              };
+        }
       }
 
       // Sin fecha: la lista completa, como siempre.
@@ -1411,6 +1430,26 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
         lista.push({ id: e.id, nombre: e.nombre, horario: tramo || 'sin horario' });
       }
 
+      // ─── Quien esta en el local pero NO toma turnos ───
+      //
+      // Un secretario, el duenio. No va en `empleados` porque no se le puede
+      // asignar un turno, pero tampoco es cierto que "no trabaje aca". Sin este
+      // dato el modelo ve una lista sin el nombre y contesta "no trabaja en el
+      // local", que es falso y el cliente lo tiene en la puerta. Se manda aparte,
+      // con la instruccion de nombrarlo solo si preguntaron por el.
+      const { data: sinTurnos } = await sb
+        .from('empleados')
+        .select('id, nombre, jornada')
+        .eq('activo', true)
+        .eq('atiende', false)
+        .order('nombre');
+      const trabajanSinTurnos = (sinTurnos ?? [])
+        .filter((e: any) => {
+          const j = Array.isArray(e.jornada) ? e.jornada[diaSemana] : null;
+          return j === null || j === undefined || !!j.activo;
+        })
+        .map((e: any) => e.nombre);
+
       return JSON.stringify({
         ok: true,
         fecha,
@@ -1418,6 +1457,13 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
         Atencion: (horarios as any[]).map((h) => `${sinSeg(h.hora_inicio)} a ${sinSeg(h.hora_fin)}`).join(' y '),
         empleados: lista,
         ausentes,
+        trabajan_sin_turnos: trabajanSinTurnos,
+        nota:
+          '`empleados` son los que atienden turnos. `trabajan_sin_turnos` son personas que ' +
+          'trabajan en el local pero NO toman turnos (secretario, duenio). Si el cliente ' +
+          'pregunta por una de ellas, decile que trabaja en el local pero no atiende turnos: ' +
+          'NO digas que no trabaja aca. No las ofrezcas como alternativa ni las nombres si ' +
+          'nadie pregunto por ellas.',
       });
     }
     case 'asociar_numero': {
@@ -1589,6 +1635,26 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       }
       libres.sort((a, b) => a - b);
 
+      // ─── La hora que sigue a lo que el cliente YA tiene ese dia ───
+      //
+      // Cuando alguien suma un segundo servicio ("agregame el lavado, despues del
+      // corte") la hora que le sirve es la que arranca justo cuando termina el
+      // anterior. En la corrida real: el corte terminaba 08:45, a las 08:45 habia
+      // lugar, y el bot ofrecia 09:00 y 09:15. La grilla arranca en la apertura y
+      // avanza de 15 en 15, asi que 08:45 YA estaba en `libres`: el modelo redondeaba
+      // al cuarto de hora siguiente en vez de mirar el fin de su propio turno.
+      //
+      // Se calcula aca, con los mismos datos que `crear_turno` va a validar. Se
+      // toma la mas temprana de todas: si tiene dos turnos, le sirve pegar el nuevo
+      // al primero, no esperar al ultimo.
+      const finDeSusTurnos = misTurnos
+        .map((t: any) => horaAMin(t.hora_fin))
+        .filter((n: number) => n > 0);
+      const inmediatas = finDeSusTurnos
+        .map((fin: number) => libres.find((h) => h >= fin))
+        .filter((h: number | undefined): h is number => h != null);
+      const horaInmediata = inmediatas.length ? Math.min(...inmediatas) : null;
+
       // ─── Franjas: mañana / tarde / noche ───
       //
       // "quiero un lavado mañana a la tarde" llego sin hora y la tool devolvio las 3
@@ -1733,7 +1799,16 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
         pref != null || franjaPedida
           ? ordenada
           : FRANJAS.map((f) => porFranja[f][0]).filter((h) => h != null);
-      const horasOrdenadas = (repartidas.length ? repartidas : ordenada).slice(0, cantidad);
+
+      // Sin hora ni franja pedidas, la que sigue a sus turnos va PRIMERO: es la
+      // unica que no le hace esperar de mas. Con hora o franja el cliente ya eligio,
+      // asi que se respeta su orden y la inmediata solo viaja como dato.
+      const base = repartidas.length ? repartidas : ordenada;
+      const conInmediata =
+        horaInmediata != null && pref == null && !franjaPedida
+          ? [horaInmediata, ...base.filter((h) => h !== horaInmediata)]
+          : base;
+      const horasOrdenadas = conInmediata.slice(0, cantidad);
 
       const sugerencias = horasOrdenadas.map((h, i) => ({
         opcion: i + 1,
@@ -1776,6 +1851,14 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
         // explicar por que una hora que el pidio no aparece, en lugar de quedarse
         // mirando una lista mas corta sin entender que paso.
         turnos_del_cliente: misTurnos,
+        // La hora que le sigue a lo que ya tiene ese dia. Va explicita para que no
+        // la tenga que deducir del `hora_fin` del turno: cuando la deducia, ofrecia
+        // el cuarto de hora siguiente (08:45 -> 09:00) y le hacia esperar 15 minutos
+        // de mas con el local libre.
+        hora_inmediata_despues: horaInmediata != null ? minAHora(horaInmediata) : null,
+        nota_despues: horaInmediata != null
+          ? `El cliente ya tiene turno ese dia. Si suma otro servicio para despues del que ya tiene, la hora que le sigue es ${minAHora(horaInmediata)}: ofrecelá asi, sin correrla.`
+          : null,
         // Que proponer cuando la hora pedida no se puede. Va calculada aca y no
         // dejada al modelo: es la misma que crear_turno va a elegir cuando el
         // cliente acepte, asi que el "dale" cae en el horario que le dijimos.

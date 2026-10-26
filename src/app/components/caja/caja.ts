@@ -569,6 +569,10 @@ export class CajaComponent implements OnInit {
   acordeonSaldo = false;
   acordeonPagosProv = false;
   acordeonCompras = false;
+  // Ingresos: los dos desgloses del gráfico. Arrancan cerrados: el gráfico ya
+  // muestra la evolución y estas dos listas son el detalle de por qué.
+  acordeonServicios = false;
+  acordeonMetodos = false;
 
   // ── "TODOS" EN EL COMBO ──────────────────────────────────────────
   //

@@ -213,37 +213,53 @@
     </div>
 
     <!-- Por servicio -->
-    <div class="seccion">
-      <h3>Por servicio</h3>
-      <div *ngIf="totalPorServicio.length === 0" class="vacio">Sin datos</div>
-      <div class="servicios-lista">
-        <div *ngFor="let s of totalPorServicio" class="servicio-fila">
-          <div class="servicio-info">
-            <span class="servicio-nombre">{{ s.nombre }}</span>
-            <span class="servicio-cantidad">{{ s.cantidad }} {{ s.cantidad === 1 ? 'vez' : 'veces' }}</span>
+    <!--
+      Acordeón: es el detalle de qué se vendió, no lo primero que se mira. El
+      gráfico de arriba ya cuenta la historia del período; esto es para el que
+      quiere saber cuál servicio la movió. Arranca cerrado, como los demás
+      acordeones de la pantalla.
+    -->
+    <div class="acordeon">
+      <div class="acordeon-header" (click)="acordeonServicios = !acordeonServicios">
+        <span>Por servicio</span>
+        <span class="chevron" [class.abierto]="acordeonServicios">›</span>
+      </div>
+      <div class="acordeon-body" [class.visible]="acordeonServicios">
+        <div *ngIf="totalPorServicio.length === 0" class="vacio">Sin datos</div>
+        <div class="servicios-lista">
+          <div *ngFor="let s of totalPorServicio" class="servicio-fila">
+            <div class="servicio-info">
+              <span class="servicio-nombre">{{ s.nombre }}</span>
+              <span class="servicio-cantidad">{{ s.cantidad }} {{ s.cantidad === 1 ? 'vez' : 'veces' }}</span>
+            </div>
+            <div class="servicio-barra-wrap">
+              <div class="servicio-barra" [style.width.%]="(s.total / totalGanancias) * 100"></div>
+            </div>
+            <span class="servicio-total">${{ s.total | number }}</span>
           </div>
-          <div class="servicio-barra-wrap">
-            <div class="servicio-barra" [style.width.%]="(s.total / totalGanancias) * 100"></div>
-          </div>
-          <span class="servicio-total">${{ s.total | number }}</span>
         </div>
       </div>
     </div>
 
     <!-- Por método de pago -->
-    <div class="seccion">
-      <h3>Por método de pago</h3>
-      <div *ngIf="totalPorMetodoPago.length === 0" class="vacio">Sin datos</div>
-      <div class="servicios-lista">
-        <div *ngFor="let m of totalPorMetodoPago" class="servicio-fila">
-          <div class="servicio-info">
-            <span class="servicio-nombre">{{ m.metodo }}</span>
-            <span class="servicio-cantidad">{{ m.cantidad }} {{ m.cantidad === 1 ? 'turno' : 'turnos' }}</span>
+    <div class="acordeon">
+      <div class="acordeon-header" (click)="acordeonMetodos = !acordeonMetodos">
+        <span>Por método de pago</span>
+        <span class="chevron" [class.abierto]="acordeonMetodos">›</span>
+      </div>
+      <div class="acordeon-body" [class.visible]="acordeonMetodos">
+        <div *ngIf="totalPorMetodoPago.length === 0" class="vacio">Sin datos</div>
+        <div class="servicios-lista">
+          <div *ngFor="let m of totalPorMetodoPago" class="servicio-fila">
+            <div class="servicio-info">
+              <span class="servicio-nombre">{{ m.metodo }}</span>
+              <span class="servicio-cantidad">{{ m.cantidad }} {{ m.cantidad === 1 ? 'turno' : 'turnos' }}</span>
+            </div>
+            <div class="servicio-barra-wrap">
+              <div class="servicio-barra" [style.width.%]="(m.total / totalGanancias) * 100"></div>
+            </div>
+            <span class="servicio-total">${{ m.total | number }}</span>
           </div>
-          <div class="servicio-barra-wrap">
-            <div class="servicio-barra" [style.width.%]="(m.total / totalGanancias) * 100"></div>
-          </div>
-          <span class="servicio-total">${{ m.total | number }}</span>
         </div>
       </div>
     </div>
