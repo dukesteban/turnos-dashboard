@@ -163,6 +163,48 @@ describe('Empleados — lista', () => {
   });
 });
 
+describe('Empleados — Atiende turnos', () => {
+  /**
+   * `atiende` es distinto de `activo`: apagarlo saca a la persona de la Agenda,
+   * de los selectores de turno y del bot, pero la deja en Personas y en Caja.
+   *
+   * El switch guarda al instante, así que la fila de la lista tiene que reflejar
+   * el cambio sin recargar: es el mismo objeto que se está viendo.
+   */
+  it('guardarAtiende guarda en la base y actualiza la fila de la lista', async () => {
+    let guardado: any = null;
+    const { cmp } = montar({
+      updateEmpleado: (id: number, cambios: any) => {
+        guardado = { id, cambios };
+        return Promise.resolve();
+      },
+    });
+    cmp.empleados = [{ ...EMP_JUAN, atiende: true }];
+    cmp.empleadoSeleccionado = cmp.empleados[0];
+
+    await cmp.guardarAtiende(false);
+
+    expect(guardado).toEqual({ id: 1, cambios: { atiende: false } });
+    expect(cmp.empleadoSeleccionado.atiende).toBe(false);
+    expect(cmp.empleados[0].atiende).toBe(false);
+  });
+
+  // Si la base rechaza el cambio, el switch no puede quedar mintiendo: vuelve
+  // al valor anterior en el detalle y en la lista.
+  it('si falla el guardado, vuelve al valor anterior', async () => {
+    const { cmp } = montar({
+      updateEmpleado: () => Promise.reject(new Error('sin red')),
+    });
+    cmp.empleados = [{ ...EMP_JUAN, atiende: true }];
+    cmp.empleadoSeleccionado = cmp.empleados[0];
+
+    await cmp.guardarAtiende(false);
+
+    expect(cmp.empleadoSeleccionado.atiende).toBe(true);
+    expect(cmp.empleados[0].atiende).toBe(true);
+  });
+});
+
 describe('Empleados — jornada: el checkbox que no desmarcaba', () => {
   it('desactivarDia pone activo=false', () => {
     const { cmp } = montar();

@@ -21,6 +21,21 @@
   }
 }
 
+// Pantallas grandes: el contenido de la pestaña se ensancha igual que Caja.
+// Antes la página se quedaba en 1100px dentro de un `.tab-panel` de 1500/1700 y
+// se veía centrada y más chica que el resto de la app.
+@media (min-width: 1500px) {
+  .empleados-page {
+    max-width: 1500px;
+  }
+}
+
+@media (min-width: 1800px) {
+  .empleados-page {
+    max-width: 1700px;
+  }
+}
+
 .alerta {
   padding: 12px 16px;
   border-radius: 8px;
@@ -47,6 +62,40 @@
   padding: 2px 10px;
   border-radius: 12px;
   font-weight: 600;
+}
+
+// "Atiende" en la lista: si la persona toma turnos.
+//
+// Va al lado de Activo/Inactivo y no lo reemplaza: son dos cosas distintas (un
+// secretario está activo y no atiende). Verde como el Activo se confundiría con
+// el estado, así que va en azul. Al que no atiende no se le muestra nada: el
+// `*ngIf` del HTML ya lo saca.
+.badge-atiende {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+
+  // Empleado dado de baja: medio gris. La fila entera ya viene atenuada desde
+  // `_lista.scss`, pero al badge le quedaba un azul lavado en vez de un chip
+  // apagado.
+  &.inactivo {
+    color: #64748b;
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+  }
+}
+
+// En celular no entra todo: queda solo "Atiende". Si está inactivo se nota
+// igual, porque el badge pasa a gris y la fila está atenuada.
+@media (max-width: 700px) {
+  .estado-badge {
+    display: none;
+  }
 }
 // El `.buscador` no está acá: vive en `styles/_buscador.scss` y lo comparten las
 // tres pestañas de Personas. Estaba copiado en Clientes y Empleados, y el de

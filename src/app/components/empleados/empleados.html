@@ -31,6 +31,14 @@
             {{ empleado.activo ? 'Activo' : 'Inactivo' }}
           </div>
           <!--
+            Si toma turnos. Es distinto de estar activo: un secretario trabaja en
+            el local (activo) pero no aparece en Agenda ni en el bot. Al que no
+            atiende no se le pone nada: el badge dice "Atiende", así que su
+            ausencia ya significa que no.
+          -->
+          <span class="badge-atiende" [class.inactivo]="!empleado.activo"
+                *ngIf="empleado.atiende !== false">Atiende</span>
+          <!--
             El rol al lado del estado: son las dos cosas que uno mira de un empleado
             para saber "puede trabajar acá y qué puede tocar". El que no tiene rol
             dice "Sin rol" en gris, no queda un hueco: se ve que le falta y no que

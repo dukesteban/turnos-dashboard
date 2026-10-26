@@ -20,6 +20,21 @@
   }
 }
 
+// Pantallas grandes: el contenido de la pestaña se ensancha igual que Caja.
+// Antes la página se quedaba en 1100px dentro de un `.tab-panel` de 1500/1700 y
+// se veía centrada y más chica que el resto de la app.
+@media (min-width: 1500px) {
+  .clientes-page {
+    max-width: 1500px;
+  }
+}
+
+@media (min-width: 1800px) {
+  .clientes-page {
+    max-width: 1700px;
+  }
+}
+
 .alerta {
   padding: 12px 16px;
   border-radius: 8px;
