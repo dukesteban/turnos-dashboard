@@ -357,6 +357,9 @@
   &:hover { filter: brightness(0.93); transform: translateX(2px); }
   &.atendido { background: #dcfce7; border-color: #16a34a; }
   &.pendiente { background: #fef9c3; border-color: #ca8a04; }
+  // Vencido en gris, igual que el badge de Turnos. Antes caia en el azul base
+  // del bloque y se leia como un turno mas.
+  &.vencido { background: #f1f5f9; border-color: #94a3b8; }
 
   .turno-header {
     display: flex;
@@ -553,6 +556,8 @@ $h-header-semana: 72px;
   &:hover { filter: brightness(0.93); }
   &.atendido { background: #dcfce7; border-color: #16a34a; }
   &.pendiente { background: #fef9c3; border-color: #ca8a04; }
+  // Mismo gris que en la vista dia y en el badge de Turnos.
+  &.vencido { background: #f1f5f9; border-color: #94a3b8; }
 
   .turno-cliente-sm { font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .turno-servicio-sm { color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -768,12 +773,11 @@ $h-header-semana: 72px;
   font-size: 0.78rem;
   font-weight: 600;
   text-transform: capitalize;
-  // Mismo gris que el badge de Pendiente en Turnos: es el mismo estado y no
-  // puede cambiar de color segun la pantalla.
-  &.pendiente { background: #f1f5f9; color: #475569; }
+  // Mismos colores que en Turnos: pendiente amarillo, vencido gris.
+  &.pendiente { background: #fef9c3; color: #854d0e; }
   &.atendido { background: #dcfce7; color: #166534; }
   &.cancelado { background: #fee2e2; color: #991b1b; }
-  &.vencido { background: #ffedd5; color: #9a3412; }
+  &.vencido { background: #f1f5f9; color: #475569; }
   &.confirmado { background: #dcfce7; color: #166534; }
 }
 

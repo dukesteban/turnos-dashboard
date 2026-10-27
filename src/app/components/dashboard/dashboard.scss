@@ -435,16 +435,23 @@
   font-weight: 600;
   text-transform: capitalize;
 
-  // Pendiente es el estado NORMAL de un turno (todavia no paso), no una alerta.
-  // En amarillo se leia como aviso y ademas no coincidia con la Agenda, donde
-  // el turno pendiente se ve gris. Mismo gris en las dos pantallas.
-  &.pendiente { background: #f1f5f9; color: #475569; }
+  // Un estado, un color, en las dos pantallas.
+  //
+  // Antes estaban invertidos: en Turnos el pendiente salia amarillo y el vencido
+  // naranja; en la Agenda el pendiente amarillo y el vencido azul. El mismo turno
+  // cambiaba de color segun donde se mirara.
+  //
+  // Ahora: pendiente (el estado normal, todavia no paso) va amarillo suave, y
+  // vencido (ya paso la hora y nadie lo cerro) va gris. Gris no grita: un turno
+  // de ayer sin marcar no es una alarma, es algo para revisar.
+  &.pendiente { background: #fef9c3; color: #854d0e; }
   &.atendido { background: #dcfce7; color: #166534; }
   &.cancelado { background: #fee2e2; color: #991b1b; }
-  &.vencido { background: #ffedd5; color: #9a3412; }
+  &.vencido { background: #f1f5f9; color: #475569; }
 }
 
-tr.vencido td { background: #fff7ed; }
+// El fondo tenue de la fila sigue al badge: vencido es gris, no naranja.
+tr.vencido td { background: #f8fafc; }
 
 .acciones {
   display: flex;
