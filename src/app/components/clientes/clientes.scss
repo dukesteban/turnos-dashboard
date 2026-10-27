@@ -358,7 +358,8 @@
   border-radius: 10px;
   font-size: 0.72rem;
   font-weight: 600;
-  &.pendiente { background: #fef9c3; color: #854d0e; }
+  // Mismo gris que en Turnos y Agenda: un estado, un color.
+  &.pendiente { background: #f1f5f9; color: #475569; }
   &.atendido { background: #dcfce7; color: #166534; }
   &.cancelado { background: #fee2e2; color: #991b1b; }
 }
