@@ -936,7 +936,12 @@ describe('Caja — el error se va cuando tocás un campo', () => {
     cmp.mensajeError = '❌ Escribí el concepto.';
     fixture.detectChanges();
 
-    const concepto = fixture.nativeElement.querySelector('.popup-overlay input[placeholder*="bidones"]');
+    // Sin placeholder de ejemplo (se saco a pedido del cliente), el campo del
+    // concepto se busca por su LABEL y no por el placeholder: que manana cambie
+    // el texto no tiene por que romper el test.
+    const campoConcepto: HTMLElement | undefined = [...fixture.nativeElement.querySelectorAll('.popup-overlay .campo')]
+      .find((c: HTMLElement) => (c.querySelector('label')?.textContent ?? '').trim().startsWith('Concepto'));
+    const concepto = campoConcepto?.querySelector('input');
     tocar(concepto, '12 bidones de shampoo');
     fixture.detectChanges();
 

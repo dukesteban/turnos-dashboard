@@ -725,24 +725,25 @@
   // El ícono era 44px, más que la mitad del alto de la tarjeta. Con 34 entra
   // la misma información en menos espacio y sigue siendo reconocible.
   .stat-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    font-size: 1rem;
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    font-size: 0.95rem;
   }
 
   .stat-card {
-    padding: 12px 14px;
-    gap: 10px;
+    padding: 10px 12px;
+    gap: 8px;
   }
 
   // La respuesta que lleva el filete de color tiene el padding-left corriendo
   // por el `border-left` de 4px: sin bajarlo, la tarjeta "Debe / Haber" queda
   // con el texto 4px corrida respecto de las otras dos de la fila.
-  .stat-card.respuesta { padding-left: 10px; }
+  .stat-card.respuesta { padding-left: 8px; }
 
-  .stat-value { font-size: 1.1rem; }
-  .stat-label { font-size: 0.74rem; }
+  .stat-value { font-size: 1rem; }
+  .stat-label { font-size: 0.72rem; }
+  .stat-nota { font-size: 0.68rem; }
 }
 
 // Las grillas de tres: UNA por renglón en teléfono.

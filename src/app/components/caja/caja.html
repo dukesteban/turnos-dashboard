@@ -623,7 +623,7 @@
           </div>
           <div class="campo">
             <label>Notas <span class="opcional">(opcional)</span></label>
-            <input type="text" [(ngModel)]="nuevoPago.notas" placeholder="Ej: quincena de octubre"
+            <input type="text" [(ngModel)]="nuevoPago.notas"
                    (ngModelChange)="mensajeErrorPagos = ''" />
           </div>
         </div>
@@ -709,7 +709,6 @@
           <div class="campo">
             <label>Notas <span class="opcional">(opcional)</span></label>
             <input type="text" [(ngModel)]="nuevoPagoProveedor.notas"
-                   placeholder="Ej: pago de la quincena"
                    (ngModelChange)="mensajeErrorPagoProveedor = ''" />
           </div>
 
@@ -808,7 +807,7 @@
           <div class="campo">
             <label>Concepto</label>
             <input type="text" [(ngModel)]="nuevaCompra.concepto"
-                   placeholder="Ej: 12 bidones de shampoo" (ngModelChange)="mensajeError = ''" />
+                   (ngModelChange)="mensajeError = ''" />
           </div>
           <div class="campo">
             <label>Monto total</label>
