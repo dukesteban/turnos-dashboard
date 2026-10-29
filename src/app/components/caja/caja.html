@@ -255,7 +255,7 @@
                 <td>{{ formatearFechaCorta(i.fecha) }}</td>
                 <td>{{ i.concepto || '—' }}</td>
                 <td>${{ i.monto | number }}</td>
-                <td>{{ i.metodo || 'Sin registrar' }}</td>
+                <td>{{ i.metodo_pago || 'Sin registrar' }}</td>
                 <td *ngIf="puedeEscribir" class="celda-acciones">
                   <button class="btn-icon" (click)="abrirFormIngreso(i)" title="Editar">✏️</button>
                   <button class="btn-icon" (click)="eliminarIngreso(i)" title="Borrar">🗑️</button>

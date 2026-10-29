@@ -1761,7 +1761,7 @@ export class CajaComponent implements OnInit {
           fecha: i.fecha,
           concepto: i.concepto || '',
           monto: Number(i.monto),
-          metodo: i.metodo || 'efectivo',
+          metodo: i.metodo_pago || 'efectivo',
           notas: i.notas || '',
         }
       : { fecha: this.hoyISO(), concepto: '', monto: null, metodo: 'efectivo', notas: '' };
@@ -1802,7 +1802,9 @@ export class CajaComponent implements OnInit {
       fecha: this.nuevoIngreso.fecha,
       concepto: this.nuevoIngreso.concepto.trim(),
       monto: Number(this.nuevoIngreso.monto),
-      metodo: this.nuevoIngreso.metodo || null,
+      // En `ingresos` la columna es `metodo_pago`, igual que en `turnos`. En el
+      // form se llama `metodo` nomás por brevedad.
+      metodo_pago: this.nuevoIngreso.metodo || null,
       notas: this.nuevoIngreso.notas || null,
     };
     try {
@@ -1851,7 +1853,7 @@ export class CajaComponent implements OnInit {
       fecha: (i) => i.fecha || '',
       concepto: (i) => i.concepto || '',
       monto: (i) => Number(i.monto) || 0,
-      metodo: (i) => i.metodo || '',
+      metodo: (i) => i.metodo_pago || '',
     }, (a, b) => {
       const fecha = String(b.fecha || '').localeCompare(String(a.fecha || ''));
       if (fecha !== 0) return fecha;
@@ -1870,7 +1872,7 @@ export class CajaComponent implements OnInit {
     // Los otros ingresos entran con su método: si la venta suelta fue "Efectivo",
     // suma a la fila de Efectivo y no hay una fila "Otros" que diluya el desglose.
     this.ingresosExtra.forEach(i => {
-      const metodo = i.metodo || 'Sin registrar';
+      const metodo = i.metodo_pago || 'Sin registrar';
       if (!mapa[metodo]) mapa[metodo] = { turnos: 0, otros: 0, total: 0 };
       mapa[metodo].otros++;
       mapa[metodo].total += Number(i.monto) || 0;
@@ -1947,7 +1949,7 @@ export class CajaComponent implements OnInit {
     // Los ingresos sueltos también mueven la aguja: si el shampoo salió en
     // "Efectivo" y fue lo único del mes, la tarjeta no puede decir '-'.
     this.ingresosExtra.forEach(i => {
-      const metodo = i.metodo || 'Sin registrar';
+      const metodo = i.metodo_pago || 'Sin registrar';
       conteo[metodo] = (conteo[metodo] || 0) + 1;
     });
     const filas = Object.entries(conteo);

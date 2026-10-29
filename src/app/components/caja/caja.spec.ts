@@ -1503,7 +1503,7 @@ describe('Caja — otros ingresos (migración 0003)', () => {
 
   const OTRO = (over: Record<string, any> = {}) => ({
     id: 1, fecha: '2026-10-15', concepto: 'Venta de shampoo', monto: 15000,
-    metodo: 'Efectivo', notas: null, created_at: '2026-10-15T10:00:00Z',
+    metodo_pago: 'Efectivo', notas: null, created_at: '2026-10-15T10:00:00Z',
     ...over,
   });
 
@@ -1601,7 +1601,7 @@ describe('Caja — otros ingresos (migración 0003)', () => {
     cmp.turnos = [
       ganancia({ precio: 12000, precio_final: 12000, metodo_pago: 'Efectivo' }),
     ];
-    cmp.ingresosExtra = [OTRO({ monto: 5000, metodo: 'Efectivo' })];
+    cmp.ingresosExtra = [OTRO({ monto: 5000, metodo_pago: 'Efectivo' })];
     const r = cmp.totalPorMetodoPago;
     expect(r.length).toBe(1);
     expect(r[0].metodo).toBe('Efectivo');
@@ -1612,7 +1612,7 @@ describe('Caja — otros ingresos (migración 0003)', () => {
   it('una fila que es SOLO de ingresos sueltos no dice "turnos"', async () => {
     const { cmp } = await listo();
     cmp.turnos = [];
-    cmp.ingresosExtra = [OTRO({ monto: 5000, metodo: 'Transferencia' })];
+    cmp.ingresosExtra = [OTRO({ monto: 5000, metodo_pago: 'Transferencia' })];
     const r = cmp.totalPorMetodoPago;
     expect(r[0].etiqueta).toBe('otro ingreso');
   });
