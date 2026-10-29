@@ -195,8 +195,10 @@
     <div class="seccion">
       <h3>{{ vista === 'dia' ? 'Ganancias por hora' : 'Ganancias por día' }}</h3>
       <div *ngIf="cargando" class="vacio">Cargando...</div>
-      <div *ngIf="!cargando && totalAtendidos === 0" class="vacio">Sin datos para este período</div>
-      <div *ngIf="!cargando && totalAtendidos > 0" class="grafico" #graficoRef>
+      <!-- Sin turnos PERO con ingresos sueltos también hay barras: serían solo
+           turnos si no, y aparecería "Sin datos" con plata que sí entró. -->
+      <div *ngIf="!cargando && totalAtendidos === 0 && totalIngresosExtra === 0" class="vacio">Sin datos para este período</div>
+      <div *ngIf="!cargando && (totalAtendidos > 0 || totalIngresosExtra > 0)" class="grafico" #graficoRef>
         <div class="grafico-inner">
           <div *ngFor="let barra of datosGrafico" class="barra-col" [class.clickeable]="vista === 'mes' && barra.total > 0" (click)="irADia(barra.label)">
             <div class="barra-wrap">
@@ -208,6 +210,68 @@
             </div>
             <div class="barra-label">{{ barra.label }}</div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!--
+      OTROS INGRESOS: acordeón de la tabla `ingresos` (migración 0003). Es la
+      plata que entró y NO pasó por la Agenda, y va ARRIBA de "Por servicio"
+      porque ese otro acordeón desglosa SOLO turnos: si estuviera abajo parecería
+      el último detalle de la lista de servicios y no otra fuente de ingreso.
+    -->
+    <div class="acordeon">
+      <div class="acordeon-header" (click)="acordeonIngresos = !acordeonIngresos">
+        <span>💵 Otros ingresos</span>
+        <span class="acordeon-total">
+          {{ ingresosExtra.length }} · ${{ totalIngresosExtra | number }}
+          <span class="chevron" [class.abierto]="acordeonIngresos">›</span>
+        </span>
+      </div>
+      <div class="acordeon-body" [class.visible]="acordeonIngresos">
+
+        <div class="seccion-header seccion-sin-borde">
+          <span></span>
+          <button *ngIf="puedeEscribir" class="btn-primary" (click)="abrirFormIngreso()">
+            ➕ Nuevo ingreso
+          </button>
+        </div>
+
+        <div *ngIf="ingresosExtra.length === 0" class="vacio">Sin ingresos</div>
+
+        <div *ngIf="ingresosExtra.length > 0" class="tabla-wrapper">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th class="col-angosta th-orden" (click)="ordenar('ingresos', 'fecha')">Fecha<span class="flecha-orden">{{ flechaOrden('ingresos', 'fecha') }}</span></th>
+                <th class="th-orden" (click)="ordenar('ingresos', 'concepto')">Concepto<span class="flecha-orden">{{ flechaOrden('ingresos', 'concepto') }}</span></th>
+                <th class="th-orden" (click)="ordenar('ingresos', 'monto')">Monto<span class="flecha-orden">{{ flechaOrden('ingresos', 'monto') }}</span></th>
+                <th class="col-angosta th-orden" (click)="ordenar('ingresos', 'metodo')">Método<span class="flecha-orden">{{ flechaOrden('ingresos', 'metodo') }}</span></th>
+                <th *ngIf="puedeEscribir" class="col-acciones">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let i of ingresosFilas">
+                <td>{{ formatearFechaCorta(i.fecha) }}</td>
+                <td>{{ i.concepto || '—' }}</td>
+                <td>${{ i.monto | number }}</td>
+                <td>{{ i.metodo || 'Sin registrar' }}</td>
+                <td *ngIf="puedeEscribir" class="celda-acciones">
+                  <button class="btn-icon" (click)="abrirFormIngreso(i)" title="Editar">✏️</button>
+                  <button class="btn-icon" (click)="eliminarIngreso(i)" title="Borrar">🗑️</button>
+                </td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Total</td>
+                <td></td>
+                <td>${{ totalIngresosExtra | number }}</td>
+                <td></td>
+                <td *ngIf="puedeEscribir"></td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </div>
     </div>
@@ -253,10 +317,10 @@
           <div *ngFor="let m of totalPorMetodoPago" class="servicio-fila">
             <div class="servicio-info">
               <span class="servicio-nombre">{{ m.metodo }}</span>
-              <span class="servicio-cantidad">{{ m.cantidad }} {{ m.cantidad === 1 ? 'turno' : 'turnos' }}</span>
+              <span class="servicio-cantidad">{{ m.cantidad }} {{ m.etiqueta }}</span>
             </div>
             <div class="servicio-barra-wrap">
-              <div class="servicio-barra" [style.width.%]="(m.total / totalGanancias) * 100"></div>
+              <div class="servicio-barra" [style.width.%]="(m.total / totalIngresos) * 100"></div>
             </div>
             <span class="servicio-total">${{ m.total | number }}</span>
           </div>
@@ -822,6 +886,57 @@
           {{ guardando ? 'Guardando...' : (editandoCompra ? '💾 Guardar cambios' : '💾 Guardar deuda') }}
         </button>
         <button class="btn-cancelado" (click)="cerrarFormCompra()">↩️ Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!--
+    POPUP DE OTRO INGRESO.
+    El gemelo del de arriba, pero sin proveedor y sin cantidad: es plata que
+    entró, no una compra de alguien. Sin empleado a propósito: es un ingreso del
+    local, y así no toca el detalle de comisiones.
+  -->
+  <div *ngIf="mostrarFormIngreso" class="popup-overlay" (click)="cerrarFormIngreso()">
+    <div class="popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <h3>{{ editandoIngreso ? '📝 Editar ingreso' : '📝 Nuevo ingreso' }}</h3>
+        <button class="btn-cerrar" (click)="cerrarFormIngreso()">✕</button>
+      </div>
+
+      <div class="popup-body">
+        <div *ngIf="mensajeError" class="error-msg">{{ mensajeError }}</div>
+
+        <div class="form-caja">
+          <div class="fila">
+            <div class="campo">
+              <label>Fecha</label>
+              <input type="date" [(ngModel)]="nuevoIngreso.fecha" (ngModelChange)="mensajeError = ''" />
+            </div>
+            <div class="campo">
+              <label>Método</label>
+              <select [(ngModel)]="nuevoIngreso.metodo" (ngModelChange)="mensajeError = ''">
+                <option *ngFor="let m of metodosPago" [value]="m.nombre">{{ m.nombre }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="campo">
+            <label>Concepto</label>
+            <input type="text" [(ngModel)]="nuevoIngreso.concepto"
+                   (ngModelChange)="mensajeError = ''" />
+          </div>
+          <div class="campo">
+            <label>Monto</label>
+            <input type="text" inputmode="decimal" appMoneda [(ngModel)]="nuevoIngreso.monto" placeholder="0"
+                   (ngModelChange)="mensajeError = ''" />
+          </div>
+        </div>
+      </div>
+
+      <div class="popup-acciones">
+        <button class="btn-atendido" [disabled]="guardandoIngreso" (click)="guardarIngreso()">
+          {{ guardandoIngreso ? 'Guardando...' : (editandoIngreso ? '💾 Guardar cambios' : '💾 Guardar ingreso') }}
+        </button>
+        <button class="btn-cancelado" (click)="cerrarFormIngreso()">↩️ Cancelar</button>
       </div>
     </div>
   </div>

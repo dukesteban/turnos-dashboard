@@ -244,6 +244,14 @@ export function crearSupabaseMock(over: Record<string, any> = {}) {
     actualizarCompra: (id: number, c: any) => Promise.resolve({ id, ...c }),
     eliminarCompra: () => Promise.resolve(),
 
+    // --- Caja: otros ingresos (migración 0003) ---
+    // Ventas sueltas que no pasaron por la Agenda: el shampoo del estante, un
+    // trabajo sin turno. Sin empleado a propósito: es un ingreso del local.
+    getIngresosExtra: vacio,
+    crearIngresoExtra: (i: any) => Promise.resolve({ id: 1, ...i }),
+    actualizarIngresoExtra: (id: number, i: any) => Promise.resolve({ id, ...i }),
+    eliminarIngresoExtra: () => Promise.resolve(),
+
     // --- Caja: pagos a proveedores (migración 013) ---
     // Mismo modelo que los de empleados: un libro de abonos, varios por compra.
     getPagosProveedor: vacio,

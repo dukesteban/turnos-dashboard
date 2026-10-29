@@ -149,6 +149,16 @@ export class CajaComponent implements OnInit {
   compraEditando: any = null;
   /** Métodos de pago activos desde la base (para selects con el nombre correcto). */
   metodosPago: any[] = [];
+
+  // ── OTROS INGRESOS (tabla `ingresos`, migración 0003) ──
+  // Ventas sueltas que no pasaron por la Agenda: el shampoo del estante, el
+  // trabajo que entró por ventanilla. Sin empleado y sin comisión a propósito:
+  // es un ingreso del local. Ver `guardarIngreso` y el acordeón "Otros ingresos".
+  ingresosExtra: any[] = [];
+  mostrarFormIngreso = false;
+  nuevoIngreso: any = { fecha: '', concepto: '', monto: null, metodo: 'efectivo', notas: '' };
+  ingresoEditando: any = null;
+  guardandoIngreso = false;
   /** Pago a empleado en edición (null = alta). */
   pagoEditando: any = null;
   /** Pago a proveedor en edición (null = alta). */
@@ -311,6 +321,10 @@ export class CajaComponent implements OnInit {
       this.cambiarTab('gastos');
       this.acordeonPagosProv = true;
       this.abrirFormPagoProveedor();
+    } else if (accion === 'ingreso') {
+      this.cambiarTab('ingresos');
+      this.acordeonIngresos = true;
+      this.abrirFormIngreso();
     }
     this.cdr.detectChanges();
   }
@@ -364,7 +378,7 @@ export class CajaComponent implements OnInit {
     const { desde, hasta } = this.getRango();
     // Las tres pestañas en paralelo: son independientes y van a la misma base.
     // Con `await` una detrás de otra el usuario esperaría 3x lo necesario.
-    const [turnos, pagos, comisiones, compras, proveedores, empleados, comisionesServicio, pagosProveedor, metodosPago] = await Promise.all([
+    const [turnos, pagos, comisiones, compras, proveedores, empleados, comisionesServicio, pagosProveedor, metodosPago, ingresosExtra] = await Promise.all([
       this.supabase.getGanancias(desde, hasta),
       this.supabase.getPagosEmpleado(desde, hasta),
       this.supabase.getComisionesPeriodo(desde, hasta),
@@ -394,6 +408,11 @@ export class CajaComponent implements OnInit {
 
       // Métodos de pago activos, para los selects con el nombre correcto.
       this.supabase.getMetodosPago(),
+
+      // Los ingresos que NO son turnos (migración 0003). ÚNICA llamada nueva
+      // con `catch`, por lo mismo que `getPagosProveedor`: si en algún proyecto
+      // todavía no se aplicó la migración, un 404 no tira abajo la pantalla.
+      this.supabase.getIngresosExtra(desde, hasta).catch(() => []),
     ]);
     this.turnos = turnos;
     this.pagos = pagos;
@@ -404,6 +423,7 @@ export class CajaComponent implements OnInit {
     this.comisionesServicio = comisionesServicio;
     this.pagosProveedor = pagosProveedor;
     this.metodosPago = metodosPago;
+    this.ingresosExtra = ingresosExtra;
     this.armarPagosPorEmpleado();
     this.armarSaldoPorProveedor();
     this.cargando = false;
@@ -472,9 +492,9 @@ export class CajaComponent implements OnInit {
   // las tres pestañas en un solo número, y eso obliga a cargar las tres siempre
   // (por eso `cargarDatos` no mira `this.tab`).
 
-  /** Lo que entró por turnos atendidos. */
+  /** Lo que entró por turnos atendidos más los ingresos que no son turnos. */
   get totalIngresos(): number {
-    return this.totalGanancias;
+    return this.totalGanancias + this.totalIngresosExtra;
   }
 
   /** Lo que se le pagó DE VERDAD a los empleados en el período. */
@@ -573,6 +593,9 @@ export class CajaComponent implements OnInit {
   // muestra la evolución y estas dos listas son el detalle de por qué.
   acordeonServicios = false;
   acordeonMetodos = false;
+  // Los ingresos que NO son turnos. Va ARRIBA de "Por servicio" en el template,
+  // porque es dinero que entró y no está en ningún otro desglose.
+  acordeonIngresos = false;
 
   // ── "TODOS" EN EL COMBO ──────────────────────────────────────────
   //
@@ -1716,16 +1739,153 @@ export class CajaComponent implements OnInit {
     setTimeout(() => { this.mensajePagos = ''; this.cdr.detectChanges(); }, 3000);
   }
 
-  get totalPorMetodoPago(): { metodo: string, cantidad: number, total: number }[] {
-    const mapa: { [key: string]: { cantidad: number, total: number } } = {};
+  // ── OTROS INGRESOS: alta / edición / borrado ──────────────
+  //
+  // El gemelo de `guardarCompra` pero SIN proveedor y SIN cantidad: es plata que
+  // entró, no una compra de alguien. Sin empleado: es un ingreso del local, no
+  // de una persona, y así no toca el detalle de comisiones.
+
+  /**
+   * Abre el popup de otro ingreso. Sin argumento = alta nueva, con ingresos = editar.
+   *
+   * La fecha de HOY y no la del período, por lo mismo que `abrirFormPago`: un
+   * ingreso suelto es un movimiento de hoy. Si se abriera con la fecha del
+   * período que se está mirando, y ese período no fuera el mes en curso, el
+   * ingreso caería fuera de la vista y parecería que no se guardó.
+   */
+  abrirFormIngreso(i: any = null) {
+    this.mensajeError = '';
+    this.ingresoEditando = i;
+    this.nuevoIngreso = i
+      ? {
+          fecha: i.fecha,
+          concepto: i.concepto || '',
+          monto: Number(i.monto),
+          metodo: i.metodo || 'efectivo',
+          notas: i.notas || '',
+        }
+      : { fecha: this.hoyISO(), concepto: '', monto: null, metodo: 'efectivo', notas: '' };
+    this.mostrarFormIngreso = true;
+    this.cdr.detectChanges();
+  }
+
+  cerrarFormIngreso() {
+    this.mostrarFormIngreso = false;
+    this.ingresoEditando = null;
+    this.mensajeError = '';
+    this.cdr.detectChanges();
+  }
+
+  get editandoIngreso(): boolean {
+    return this.ingresoEditando !== null;
+  }
+
+  async guardarIngreso() {
+    this.mensajeError = '';
+    this.mensaje = '';
+    if (!this.nuevoIngreso.fecha) {
+      this.mensajeError = '❌ Elegí la fecha.';
+      return;
+    }
+    if (!(this.nuevoIngreso.concepto || '').trim()) {
+      this.mensajeError = '❌ Escribí el concepto.';
+      return;
+    }
+    // `monto > 0` es un CHECK en la base. Validarlo acá evita un error de
+    // Postgres que el usuario no entendería ("violates check constraint").
+    if (!(Number(this.nuevoIngreso.monto) > 0)) {
+      this.mensajeError = '❌ El monto tiene que ser mayor a 0.';
+      return;
+    }
+    this.guardandoIngreso = true;
+    const datos = {
+      fecha: this.nuevoIngreso.fecha,
+      concepto: this.nuevoIngreso.concepto.trim(),
+      monto: Number(this.nuevoIngreso.monto),
+      metodo: this.nuevoIngreso.metodo || null,
+      notas: this.nuevoIngreso.notas || null,
+    };
+    try {
+      if (this.editandoIngreso) {
+        await this.supabase.actualizarIngresoExtra(this.ingresoEditando.id, datos);
+      } else {
+        await this.supabase.crearIngresoExtra(datos);
+      }
+      const eraEdicion = this.editandoIngreso;
+      this.cerrarFormIngreso();
+      this.nuevoIngreso = { fecha: '', concepto: '', monto: null, metodo: 'efectivo', notas: '' };
+      await this.cargarDatos();
+      this.mostrarMensaje(eraEdicion ? '✅ Ingreso actualizado.' : '✅ Ingreso registrado.');
+    } catch (e) {
+      this.mensajeError = '❌ No se pudo guardar el ingreso.';
+    }
+    this.guardandoIngreso = false;
+    this.cdr.detectChanges();
+  }
+
+  async eliminarIngreso(i: any) {
+    if (!confirm(`¿Borrar el ingreso de $${Number(i.monto).toLocaleString('es-AR')} del ${fechaConAnio(i.fecha)}?`)) return;
+    try {
+      await this.supabase.eliminarIngresoExtra(i.id);
+      await this.cargarDatos();
+      this.mostrarMensaje('✅ Ingreso eliminado.');
+    } catch (e) {
+      this.mensajeError = '❌ No se pudo eliminar.';
+    }
+    this.cdr.detectChanges();
+  }
+
+  get totalIngresosExtra(): number {
+    return this.ingresosExtra.reduce((sum, i) => sum + (Number(i.monto) || 0), 0);
+  }
+
+  /**
+   * Filas del acordeón "Otros ingresos", con el orden que eligió el usuario.
+   *
+   * Por defecto el más nuevo arriba, regla de todas las tablas del proyecto. El
+   * desempate lo hacen por `created_at`: dos ingresos del MISMO día salen en el
+   * orden en que se cargaron, el último primero.
+   */
+  get ingresosFilas(): any[] {
+    return this.ordenarFilas('ingresos', this.ingresosExtra, {
+      fecha: (i) => i.fecha || '',
+      concepto: (i) => i.concepto || '',
+      monto: (i) => Number(i.monto) || 0,
+      metodo: (i) => i.metodo || '',
+    }, (a, b) => {
+      const fecha = String(b.fecha || '').localeCompare(String(a.fecha || ''));
+      if (fecha !== 0) return fecha;
+      return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+    });
+  }
+
+  get totalPorMetodoPago(): { metodo: string, cantidad: number, etiqueta: string, total: number }[] {
+    const mapa: { [key: string]: { turnos: number, otros: number, total: number } } = {};
     this.turnos.forEach(t => {
       const metodo = t.metodo_pago || 'Sin registrar';
-      if (!mapa[metodo]) mapa[metodo] = { cantidad: 0, total: 0 };
-      mapa[metodo].cantidad++;
+      if (!mapa[metodo]) mapa[metodo] = { turnos: 0, otros: 0, total: 0 };
+      mapa[metodo].turnos++;
       mapa[metodo].total += Number(t.precio_final || t.precio) || 0;
     });
+    // Los otros ingresos entran con su método: si la venta suelta fue "Efectivo",
+    // suma a la fila de Efectivo y no hay una fila "Otros" que diluya el desglose.
+    this.ingresosExtra.forEach(i => {
+      const metodo = i.metodo || 'Sin registrar';
+      if (!mapa[metodo]) mapa[metodo] = { turnos: 0, otros: 0, total: 0 };
+      mapa[metodo].otros++;
+      mapa[metodo].total += Number(i.monto) || 0;
+    });
     return Object.entries(mapa)
-      .map(([metodo, v]) => ({ metodo, ...v }))
+      .map(([metodo, v]) => {
+        const cantidad = v.turnos + v.otros;
+        // "turnos" si la fila es solo de turnos, "otros" si es solo de ingresos
+        // sueltos. Cuando se mezclan, ninguna de las dos palabras es cierta para
+        // los dos: ahí dice "movimientos", que cubre los dos sin mentir.
+        const etiqueta = v.otros === 0
+          ? (cantidad === 1 ? 'turno' : 'turnos')
+          : (v.turnos === 0 ? (cantidad === 1 ? 'otro ingreso' : 'otros ingresos') : (cantidad === 1 ? 'movimiento' : 'movimientos'));
+        return { metodo, cantidad, etiqueta, total: v.total };
+      })
       .sort((a, b) => b.total - a.total);
   }
 
@@ -1776,7 +1936,6 @@ export class CajaComponent implements OnInit {
   //}
 
   get metodoPagoMasUsado(): string {
-    if (!this.turnos.length) return '-';
     const conteo: { [key: string]: number } = {};
     this.turnos.forEach(t => {
       // Sin `|| 'Sin registrar'` la clave del objeto era la string "null" y la
@@ -1785,7 +1944,15 @@ export class CajaComponent implements OnInit {
       const metodo = t.metodo_pago || 'Sin registrar';
       conteo[metodo] = (conteo[metodo] || 0) + 1;
     });
-    return Object.entries(conteo).sort((a, b) => b[1] - a[1])[0][0];
+    // Los ingresos sueltos también mueven la aguja: si el shampoo salió en
+    // "Efectivo" y fue lo único del mes, la tarjeta no puede decir '-'.
+    this.ingresosExtra.forEach(i => {
+      const metodo = i.metodo || 'Sin registrar';
+      conteo[metodo] = (conteo[metodo] || 0) + 1;
+    });
+    const filas = Object.entries(conteo);
+    if (!filas.length) return '-';
+    return filas.sort((a, b) => b[1] - a[1])[0][0];
   }
 
   get servicioMasVendido(): string {
@@ -1812,6 +1979,8 @@ export class CajaComponent implements OnInit {
       for (let h = minH; h <= maxH; h++) {
         horas[`${h}:00`] = { total: 0, cantidad: 0 };
       }
+      let totalExtra = 0;
+      this.ingresosExtra.forEach(i => { totalExtra += Number(i.monto) || 0; });
       this.turnos.forEach(t => {
         const h = parseInt(t.hora_inicio?.slice(0, 2) || t.hora?.slice(0, 2) || '0', 10);
         const key = `${h}:00`;
@@ -1820,7 +1989,12 @@ export class CajaComponent implements OnInit {
           horas[key].cantidad++;
         }
       });
-      return Object.entries(horas).map(([label, v]) => ({ label, ...v }));
+      const barras = Object.entries(horas).map(([label, v]) => ({ label, ...v }));
+      // Los ingresos sueltos no tienen hora, así que una barra por hora no
+      // existe para ellos: van todos al final en una sola barra "Otros". Sin
+      // esto, un día solo de ventas sueltas no sumaría NADA en el gráfico.
+      if (totalExtra > 0) barras.push({ label: 'Otros', total: totalExtra, cantidad: 0 });
+      return barras;
     } else if (this.vista === 'semana') {
       // 7 barras, una por día, ETIQUETADAS CON LA FECHA COMPLETA.
       //
@@ -1842,6 +2016,13 @@ export class CajaComponent implements OnInit {
           dias[idx].cantidad++;
         }
       });
+      // Los ingresos sueltos caen en el día de su fecha: en vista semana y mes
+      // SÍ tienen día, y separarlos en una barra aparte rompería la lectura de
+      // "cuánto entró cada día".
+      this.ingresosExtra.forEach((i) => {
+        const idx = dias.findIndex((b) => b.label.endsWith(` ${i.fecha?.slice(8, 10)}`));
+        if (idx >= 0) dias[idx].total += Number(i.monto) || 0;
+      });
 
       return dias;
     } else {
@@ -1861,6 +2042,13 @@ export class CajaComponent implements OnInit {
           dias[idx].total += (t.estado === 'atendido' && t.precio_final ? t.precio_final : t.precio) || 0;
           dias[idx].cantidad++;
         }
+      });
+      // Ídem semana: al día de su fecha. Acá `- 1` porque el label del mes es el
+      // número de día y el array arranca en 0.
+      this.ingresosExtra.forEach(i => {
+        const d = parseInt(i.fecha?.slice(8, 10));
+        const idx = d - 1;
+        if (dias[idx]) dias[idx].total += Number(i.monto) || 0;
       });
       
       return dias;

@@ -1494,6 +1494,177 @@ describe('Caja — proveedores y compras', () => {
   });
 });
 
+describe('Caja — otros ingresos (migración 0003)', () => {
+  const listo = async (over: Record<string, any> = {}) => {
+    const r = montar(over);
+    await r.cmp.cargarDatos();
+    return r;
+  };
+
+  const OTRO = (over: Record<string, any> = {}) => ({
+    id: 1, fecha: '2026-10-15', concepto: 'Venta de shampoo', monto: 15000,
+    metodo: 'Efectivo', notas: null, created_at: '2026-10-15T10:00:00Z',
+    ...over,
+  });
+
+  it('cargarDatos baja los ingresos extra del período', async () => {
+    const { cmp } = await listo({
+      getIngresosExtra: () => Promise.resolve([OTRO()]),
+    });
+    expect(cmp.ingresosExtra.length).toBe(1);
+    expect(cmp.totalIngresosExtra).toBe(15000);
+  });
+
+  it('si la tabla ingresos no está aplicada, la pantalla sigue con []', async () => {
+    const { cmp } = await listo({
+      getIngresosExtra: () => Promise.reject({ message: '404' }),
+    });
+    expect(cmp.ingresosExtra).toEqual([]);
+  });
+
+  it('totalIngresos = turnos + ingresos sueltos', async () => {
+    const { cmp } = await listo();
+    cmp.turnos = [
+      ganancia({ precio: 100000, precio_final: 120000 }),
+      ganancia({ precio: 50000, precio_final: null }),
+    ];
+    cmp.ingresosExtra = [OTRO({ monto: 15000 }), OTRO({ id: 2, monto: 3000 })];
+    expect(cmp.totalGanancias).toBe(170000);
+    expect(cmp.totalIngresos).toBe(188000);
+  });
+
+  it('guardarIngreso: exige fecha, concepto y monto > 0', async () => {
+    const base = { fecha: '2026-10-15', concepto: 'Venta', monto: 5000 };
+    const casos: any[] = [
+      { ...base, fecha: '', esperado: /fecha/i },
+      { ...base, concepto: '  ', esperado: /concepto/i },
+      { ...base, monto: 0, esperado: /mayor a 0/i },
+    ];
+    const { cmp, mock } = await listo();
+    for (const c of casos) {
+      cmp.nuevoIngreso = { ...c };
+      await cmp.guardarIngreso();
+      expect(cmp.mensajeError).toMatch(c.esperado);
+      expect(mock.llamadas).not.toContain('crearIngresoExtra');
+    }
+  });
+
+  it('ingreso válido: guarda, recarga y avisa', async () => {
+    const guardados: any[] = [];
+    const { cmp } = await listo({
+      crearIngresoExtra: (i: any) => { guardados.push(i); return Promise.resolve({ id: 1, ...i }); },
+    });
+    cmp.nuevoIngreso = { fecha: '2026-10-15', concepto: '  shampoo suelto  ', monto: '15000', metodo: 'Efectivo', notas: '' };
+    await cmp.guardarIngreso();
+    expect(guardados.length).toBe(1);
+    expect(guardados[0].concepto).toBe('shampoo suelto');
+    expect(guardados[0].monto).toBe(15000);
+    expect(cmp.mostrarFormIngreso).toBe(false);
+    expect(cmp.mensaje).toMatch(/ingreso registrado/i);
+  });
+
+  it('editar un ingreso llama a actualizarIngresoExtra', async () => {
+    const cambiados: any[] = [];
+    const { cmp } = await listo({
+      actualizarIngresoExtra: (id: number, d: any) => { cambiados.push({ id, d }); return Promise.resolve({ id, ...d }); },
+    });
+    cmp.abrirFormIngreso(OTRO({ monto: 20000 }));
+    await cmp.guardarIngreso();
+    expect(cambiados.length).toBe(1);
+    expect(cambiados[0].id).toBe(1);
+    expect(cambiados[0].d.monto).toBe(20000);
+  });
+
+  it('eliminar un ingreso pide confirmación antes de tocar la base', async () => {
+    const spy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { cmp, mock } = await listo();
+    await cmp.eliminarIngreso(OTRO());
+    expect(spy).toHaveBeenCalled();
+    expect(mock.llamadas).not.toContain('eliminarIngresoExtra');
+    spy.mockRestore();
+  });
+
+  it('los ingresos sueltos se ordenan del más nuevo arriba', async () => {
+    const { cmp } = await listo({
+      getIngresosExtra: () => Promise.resolve([
+        OTRO({ id: 1, fecha: '2026-10-10', created_at: '2026-10-10T09:00:00Z' }),
+        OTRO({ id: 2, fecha: '2026-10-15', concepto: 'Segundo', created_at: '2026-10-15T09:00:00Z' }),
+        OTRO({ id: 3, fecha: '2026-10-15', concepto: 'Tercero', created_at: '2026-10-15T11:00:00Z' }),
+      ]),
+    });
+    const ids = cmp.ingresosFilas.map((i: any) => i.id);
+    expect(ids).toEqual([3, 2, 1]);
+  });
+
+  it('Por método de pago mezcla turnos e ingresos sueltos, y nombra a los dos', async () => {
+    const { cmp } = await listo();
+    cmp.turnos = [
+      ganancia({ precio: 12000, precio_final: 12000, metodo_pago: 'Efectivo' }),
+    ];
+    cmp.ingresosExtra = [OTRO({ monto: 5000, metodo: 'Efectivo' })];
+    const r = cmp.totalPorMetodoPago;
+    expect(r.length).toBe(1);
+    expect(r[0].metodo).toBe('Efectivo');
+    expect(r[0].total).toBe(17000);
+    expect(r[0].etiqueta).toBe('movimientos');
+  });
+
+  it('una fila que es SOLO de ingresos sueltos no dice "turnos"', async () => {
+    const { cmp } = await listo();
+    cmp.turnos = [];
+    cmp.ingresosExtra = [OTRO({ monto: 5000, metodo: 'Transferencia' })];
+    const r = cmp.totalPorMetodoPago;
+    expect(r[0].etiqueta).toBe('otro ingreso');
+  });
+
+  it('en vista MES el ingreso suelto cae en el día de su fecha', async () => {
+    const { cmp } = await listo();
+    cmp.vista = 'mes';
+    cmp.fechaActual = new Date(2026, 9, 1);
+    cmp.turnos = [ganancia({ fecha: '2026-10-02', estado: 'atendido', precio: 12000, precio_final: 12000 })];
+    cmp.ingresosExtra = [OTRO({ fecha: '2026-10-15', monto: 15000 })];
+    const dias = cmp.datosGrafico;
+    expect(dias[1].total).toBe(12000);   // 02/10 del turno
+    expect(dias[14].total).toBe(15000);  // 15/10 del ingreso suelto
+  });
+
+  it('en vista DÍA los sueltos van a UNA barra "Otros" al final', async () => {
+    const { cmp } = await listo();
+    cmp.vista = 'dia';
+    cmp.fechaActual = new Date(2026, 9, 15);
+    cmp.turnos = [ganancia({ fecha: '2026-10-15', estado: 'atendido', precio: 12000, precio_final: 12000 })];
+    cmp.ingresosExtra = [OTRO({ fecha: '2026-10-15', monto: 15000 })];
+    const barras = cmp.datosGrafico;
+    const otros = barras.find(b => b.label === 'Otros');
+    expect(otros?.total).toBe(15000);
+  });
+
+  it('con SOLO ingresos sueltos el gráfico no dice "Sin datos" ni se vacía', async () => {
+    const { cmp, fixture } = await listo({
+      getIngresosExtra: () => Promise.resolve([OTRO()]),
+    });
+    cmp.turnos = [];
+    cmp.ingresosExtra = [OTRO({ fecha: '2026-10-15' })];
+    fixture.detectChanges();
+    const texto = fixture.nativeElement.textContent;
+    expect(texto).not.toContain('Sin datos para este período');
+  });
+
+  it('el acordeón "Otros ingresos" va ARRIBA de "Por servicio"', async () => {
+    const { cmp, fixture } = await listo({
+      getIngresosExtra: () => Promise.resolve([OTRO()]),
+    });
+    cmp.acordeonIngresos = true;
+    fixture.detectChanges();
+    const acordeones = [...fixture.nativeElement.querySelectorAll('.acordeon span')];
+    const textos = acordeones.map((s: any) => s.textContent.trim());
+    const idxOtros = textos.findIndex((t: string) => t.includes('Otros ingresos'));
+    const idxServ = textos.findIndex((t: string) => t.includes('Por servicio'));
+    expect(idxOtros).toBeGreaterThanOrEqual(0);
+    expect(idxServ).toBeGreaterThan(idxOtros);
+  });
+});
+
 describe('Caja — carga', () => {
   it('carga los horarios y los datos al iniciar', async () => {
     const { cmp } = montar();
@@ -2704,6 +2875,17 @@ describe('Caja - los botones flotantes del Dashboard', () => {
     expect(cmp.mostrarFormPagoProveedor).toBe(true);
     expect(cmp.tab).toBe('gastos');
     expect(cmp.acordeonPagosProv).toBe(true);
+  });
+
+  it('?accion=ingreso abre el popup de nuevo ingreso, en la pestaña de ingresos', async () => {
+    const { cmp } = montar({}, 'ingreso');
+    await cmp.ngOnInit();
+
+    expect(cmp.mostrarFormIngreso).toBe(true);
+    expect(cmp.tab).toBe('ingresos');
+    // Y el acordeón abre junto, por lo mismo que en las otras acciones: si el
+    // popup se cierra y debajo no se ve la lista, no se sabe donde se guardo.
+    expect(cmp.acordeonIngresos).toBe(true);
   });
 
   it('el popup abre con los datos ya cargados: puede preseleccionar al empleado', async () => {

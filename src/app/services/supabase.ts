@@ -1491,6 +1491,56 @@ export class SupabaseService {
     if (error) throw error;
   }
 
+  // ── CAJA: OTROS INGRESOS (tabla `ingresos`) ───────────────
+  //
+  // Ingresos de Caja que NO son turnos: ventas sueltas, trabajos que entraron
+  // sin agenda. Tabla propia y no `compras_proveedor` con signo invertido, por
+  // lo mismo que las deudas tienen su tabla. Migración 0003.
+  //
+  // Descendente por fecha (y `created_at` de desempate entre dos ingresos del
+  // MISMO día): el más nuevo arriba, regla de todas las tablas del proyecto.
+
+  async getIngresosExtra(desde: string, hasta: string) {
+    const { data, error } = await this.supabase
+      .from('ingresos')
+      .select('*')
+      .gte('fecha', desde)
+      .lte('fecha', hasta)
+      .order('fecha', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  async crearIngresoExtra(datos: any) {
+    const { data, error } = await this.supabase
+      .from('ingresos')
+      .insert(datos)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async actualizarIngresoExtra(id: number, datos: any) {
+    const { data, error } = await this.supabase
+      .from('ingresos')
+      .update(datos)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async eliminarIngresoExtra(id: number) {
+    const { error } = await this.supabase
+      .from('ingresos')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }
+
   /**
    * Le manda un WhatsApp al cliente desde el número del negocio.
    *

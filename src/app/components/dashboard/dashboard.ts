@@ -31,6 +31,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   turnosHoy: any[] = [];
   todosTurnos: any[] = [];
   totalIngresos = 0;
+  /**
+   * Ingresos del día que NO son turnos (tabla `ingresos`). Solo alimentan el
+   * cuadro de arriba cuando el combo está en "Todos", por lo que dice
+   * `recalcularResumenDeHoy`.
+   */
+  ingresosExtraHoy: any[] = [];
   totalClientes = 0;
   turnosPendientes = 0;
   vistasTurnos: 'semana' | 'mes' = 'semana';
@@ -243,7 +249,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * navega a una acción que Caja no conoce (que abriría la pantalla sin popup, sin
    * decir nada).
    */
-  irACaja(accion: 'pago-empleado' | 'deuda' | 'pago-proveedor') {
+  irACaja(accion: 'pago-empleado' | 'deuda' | 'pago-proveedor' | 'ingreso') {
     this.router.navigate(['/ganancias'], { queryParams: { accion } });
   }
 
@@ -289,6 +295,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.turnosHoy = soloLosTurnosDe(hoy, miId);
     this.todosTurnos = soloLosTurnosDe(periodo, miId);
 
+    // Los ingresos que NO son turnos, de HOY. Van al cuadro de arriba SOLO con
+    // el combo en "Todos": no tienen empleado, no se pueden atribuir a uno, y
+    // atribuírselos al que está mirando inflaría su número sin que él los cobre.
+    // Ver `recalcularResumenDeHoy`.
+    const hoyISO = this.fechaLocal(new Date());
+    try {
+      this.ingresosExtraHoy = await this.supabase.getIngresosExtra(hoyISO, hoyISO);
+    } catch {
+      // Sin migración aplicada o sin conexión: el cuadro muestra lo que sí
+      // sabemos (los turnos), que es mejor que una pantalla vacía.
+      this.ingresosExtraHoy = [];
+    }
+
     this.recalcularResumenDeHoy();
     this.cdr.detectChanges();
   }
@@ -309,7 +328,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     this.totalIngresos = hoy
       .filter((t: any) => t.estado === 'atendido')
-      .reduce((sum: number, t: any) => sum + (Number(t.precio_final || t.precio) || 0), 0);
+      .reduce((sum: number, t: any) => sum + (Number(t.precio_final || t.precio) || 0), 0)
+      // Solo con "Todos": los ingresos sueltos no tienen empleado, así que el
+      // filtro de un empleado no los puede atribuir a nadie. Con el filtro
+      // puesto seguirían contando del número de TODO el mundo y el cuadro
+      // contradiría a la tabla de abajo, que solo muestra los turnos de ESE.
+      + (this.filtroEmpleadoHoy === SIN_FILTRO
+        ? this.ingresosExtraHoy.reduce((s: number, i: any) => s + (Number(i.monto) || 0), 0)
+        : 0);
 
     this.totalClientes = hoy
       .filter((t: any) => t.estado === 'atendido').length;

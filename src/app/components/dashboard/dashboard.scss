@@ -175,6 +175,9 @@
 .accion-naranja { --c: #ea580c; --fondo: #ffedd5; }
 .accion-rojo     { --c: #dc2626; --fondo: #fee2e2; }
 .accion-verde    { --c: #15803d; --fondo: #dcfce7; }
+// · violeta  el nuevo ingreso: no se lea como gasto (rojo/naranja) ni como
+//   pago a alguien, y verde ya significaba "abono".
+.accion-violeta  { --c: #7c3aed; --fondo: #ede9fe; }
 
 // En celular el círculo baja un poco y se pega más al borde. Ojo: el texto NO se
 // saca acá a la fuerza. Tres etiquetas siempre visibles en una pantalla angosta

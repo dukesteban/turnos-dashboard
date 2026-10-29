@@ -46,6 +46,14 @@
       <span class="accion-signo">+</span>
       <span class="accion-texto">Pago a proveedor</span>
     </button>
+    <!-- Ingreso suelto (tabla `ingresos`): la cuarta cosa que se carga todos los
+         días y que NO pasa por un turno. -->
+    <button type="button" class="accion-rapida accion-violeta"
+            (click)="irACaja('ingreso')"
+            aria-label="Nuevo ingreso">
+      <span class="accion-signo">+</span>
+      <span class="accion-texto">Nuevo ingreso</span>
+    </button>
   </div>
 
   <!-- Stats -->
