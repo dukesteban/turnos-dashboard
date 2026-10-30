@@ -168,16 +168,15 @@
 
 // Un color por salida de dinero, y son los mismos de las dos pestañas de Caja:
 //   · naranja  lo que sale para la gente de la casa (pago a empleado)
+//   · azul     lo que se abona a un proveedor (pago a proveedor)
 //   · rojo     lo que se toma y hay que devolver (deuda)
-//   · verde    lo que se abona (pago a proveedor)
+//   · verde    lo único que SUMA: el nuevo ingreso
 // Los `--fondo` son tintes del mismo color, no grises: al pasar el mouse el círculo
 // se tiñe y tiene que leerse como el mismo botón, no como uno distinto.
 .accion-naranja { --c: #ea580c; --fondo: #ffedd5; }
 .accion-rojo     { --c: #dc2626; --fondo: #fee2e2; }
+.accion-azul     { --c: #2563eb; --fondo: #dbeafe; }
 .accion-verde    { --c: #15803d; --fondo: #dcfce7; }
-// · violeta  el nuevo ingreso: no se lea como gasto (rojo/naranja) ni como
-//   pago a alguien, y verde ya significaba "abono".
-.accion-violeta  { --c: #7c3aed; --fondo: #ede9fe; }
 
 // En celular el círculo baja un poco y se pega más al borde. Ojo: el texto NO se
 // saca acá a la fuerza. Tres etiquetas siempre visibles en una pantalla angosta

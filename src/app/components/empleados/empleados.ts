@@ -127,6 +127,18 @@ export class EmpleadosComponent implements OnInit {
   empleadoSeleccionado: any = null;
   mensaje = '';
   mensajeError = '';
+  /**
+   * En qué acordeón va el cartel de `mensaje`/`mensajeError`.
+   *
+   * El detalle tiene seis acordeones y un cartel global arriba obligaba a
+   * buscarlo: guardabas la jornada y el aviso aparecía fuera de la pantalla o
+   * pegado al título, lejos del campo que tocaste. Con la sección, el cartel se
+   * dibuja dentro del acordeón donde ocurrió la acción.
+   *
+   * `lista` es la excepción: el alta y el inactivado cierran el detalle, así que
+   * el aviso tiene que verse en la columna de la lista.
+   */
+  mensajeSeccion = '';
   busqueda = '';
 
   // Formulario
@@ -235,7 +247,7 @@ export class EmpleadosComponent implements OnInit {
       });
       await this.cargarRoles();
       this.modalAcceso = false;
-      this.mostrarMensaje(`✅ Acceso creado para ${e.nombre}.`);
+      this.mostrarMensaje(`✅ Acceso creado para ${e.nombre}.`, 'acceso');
     } catch (err: any) {
       this.accesoError = `❌ ${err?.message || 'No se pudo crear el acceso'}`;
     }
@@ -324,7 +336,7 @@ export class EmpleadosComponent implements OnInit {
       this.nuevaComision = 10;
       this.jornadaNueva = jornadaVaciaPorDefecto();
       this.cerrarModalNuevoEmpleado();
-      this.mostrarMensaje('✅ Empleado agregado.');
+      this.mostrarMensaje('✅ Empleado agregado.', 'lista');
     } catch (e: any) {
       console.error('Error al agregar empleado:', e);
       this.errorNuevoEmpleado = `❌ Error: ${e.message || 'No se pudo agregar'}`;
@@ -400,9 +412,9 @@ export class EmpleadosComponent implements OnInit {
       await this.supabase.upsertComisionEmpleado(emp.id, servicioId, this.nuevaComisionServicio);
       await this.cargarComisionesPorServicio();
       this.editandoComisionServicio = null;
-      this.mostrarMensaje('✅ Comisión actualizada.');
+      this.mostrarMensaje('✅ Comisión actualizada.', 'comisiones');
     } catch (e) {
-      this.mostrarError('❌ Error al guardar la comisión.');
+      this.mostrarError('❌ Error al guardar la comisión.', 'comisiones');
     } finally {
       emp.guardando = false;
       this.cdr.detectChanges();
@@ -415,9 +427,9 @@ export class EmpleadosComponent implements OnInit {
     try {
       await this.supabase.deleteComisionEmpleado(this.empleadoSeleccionado.id, servicioId);
       await this.cargarComisionesPorServicio();
-      this.mostrarMensaje('✅ Comisión eliminada.');
+      this.mostrarMensaje('✅ Comisión eliminada.', 'comisiones');
     } catch (e) {
-      this.mostrarError('❌ Error al eliminar la comisión.');
+      this.mostrarError('❌ Error al eliminar la comisión.', 'comisiones');
     }
   }
 
@@ -468,7 +480,7 @@ export class EmpleadosComponent implements OnInit {
 
     const nombre = (emp.nombre ?? '').trim();
     if (!nombre) {
-      this.mostrarError('❌ El nombre es obligatorio.');
+      this.mostrarError('❌ El nombre es obligatorio.', 'datos');
       this.cdr.detectChanges();
       return;
     }
@@ -503,9 +515,9 @@ export class EmpleadosComponent implements OnInit {
       emp.direccion = datos.direccion || '';
       emp._datosOrig = { nombre: emp.nombre, telefono: emp.telefono };
       emp.editando = false;
-      this.mostrarMensaje('✅ Datos actualizados.');
+      this.mostrarMensaje('✅ Datos actualizados.', 'datos');
     } catch (e) {
-      this.mostrarError('❌ Error al actualizar.');
+      this.mostrarError('❌ Error al actualizar.', 'datos');
     } finally {
       emp.guardando = false;
       this.cdr.detectChanges();
@@ -522,9 +534,9 @@ export class EmpleadosComponent implements OnInit {
       const idx = this.empleados.findIndex(e => e.id === emp.id);
       if (idx >= 0) this.empleados[idx].comision_porcentaje = emp.comision_porcentaje;
       emp.editandoComision = false;
-      this.mostrarMensaje('✅ Comisión actualizada.');
+      this.mostrarMensaje('✅ Comisión actualizada.', 'comisiones');
     } catch (e) {
-      this.mostrarError('❌ Error al actualizar.');
+      this.mostrarError('❌ Error al actualizar.', 'comisiones');
     } finally {
       emp.guardando = false;
       this.cdr.detectChanges();
@@ -548,9 +560,9 @@ export class EmpleadosComponent implements OnInit {
       emp.editandoJornada = false;
       // Cambiar la jornada puede SACAR turnos de riesgo o meterlos.
       await this.cargarTurnosEnRiesgo();
-      this.mostrarMensaje('✅ Jornada actualizada.');
+      this.mostrarMensaje('✅ Jornada actualizada.', 'jornada');
     } catch (e) {
-      this.mostrarError('❌ Error al actualizar.');
+      this.mostrarError('❌ Error al actualizar.', 'jornada');
     } finally {
       emp.guardando = false;
       this.cdr.detectChanges();
@@ -646,9 +658,9 @@ export class EmpleadosComponent implements OnInit {
       const idx = this.empleados.findIndex(e => e.id === this.empleadoSeleccionado.id);
       if (idx >= 0) this.empleados[idx].activo = false;
       this.cerrarDetalle();
-      this.mostrarMensaje('✅ Empleado inactivado.');
+      this.mostrarMensaje('✅ Empleado inactivado.', 'lista');
     } catch (e) {
-      this.mostrarError('❌ Error al inactivar.');
+      this.mostrarError('❌ Error al inactivar.', 'acciones');
     }
   }
 
@@ -673,11 +685,11 @@ export class EmpleadosComponent implements OnInit {
     this.cdr.detectChanges();
     try {
       await this.supabase.updateEmpleado(emp.id, { atiende });
-      this.mostrarMensaje(atiende ? '✅ Ahora atiende turnos.' : '✅ Ya no atiende turnos.');
+      this.mostrarMensaje(atiende ? '✅ Ahora atiende turnos.' : '✅ Ya no atiende turnos.', 'acceso');
     } catch (e) {
       emp.atiende = anterior;
       if (fila) fila.atiende = anterior;
-      this.mostrarError('❌ No se pudo guardar.');
+      this.mostrarError('❌ No se pudo guardar.', 'acceso');
     }
     this.guardandoAtiende = false;
     this.cdr.detectChanges();
@@ -732,20 +744,20 @@ export class EmpleadosComponent implements OnInit {
     this.mostrarError('');
     const a = this.nuevaAusencia;
     if (!a.desde) {
-      this.mostrarError('❌ Elegí la fecha de inicio.');
+      this.mostrarError('❌ Elegí la fecha de inicio.', 'ausencias');
       return;
     }
     if (a.hasta && a.hasta < a.desde) {
-      this.mostrarError('❌ "Hasta" no puede ser anterior a "Desde".');
+      this.mostrarError('❌ "Hasta" no puede ser anterior a "Desde".', 'ausencias');
       return;
     }
     // Con una sola hora no se puede: el tope siempre es un rango.
     if (!!a.hora_inicio !== !!a.hora_fin) {
-      this.mostrarError('❌ Cargá las dos horas, o ninguna para el día entero.');
+      this.mostrarError('❌ Cargá las dos horas, o ninguna para el día entero.', 'ausencias');
       return;
     }
     if (a.hora_inicio && a.hora_fin <= a.hora_inicio) {
-      this.mostrarError('❌ La hora de fin debe ser posterior a la de inicio.');
+      this.mostrarError('❌ La hora de fin debe ser posterior a la de inicio.', 'ausencias');
       return;
     }
 
@@ -781,10 +793,11 @@ export class EmpleadosComponent implements OnInit {
       this.mostrarMensaje(
         enRiesgo.length
           ? `✅ Ausencia guardada. ${enRiesgo.length} turno(s) a reprogramar.`
-          : '✅ Ausencia guardada.'
+          : '✅ Ausencia guardada.',
+        'ausencias'
       );
     } catch (e: any) {
-      this.mostrarError(`❌ ${e?.message || 'No se pudo guardar'}`);
+      this.mostrarError(`❌ ${e?.message || 'No se pudo guardar'}`, 'ausencias');
     } finally {
       this.guardandoAusencia = false;
       this.cdr.detectChanges();
@@ -868,9 +881,9 @@ export class EmpleadosComponent implements OnInit {
       // Borrar una ausencia puede SACAR turnos de riesgo. No los revalida la base
       // (decisión del usuario), pero el listado sí se recalcula.
       await this.cargarTurnosEnRiesgo();
-      this.mostrarMensaje('✅ Ausencia eliminada. Los turnos no se revalidan.');
+      this.mostrarMensaje('✅ Ausencia eliminada. Los turnos no se revalidan.', 'ausencias');
     } catch (e: any) {
-      this.mostrarError(`❌ ${e?.message || 'Error'}`);
+      this.mostrarError(`❌ ${e?.message || 'Error'}`, 'ausencias');
     }
     this.cdr.detectChanges();
   }
@@ -879,16 +892,18 @@ export class EmpleadosComponent implements OnInit {
     return textoAusencia(a);
   }
 
-  mostrarMensaje(msg: string) {
+  mostrarMensaje(msg: string, seccion = 'datos') {
     this.mensaje = msg;
     this.mensajeError = '';
+    this.mensajeSeccion = seccion;
     this.cdr.detectChanges();
     setTimeout(() => { this.mensaje = ''; this.cdr.detectChanges(); }, 3000);
   }
 
-  mostrarError(msg: string) {
+  mostrarError(msg: string, seccion = 'datos') {
     this.mensajeError = msg;
     this.mensaje = '';
+    this.mensajeSeccion = seccion;
     this.cdr.detectChanges();
     setTimeout(() => { this.mensajeError = ''; this.cdr.detectChanges(); }, 3000);
   }

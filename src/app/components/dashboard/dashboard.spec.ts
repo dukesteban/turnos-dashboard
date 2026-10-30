@@ -46,8 +46,8 @@ function montar(over: Record<string, any> = {}) {
       },
     ],
   });
-  const cmp = TestBed.createComponent(DashboardComponent).componentInstance;
-  return { cmp, mock, navegaciones };
+  const fixture = TestBed.createComponent(DashboardComponent);
+  return { cmp: fixture.componentInstance, mock, navegaciones, fixture };
 }
 
 /** Monta y deja correr `ngOnInit`, que es lo que carga empleados y teléfonos. */
@@ -1139,5 +1139,44 @@ describe('Dashboard - el cliente del popup lleva a su ficha', () => {
 
     expect(navegaciones[0].args).toEqual(['/personas/clientes']);
     expect(navegaciones[0].extra).toEqual({});
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// BOTONES FLOTANTES — orden y color
+// ═══════════════════════════════════════════════════════════════
+
+describe('Dashboard — botones flotantes de Caja', () => {
+  /**
+   * Los cuatro botones, en el orden en que se ven. El de Nuevo ingreso va
+   * último y es el único verde porque es el único que SUMA plata; el pago a
+   * proveedor pasó de verde a azul y Nueva deuda bajó un lugar para quedar
+   * justo arriba del ingreso.
+   */
+  const botones = (fixture: any) =>
+    [...fixture.nativeElement.querySelectorAll('.accion-rapida')] as HTMLElement[];
+
+  it('van en el orden esperado y con su color', () => {
+    const { cmp, fixture } = montar();
+    Object.defineProperty(cmp, 'puedeEscribirCaja', { get: () => true });
+    fixture.detectChanges();
+
+    const b = botones(fixture);
+    expect(b.map(x => x.querySelector('.accion-texto')?.textContent?.trim())).toEqual([
+      'Pago a empleados', 'Pago a proveedor', 'Nueva deuda', 'Nuevo ingreso',
+    ]);
+    expect(b[1].classList.contains('accion-azul')).toBe(true);
+    expect(b[3].classList.contains('accion-verde')).toBe(true);
+    // El violeta ya no existe: lo tenía el ingreso antes de pasar a verde.
+    expect(b.some(x => x.classList.contains('accion-violeta'))).toBe(false);
+  });
+
+  it('Nueva deuda queda justo arriba de Nuevo ingreso', () => {
+    const { cmp, fixture } = montar();
+    Object.defineProperty(cmp, 'puedeEscribirCaja', { get: () => true });
+    fixture.detectChanges();
+
+    const textos = botones(fixture).map(x => x.querySelector('.accion-texto')?.textContent?.trim());
+    expect(textos.indexOf('Nueva deuda')).toBe(textos.indexOf('Nuevo ingreso') - 1);
   });
 });

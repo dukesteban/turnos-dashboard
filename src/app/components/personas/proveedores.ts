@@ -57,6 +57,20 @@ export class ProveedoresComponent implements OnInit {
 
   mensaje = '';
   mensajeError = '';
+  /**
+   * Acordeón del panel de detalle. Hoy hay uno solo ("Datos") y arranca abierto,
+   * igual que en Empleados: es el bloque que se viene a ver.
+   */
+  acordeonDatos = true;
+  /**
+   * Dónde va el cartel de `mensaje`/`mensajeError`. Sin esto el aviso aparecía
+   * arriba del título del detalle, lejos del campo o del botón que lo generó.
+   *
+   * `lista` = alta o error de carga (el detalle puede estar cerrado);
+   * `acciones` = estado, inactivar y reactivar;
+   * `popup` = errores del popup de alta, que se muestran DENTRO del popup.
+   */
+  mensajeSeccion = '';
   guardando = false;
   cargando = true;
 
@@ -99,7 +113,7 @@ export class ProveedoresComponent implements OnInit {
     try {
       this.proveedores = await this.supabase.getProveedores();
     } catch (e) {
-      this.mensajeError = '❌ No se pudieron cargar los proveedores.';
+      this.mostrarError('❌ No se pudieron cargar los proveedores.', 'lista');
     }
     this.cargando = false;
     // Si el panel estaba abierto mostrando un proveedor, se lo vuelve a armar con
@@ -199,8 +213,7 @@ export class ProveedoresComponent implements OnInit {
 
     const nombre = (sel.nombre ?? '').trim();
     if (!nombre) {
-      this.mensajeError = '❌ El nombre es obligatorio.';
-      this.cdr.detectChanges();
+      this.mostrarError('❌ El nombre es obligatorio.', 'datos');
       return;
     }
 
@@ -211,8 +224,7 @@ export class ProveedoresComponent implements OnInit {
     if (this.proveedores.some(
       (p: any) => paraComparar(p.nombre) === paraComparar(nombre) && p.id !== sel.id
     )) {
-      this.mensajeError = '⚠️ Ya existe un proveedor con ese nombre.';
-      this.cdr.detectChanges();
+      this.mostrarError('⚠️ Ya existe un proveedor con ese nombre.', 'datos');
       return;
     }
 
@@ -251,9 +263,9 @@ export class ProveedoresComponent implements OnInit {
         notas: sel.notas,
       };
       sel.editando = false;
-      this.mostrarMensaje('✅ Proveedor actualizado.');
+      this.mostrarMensaje('✅ Proveedor actualizado.', 'datos');
     } catch (e) {
-      this.mensajeError = '❌ No se pudo guardar.';
+      this.mostrarError('❌ No se pudo guardar.', 'datos');
     } finally {
       sel.guardandoCampo = false;
       this.cdr.detectChanges();
@@ -293,7 +305,7 @@ export class ProveedoresComponent implements OnInit {
     this.mensajeError = '';
     this.mensaje = '';
     if (!this.nuevoProveedor.nombre.trim()) {
-      this.mensajeError = '❌ El nombre es obligatorio.';
+      this.mostrarError('❌ El nombre es obligatorio.', 'popup');
       return;
     }
 
@@ -303,7 +315,7 @@ export class ProveedoresComponent implements OnInit {
     if (this.proveedores.some(
       (p: any) => paraComparar(p.nombre) === paraComparar(this.nuevoProveedor.nombre)
     )) {
-      this.mensajeError = '⚠️ Ya existe un proveedor con ese nombre.';
+      this.mostrarError('⚠️ Ya existe un proveedor con ese nombre.', 'popup');
       return;
     }
 
@@ -320,7 +332,7 @@ export class ProveedoresComponent implements OnInit {
       const creado = await this.supabase.crearProveedor(datos);
       this.cerrarFormProveedor();
       await this.cargarDatos();
-      this.mostrarMensaje('✅ Proveedor agregado.');
+      this.mostrarMensaje('✅ Proveedor agregado.', 'lista');
       // Se abre el detalle del recién creado: es lo que el usuario quiere ver
       // después de dar de alta, y le ahorra el click de buscarlo en la lista.
       if (creado?.id) {
@@ -328,7 +340,7 @@ export class ProveedoresComponent implements OnInit {
         if (nuevo) this.seleccionarProveedor(nuevo);
       }
     } catch (e) {
-      this.mensajeError = '❌ No se pudo guardar el proveedor.';
+      this.mostrarError('❌ No se pudo guardar el proveedor.', 'popup');
     }
     this.guardando = false;
     this.cdr.detectChanges();
@@ -344,9 +356,9 @@ export class ProveedoresComponent implements OnInit {
     try {
       await this.supabase.inactivarProveedor(p.id);
       await this.cargarDatos();
-      this.mostrarMensaje('✅ Proveedor inactivado.');
+      this.mostrarMensaje('✅ Proveedor inactivado.', 'acciones');
     } catch (e) {
-      this.mensajeError = '❌ No se pudo inactivar.';
+      this.mostrarError('❌ No se pudo inactivar.', 'acciones');
     }
     this.cdr.detectChanges();
   }
@@ -368,17 +380,29 @@ export class ProveedoresComponent implements OnInit {
     try {
       await this.supabase.activarProveedor(p.id);
       await this.cargarDatos();
-      this.mostrarMensaje('✅ Proveedor reactivado.');
+      this.mostrarMensaje('✅ Proveedor reactivado.', 'acciones');
     } catch (e) {
-      this.mensajeError = '❌ No se pudo reactivar.';
+      this.mostrarError('❌ No se pudo reactivar.', 'acciones');
     }
     this.cdr.detectChanges();
   }
 
-  private mostrarMensaje(m: string) {
+  private mostrarMensaje(m: string, seccion = 'datos') {
     this.mensaje = m;
     this.mensajeError = '';
+    this.mensajeSeccion = seccion;
     this.cdr.detectChanges();
     setTimeout(() => { this.mensaje = ''; this.cdr.detectChanges(); }, 3000);
+  }
+
+  /**
+   * Igual que `mostrarMensaje` pero para errores. El error NO se borra solo a
+   * los 3 segundos: tiene que quedar hasta que el usuario toque algo o cierre.
+   */
+  private mostrarError(m: string, seccion = 'datos') {
+    this.mensajeError = m;
+    this.mensaje = '';
+    this.mensajeSeccion = seccion;
+    this.cdr.detectChanges();
   }
 }

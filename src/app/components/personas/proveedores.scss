@@ -19,6 +19,8 @@
 // Y la cabecera con 14px de margen abajo, como las otras dos. Venía del 10px de
 // `_tabla.scss` y el buscador quedaba más pegado al borde de la caja.
 @use '../../../styles/seccion-header';
+// El acordeón del panel de detalle: el mismo de la ficha de Empleados.
+@use '../../../styles/acordeon';
 
 .proveedores-page {
   padding: 24px;

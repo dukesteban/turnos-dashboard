@@ -38,8 +38,8 @@ function montar(over: Record<string, any> = {}, query: Record<string, string> = 
       },
     ],
   });
-  const cmp = TestBed.createComponent(EmpleadosComponent).componentInstance;
-  return { cmp, mock };
+  const fixture = TestBed.createComponent(EmpleadosComponent);
+  return { cmp: fixture.componentInstance, mock, fixture };
 }
 
 const settle = () => new Promise(r => setTimeout(r, 0));
@@ -132,6 +132,65 @@ describe('Empleados — acordeones del detalle', () => {
 
     cmp.acordeonRiesgo = false;
     expect(cmp.turnosEnRiesgoLista.length).toBe(1);   // la lista sigue en el componente
+  });
+});
+
+describe('Empleados — carteles dentro del acordeón', () => {
+  // El cartel tiene que verse donde ocurrió la acción. Antes había uno solo
+  // arriba de "Detalle del empleado" y el aviso de la comisión aparecía pegado
+  // al título, fuera del panel que se estaba mirando.
+  const acordeonDe = (fixture: any, titulo: string) =>
+    [...fixture.nativeElement.querySelectorAll('.detalle-seccion .acordeon')]
+      .find((a: any) => a.querySelector('.acordeon-header')?.textContent.includes(titulo)) as any;
+
+  const seleccionarJuan = async (over: Record<string, any> = {}) => {
+    const r = montar(over);
+    await r.cmp.seleccionarEmpleado(cloneEmpleado(EMP_JUAN));
+    return r;
+  };
+
+  it('el aviso de comisión va DENTRO del acordeón de comisiones', async () => {
+    const { cmp, fixture } = await seleccionarJuan();
+    cmp.acordeonComisiones = true;
+    cmp.mostrarMensaje('✅ Comisión actualizada.', 'comisiones');
+    fixture.detectChanges();
+
+    const acordeon = acordeonDe(fixture, 'Comisión por servicio');
+    expect(acordeon.querySelector('.alerta')?.textContent).toContain('Comisión actualizada');
+  });
+
+  it('ningún cartel queda suelto arriba del título del detalle', async () => {
+    const { cmp, fixture } = await seleccionarJuan();
+    cmp.acordeonJornada = true;
+    cmp.mostrarError('❌ Error al actualizar.', 'jornada');
+    fixture.detectChanges();
+
+    const detalle = fixture.nativeElement.querySelector('.detalle-seccion');
+    const sueltos = [...detalle.querySelectorAll('.alerta')]
+      .filter((a: any) => !a.closest('.acordeon'));
+    expect(sueltos.length).toBe(0);
+    // Y sí está donde corresponde.
+    expect(acordeonDe(fixture, 'Jornada').querySelector('.alerta')?.textContent).toContain('Error al actualizar');
+  });
+
+  it('el error de la comisión no se escapa al acordeón de datos', async () => {
+    const { cmp, fixture } = await seleccionarJuan();
+    cmp.acordeonComisiones = true;
+    cmp.mostrarError('❌ Error al guardar la comisión.', 'comisiones');
+    fixture.detectChanges();
+
+    expect(acordeonDe(fixture, 'Datos').querySelector('.alerta')).toBeNull();
+    expect(acordeonDe(fixture, 'Comisión por servicio').querySelector('.alerta')).toBeTruthy();
+  });
+
+  it('el alta deja el aviso en la columna de la lista, no en el detalle', async () => {
+    const { cmp, fixture } = await seleccionarJuan();
+    cmp.mostrarMensaje('✅ Empleado agregado.', 'lista');
+    fixture.detectChanges();
+
+    const lista = fixture.nativeElement.querySelector('.lista-seccion');
+    expect(lista.querySelector('.alerta')?.textContent).toContain('Empleado agregado');
+    expect(fixture.nativeElement.querySelector('.detalle-seccion .alerta')).toBeNull();
   });
 });
 

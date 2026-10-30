@@ -1,3 +1,20 @@
+<!--
+  Cartel de la sección que originó la acción.
+
+  Antes había UN cartel arriba de "Detalle del empleado": guardabas la comisión y
+  el "✅ Comisión actualizada" aparecía pegado al título, fuera del acordeón que
+  estabas mirando (y con los de abajo abiertos, directamente fuera de pantalla).
+  Ahora cada acordeón dibuja el cartel de su propia sección con este template.
+
+  El `context` es el nombre de la sección que manda `mostrarMensaje`/
+  `mostrarError` en el .ts. Si no coincide, no se muestra nada: el mensaje no se
+  puede escapar a otra parte de la pantalla.
+-->
+<ng-template #alertaSeccion let-s="seccion">
+  <div *ngIf="mensajeSeccion === s && mensaje" class="alerta exito">{{ mensaje }}</div>
+  <div *ngIf="mensajeSeccion === s && mensajeError" class="alerta error">{{ mensajeError }}</div>
+</ng-template>
+
 <div class="empleados-page">
 
   <div class="layout" [class.con-detalle]="empleadoSeleccionado">
@@ -8,6 +25,9 @@
         <span class="badge-count">Total: {{ empleadosFiltrados.length }}</span>
         <button class="btn-primary" (click)="abrirModalNuevoEmpleado()">➕ Nuevo</button>
       </div>
+      <!-- El alta y el inactivado CIERRAN el detalle: su cartel va en la lista,
+           que es lo único que queda en pantalla. -->
+      <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'lista' }"></ng-container>
       <input type="text" class="buscador" [(ngModel)]="busqueda" placeholder="🔍 Buscar por nombre..." />
 
       <div class="lista">
@@ -55,9 +75,6 @@
 
     <!-- DETALLE -->
     <div *ngIf="empleadoSeleccionado" class="seccion detalle-seccion">
-      <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
-      <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
-
       <div class="seccion-header">
         <h3>Detalle del empleado</h3>
         <button class="btn-cerrar" (click)="cerrarDetalle()">✕</button>
@@ -70,6 +87,7 @@
           <span class="chevron" [class.abierto]="acordeonDatos">›</span>
         </div>
         <div class="acordeon-body" [class.visible]="acordeonDatos">
+          <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'datos' }"></ng-container>
           <!--
             UN solo boton "Editar" para los dos campos, como en Personas >
             Proveedores. Antes habia un lapiz por campo (y dos flags distintos:
@@ -153,6 +171,7 @@
           <span class="chevron" [class.abierto]="acordeonAcceso">›</span>
         </div>
         <div class="acordeon-body" [class.visible]="acordeonAcceso">
+          <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'acceso' }"></ng-container>
           <div class="acceso-rol">
             <span class="label-general">Atiende turnos</span>
             <label class="switch">
@@ -192,6 +211,7 @@
           <span class="chevron" [class.abierto]="acordeonComisiones">›</span>
         </div>
         <div class="acordeon-body" [class.visible]="acordeonComisiones">
+        <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'comisiones' }"></ng-container>
         <div class="campo-editable comision-general">
           <span class="label-general">General</span>
           <span *ngIf="!empleadoSeleccionado.editandoComision" class="comision-grande">{{ empleadoSeleccionado.comision_porcentaje }}%</span>
@@ -245,6 +265,7 @@
           <span class="chevron" [class.abierto]="acordeonJornada">›</span>
         </div>
         <div class="acordeon-body" [class.visible]="acordeonJornada">
+        <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'jornada' }"></ng-container>
         <div *ngIf="!empleadoSeleccionado.editandoJornada" class="dias-display">
           <span *ngFor="let dia of diasCompletos; let i = index"
             class="dia-badge"
@@ -297,6 +318,7 @@
           <span class="chevron" [class.abierto]="acordeonAusencias">›</span>
         </div>
         <div class="acordeon-body" [class.visible]="acordeonAusencias">
+        <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'ausencias' }"></ng-container>
         <!-- El botón va solo y a la derecha, con etiqueta. Antes era un ➕
              suelto en un flex con `space-between` al lado de un texto largo: el
              texto se enrollaba y el ícono quedaba descolgado (y en un celu un
@@ -413,6 +435,7 @@
         sin badge: dos acciones que hacen lo mismo pero no se parecían, y el
         rojo de "borrar" en una acción que tiene vuelta atrás exagera.
       -->
+      <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'acciones' }"></ng-container>
       <div class="detalle-acciones" *ngIf="empleadoSeleccionado?.activo !== false">
         <span class="estado-badge">Activo</span>
         <button class="btn-secundario-sm" (click)="inactivarEmpleado()">

@@ -20,6 +20,25 @@ export class ClientesComponent implements OnInit {
   turnosCliente: any[] = [];
   mensaje = '';
   mensajeError = '';
+  /**
+   * Acordeones del detalle, con el mismo modelo que Empleados: el primero
+   * ("Nombre") abierto y el resto cerrado, para que la ficha no sea una lista
+   * larga de bloques que hay que scrollear.
+   */
+  acordeonNombre = true;
+  acordeonFiscales = false;
+  acordeonTelefonos = false;
+  acordeonFusionar = false;
+  acordeonTurnos = false;
+  /**
+   * Dónde va el cartel de `mensaje`/`mensajeError`. Antes había uno solo arriba
+   * del título y el aviso de "Teléfono agregado" aparecía lejos del bloque que
+   * se acababa de tocar.
+   *
+   * `lista` = alta o error sin cliente seleccionado (no hay detalle donde
+   * mostrarlo).
+   */
+  mensajeSeccion = '';
   nuevoTelefono = '';
   cargandoTurnos = false;
   busqueda = '';
@@ -123,7 +142,7 @@ export class ClientesComponent implements OnInit {
 
       await this.cargarClientes();
       this.cerrarModalNuevo();
-      this.mostrarMensaje('✅ Cliente agregado.');
+      this.mostrarMensaje('✅ Cliente agregado.', 'lista');
     } catch (e) {
       console.error('Error al agregar cliente:', e);
       this.errorNuevo = '❌ Error al guardar el cliente. Puede que el teléfono ya exista.';
@@ -171,7 +190,7 @@ export class ClientesComponent implements OnInit {
   }
 
   async guardarFicha() {
-    if (!this.clienteSeleccionado) return this.mostrarError('❌ No hay ningún cliente seleccionado.');
+    if (!this.clienteSeleccionado) return this.mostrarError('❌ No hay ningún cliente seleccionado.', 'lista');
     try {
       await this.supabase.updateClienteFicha(this.clienteSeleccionado.id, {
         cuit_cuil: this.clienteSeleccionado.cuit_cuil ?? '',
@@ -179,9 +198,9 @@ export class ClientesComponent implements OnInit {
       });
       // Se guarda "" como null en la base: el getter lo vuelve a mostrar como "Sin dato".
       this.clienteSeleccionado.editandoFicha = false;
-      this.mostrarMensaje('✅ Datos actualizados.');
+      this.mostrarMensaje('✅ Datos actualizados.', 'fiscales');
     } catch (e) {
-      this.mostrarError('❌ Error al actualizar los datos.');
+      this.mostrarError('❌ Error al actualizar los datos.', 'fiscales');
     }
   }
 
@@ -213,13 +232,13 @@ export class ClientesComponent implements OnInit {
   async guardarNombre() {
     // Sin el guard, un clic en "guardar" sin cliente seleccionado (o con el
     // detalle cerrado) rompe la pantalla con "no se puede leer editando de null".
-    if (!this.clienteSeleccionado) return this.mostrarError('❌ No hay ningún cliente seleccionado.');
+    if (!this.clienteSeleccionado) return this.mostrarError('❌ No hay ningún cliente seleccionado.', 'lista');
     const nombreNorm = this.supabase.normalizarNombre(this.clienteSeleccionado.nombre);
     this.clienteSeleccionado.nombre = nombreNorm;
 
     const duplicado = await this.supabase.verificarNombreDuplicado(nombreNorm, this.clienteSeleccionado.id);
     if (duplicado) {
-      this.mostrarError('❌ Ya existe un cliente con ese nombre.');
+      this.mostrarError('❌ Ya existe un cliente con ese nombre.', 'nombre');
       return;
     }
 
@@ -228,15 +247,15 @@ export class ClientesComponent implements OnInit {
       const idx = this.clientes.findIndex(c => c.id === this.clienteSeleccionado.id);
       if (idx >= 0) this.clientes[idx].nombre = nombreNorm;
       this.clienteSeleccionado.editando = false;
-      this.mostrarMensaje('✅ Nombre actualizado.');
+      this.mostrarMensaje('✅ Nombre actualizado.', 'nombre');
     } catch (e) {
-      this.mostrarError('❌ Error al actualizar el nombre.');
+      this.mostrarError('❌ Error al actualizar el nombre.', 'nombre');
     }
   }
 
   async agregarTelefono() {
     const problema = problemaTelefono(this.nuevoTelefono);
-    if (problema) return this.mostrarError(`❌ ${problema}`);
+    if (problema) return this.mostrarError(`❌ ${problema}`, 'telefonos');
     try {
       const tel = await this.supabase.agregarTelefono(this.clienteSeleccionado.id, this.nuevoTelefono.trim());
       this.clienteSeleccionado.telefonos = [...(this.clienteSeleccionado.telefonos || []), tel];
@@ -245,9 +264,9 @@ export class ClientesComponent implements OnInit {
         await this.supabase.actualizarTelefonoEnTurnos(this.clienteSeleccionado.id, this.nuevoTelefono.trim());
       }
       this.nuevoTelefono = '';
-      this.mostrarMensaje('✅ Teléfono agregado.');
+      this.mostrarMensaje('✅ Teléfono agregado.', 'telefonos');
     } catch (e) {
-      this.mostrarError('❌ Error al agregar el teléfono. Puede que ya exista.');
+      this.mostrarError('❌ Error al agregar el teléfono. Puede que ya exista.', 'telefonos');
     }
   }
 
@@ -259,9 +278,9 @@ export class ClientesComponent implements OnInit {
       // Actualizar con el nuevo teléfono principal si queda alguno
       const telPrincipal = this.clienteSeleccionado.telefonos?.[0]?.telefono || '';
       await this.supabase.actualizarTelefonoEnTurnos(this.clienteSeleccionado.id, telPrincipal);
-      this.mostrarMensaje('✅ Teléfono eliminado.');
+      this.mostrarMensaje('✅ Teléfono eliminado.', 'telefonos');
     } catch (e) {
-      this.mostrarError('❌ Error al eliminar el teléfono.');
+      this.mostrarError('❌ Error al eliminar el teléfono.', 'telefonos');
     }
   }
 
@@ -273,15 +292,15 @@ export class ClientesComponent implements OnInit {
       this.clienteSeleccionado.telefonos.forEach((t: any) => t.principal = t.id === tel.id);
       // Actualizar teléfono en turnos
       await this.supabase.actualizarTelefonoEnTurnos(this.clienteSeleccionado.id, tel.telefono);
-      this.mostrarMensaje('✅ Teléfono principal actualizado.');
+      this.mostrarMensaje('✅ Teléfono principal actualizado.', 'telefonos');
     } catch (e) {
-      this.mostrarError('❌ Error al cambiar el teléfono principal.');
+      this.mostrarError('❌ Error al cambiar el teléfono principal.', 'telefonos');
     }
   }
 
   async guardarTelefono(tel: any) {
     const problema = problemaTelefono(tel._telEditando);
-    if (problema) return this.mostrarError(`❌ ${problema}`);
+    if (problema) return this.mostrarError(`❌ ${problema}`, 'telefonos');
     try {
       await this.supabase.editarTelefono(tel.id, tel._telEditando.trim());
       tel.telefono = tel._telEditando.trim();
@@ -289,9 +308,9 @@ export class ClientesComponent implements OnInit {
       if (tel.principal) {
         await this.supabase.actualizarTelefonoEnTurnos(this.clienteSeleccionado.id, tel.telefono);
       }
-      this.mostrarMensaje('✅ Teléfono actualizado.');
+      this.mostrarMensaje('✅ Teléfono actualizado.', 'telefonos');
     } catch (e) {
-      this.mostrarError('❌ Error al actualizar. Puede que ya exista ese número.');
+      this.mostrarError('❌ Error al actualizar. Puede que ya exista ese número.', 'telefonos');
     }
   }
 
@@ -323,10 +342,10 @@ export class ClientesComponent implements OnInit {
       this.mostrandoFusionar = false;
       this.busquedaFusionar = '';
       this.clienteParaFusionar = null;
-      this.mostrarMensaje('✅ Clientes fusionados correctamente.');
+      this.mostrarMensaje('✅ Clientes fusionados correctamente.', 'fusionar');
       this.cdr.detectChanges();
     } catch (e) {
-      this.mostrarError('❌ Error al fusionar los clientes.');
+      this.mostrarError('❌ Error al fusionar los clientes.', 'fusionar');
     }
   }
 
@@ -344,16 +363,18 @@ export class ClientesComponent implements OnInit {
     return `${dia} ${d}/${m}`;
   }
 
-  mostrarMensaje(msg: string) {
+  mostrarMensaje(msg: string, seccion = 'nombre') {
     this.mensaje = msg;
     this.mensajeError = '';
+    this.mensajeSeccion = seccion;
     this.cdr.detectChanges();
     setTimeout(() => { this.mensaje = ''; this.cdr.detectChanges(); }, 3000);
   }
 
-  mostrarError(msg: string) {
+  mostrarError(msg: string, seccion = 'nombre') {
     this.mensajeError = msg;
     this.mensaje = '';
+    this.mensajeSeccion = seccion;
     this.cdr.detectChanges();
     setTimeout(() => { this.mensajeError = ''; this.cdr.detectChanges(); }, 3000);
   }

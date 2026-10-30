@@ -34,21 +34,22 @@
       <span class="accion-signo">+</span>
       <span class="accion-texto">Pago a empleados</span>
     </button>
+    <button type="button" class="accion-rapida accion-azul"
+            (click)="irACaja('pago-proveedor')"
+            aria-label="Nuevo pago a proveedor">
+      <span class="accion-signo">+</span>
+      <span class="accion-texto">Pago a proveedor</span>
+    </button>
     <button type="button" class="accion-rapida accion-rojo"
             (click)="irACaja('deuda')"
             aria-label="Nueva deuda con proveedor">
       <span class="accion-signo">+</span>
       <span class="accion-texto">Nueva deuda</span>
     </button>
-    <button type="button" class="accion-rapida accion-verde"
-            (click)="irACaja('pago-proveedor')"
-            aria-label="Nuevo pago a proveedor">
-      <span class="accion-signo">+</span>
-      <span class="accion-texto">Pago a proveedor</span>
-    </button>
     <!-- Ingreso suelto (tabla `ingresos`): la cuarta cosa que se carga todos los
-         días y que NO pasa por un turno. -->
-    <button type="button" class="accion-rapida accion-violeta"
+         días y que NO pasa por un turno. Va último y en verde: es la única de
+         las cuatro que SUMA plata. -->
+    <button type="button" class="accion-rapida accion-verde"
             (click)="irACaja('ingreso')"
             aria-label="Nuevo ingreso">
       <span class="accion-signo">+</span>

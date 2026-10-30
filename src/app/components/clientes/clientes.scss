@@ -5,10 +5,13 @@
 //     `.btn-primary`.
 //   - `_detalle.scss` -> el armazon lista + panel, el mismo que el de
 //     Empleados y el de Personas > Proveedores.
+//   - `acordeon` -> el acordeon del detalle (header con chevron + body), el
+//     mismo de la ficha de Empleados.
 @use '../../../styles/popup';
 @use '../../../styles/detalle';
 @use '../../../styles/buscador';
 @use '../../../styles/seccion-header';
+@use '../../../styles/acordeon';
 
 .clientes-page {
   padding: 24px;

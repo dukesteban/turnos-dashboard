@@ -688,3 +688,65 @@ it('con el proveedor activo, el detalle ofrece "Inactivar"', async () => {
     expect(botones[0].textContent).toContain('Reactivar');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// CARTELES — cada uno dentro del bloque que lo originó
+// ═══════════════════════════════════════════════════════════════
+
+describe('Personas > Proveedores — carteles dentro del acordeón', () => {
+  const acordeonDatos = (fixture: any) =>
+    fixture.nativeElement.querySelector('.detalle-seccion .acordeon') as HTMLElement;
+
+  it('el aviso de guardado va DENTRO del acordeón Datos', async () => {
+    const { cmp, fixture } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
+    cmp.seleccionarProveedor(cmp.proveedores[0]);
+    cmp.editarProveedor();
+    cmp.proveedorSeleccionado.nombre = 'Quimicas del Sur';
+    await cmp.guardarProveedor();
+    fixture.detectChanges();
+
+    expect(acordeonDatos(fixture).querySelector('.alerta')?.textContent).toContain('Proveedor actualizado');
+  });
+
+  it('el error de guardado también queda en Datos, no arriba del título', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([{ ...PROV }]),
+      actualizarProveedor: () => Promise.reject({ message: 'boom' }),
+    });
+    cmp.seleccionarProveedor(cmp.proveedores[0]);
+    cmp.editarProveedor();
+    await cmp.guardarProveedor();
+    fixture.detectChanges();
+
+    expect(acordeonDatos(fixture).querySelector('.alerta')?.textContent).toContain('No se pudo guardar');
+    const sueltos = [...fixture.nativeElement.querySelectorAll('.detalle-seccion .alerta')]
+      .filter((a: any) => !a.closest('.acordeon'));
+    expect(sueltos.length).toBe(0);
+  });
+
+  it('el aviso de inactivar va junto al estado, FUERA del acordeón Datos', async () => {
+    const spy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { cmp, fixture } = await listo({ getProveedores: () => Promise.resolve([{ ...PROV }]) });
+    cmp.seleccionarProveedor(cmp.proveedores[0]);
+    await cmp.inactivarProveedor(cmp.proveedorSeleccionado);
+    fixture.detectChanges();
+
+    const alertas = [...fixture.nativeElement.querySelectorAll('.detalle-seccion .alerta')] as HTMLElement[];
+    const aviso = alertas.find(a => a.textContent.includes('Proveedor inactivado'));
+    expect(aviso).toBeTruthy();
+    expect(aviso!.closest('.acordeon')).toBeNull();
+    spy.mockRestore();
+  });
+
+  it('el alta deja el aviso en la lista', async () => {
+    const { cmp, fixture } = await listo({
+      getProveedores: () => Promise.resolve([]),
+      crearProveedor: () => Promise.resolve({ id: 9, nombre: 'Ledesma', activo: true }),
+    });
+    cmp.nuevoProveedor = { nombre: 'Ledesma', contacto: '', telefono: '', domicilio: '', notas: '', cuit_cuil: '' };
+    await cmp.guardarNuevo();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.lista-seccion .alerta')?.textContent).toContain('Proveedor agregado');
+  });
+});

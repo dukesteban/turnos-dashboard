@@ -34,8 +34,8 @@ function montar(over: Record<string, any> = {}, query: Record<string, string> = 
       },
     ],
   });
-  const cmp = TestBed.createComponent(ClientesComponent).componentInstance;
-  return { cmp, mock };
+  const fixture = TestBed.createComponent(ClientesComponent);
+  return { cmp: fixture.componentInstance, mock, fixture };
 }
 
 /** Los tests arman `cmp.clientes` a mano; esto los deja listos. */
@@ -581,5 +581,69 @@ describe('Clientes — formatearFecha', () => {
   it('el primer dia del mes no se corre al mes anterior', () => {
     const { cmp } = montar();
     expect(cmp.formatearFecha('2026-03-01')).toBe('Dom 01/03');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// DETALLE EN ACORDEONES — el mismo modelo que Empleados
+// ═══════════════════════════════════════════════════════════════
+
+describe('Clientes — detalle en acordeones', () => {
+  const acordeonDe = (fixture: any, titulo: string) =>
+    [...fixture.nativeElement.querySelectorAll('.detalle-seccion .acordeon')]
+      .find((a: any) => a.querySelector('.acordeon-header')?.textContent.includes(titulo)) as HTMLElement;
+
+  it('los cinco bloques son acordeones, con solo Nombre abierto', async () => {
+    const { cmp, fixture } = montar({ getClientes: () => Promise.resolve([clonarCliente(CLI_DANIEL)]) });
+    await cmp.seleccionarCliente(clonarCliente(CLI_DANIEL));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelectorAll('.detalle-seccion .acordeon').length).toBe(5);
+    expect(cmp.acordeonNombre).toBe(true);
+    expect(cmp.acordeonFiscales).toBe(false);
+    expect(cmp.acordeonTelefonos).toBe(false);
+    expect(cmp.acordeonFusionar).toBe(false);
+    expect(cmp.acordeonTurnos).toBe(false);
+  });
+
+  it('el aviso de teléfono agregado va DENTRO del acordeón de Teléfonos', async () => {
+    const { cmp, fixture } = montar({
+      getClientes: () => Promise.resolve([clonarCliente(CLI_DANIEL)]),
+      agregarTelefono: (_id: number, tel: string) => Promise.resolve({ id: 99, telefono: tel, principal: false }),
+    });
+    await cmp.seleccionarCliente(clonarCliente(CLI_DANIEL));
+    cmp.acordeonTelefonos = true;
+    cmp.nuevoTelefono = '11 5555-1234';
+    await cmp.agregarTelefono();
+    fixture.detectChanges();
+
+    expect(acordeonDe(fixture, 'Teléfonos').querySelector('.alerta')?.textContent).toContain('Teléfono agregado');
+  });
+
+  it('ningún cartel queda suelto arriba del título del detalle', async () => {
+    const { cmp, fixture } = montar({ getClientes: () => Promise.resolve([clonarCliente(CLI_DANIEL)]) });
+    await cmp.seleccionarCliente(clonarCliente(CLI_DANIEL));
+    cmp.acordeonFiscales = true;
+    cmp.mostrarMensaje('✅ Datos actualizados.', 'fiscales');
+    fixture.detectChanges();
+
+    const detalle = fixture.nativeElement.querySelector('.detalle-seccion');
+    const sueltos = [...detalle.querySelectorAll('.alerta')]
+      .filter((a: any) => !a.closest('.acordeon'));
+    expect(sueltos.length).toBe(0);
+    expect(acordeonDe(fixture, 'Datos fiscales').querySelector('.alerta')?.textContent).toContain('Datos actualizados');
+  });
+
+  it('el alta deja el aviso en la lista', async () => {
+    const { cmp, fixture } = montar({
+      getClientes: () => Promise.resolve([]),
+      verificarNombreDuplicado: () => Promise.resolve(false),
+      crearCliente: () => Promise.resolve({ id: 9, nombre: 'Nuevo' }),
+    });
+    cmp.altaNombre = 'Nuevo';
+    await cmp.agregarCliente();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.lista-seccion .alerta')?.textContent).toContain('Cliente agregado');
   });
 });

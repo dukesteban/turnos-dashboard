@@ -1,3 +1,15 @@
+<!--
+  Cartel de la sección que originó la acción, igual que en Empleados.
+
+  Antes había UN cartel arriba de "Detalle del cliente": agregabas un teléfono y
+  el aviso aparecía pegado al título, fuera del bloque de teléfonos. Cada
+  acordeón dibuja el suyo con este template.
+-->
+<ng-template #alertaSeccion let-s="seccion">
+  <div *ngIf="mensajeSeccion === s && mensaje" class="alerta exito">{{ mensaje }}</div>
+  <div *ngIf="mensajeSeccion === s && mensajeError" class="alerta error">{{ mensajeError }}</div>
+</ng-template>
+
 <div class="clientes-page">
 
   <div class="layout" [class.con-detalle]="clienteSeleccionado">
@@ -8,6 +20,8 @@
         <span class="badge-count">Total: {{ clientesFiltrados.length }}</span>
         <button class="btn-primary" (click)="abrirModalNuevo()">➕ Nuevo</button>
       </div>
+      <!-- El alta deja el cartel en la lista: el detalle puede estar cerrado. -->
+      <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'lista' }"></ng-container>
       <input type="text" class="buscador" [(ngModel)]="busqueda" placeholder="🔍 Buscar por nombre o teléfono..." />
       <div class="lista-clientes">
         <div *ngFor="let cliente of clientesFiltrados"
@@ -27,48 +41,70 @@
 
     <!-- DETALLE -->
     <div *ngIf="clienteSeleccionado" class="seccion detalle-seccion">
-      <div *ngIf="mensaje" class="alerta exito">{{ mensaje }}</div>
-      <div *ngIf="mensajeError" class="alerta error">{{ mensajeError }}</div>
       <div class="seccion-header">
         <h3>Detalle del cliente</h3>
         <button class="btn-cerrar" (click)="cerrarDetalle()">✕</button>
       </div>
 
+      <!--
+        Los cinco bloques son acordeones, igual que la ficha de Empleados: el
+        primero abierto y el resto cerrado. Antes eran cinco `detalle-bloque`
+        siempre desplegados y la ficha del cliente era una columna larguísima
+        donde el historial de turnos tapaba los teléfonos.
+      -->
+
       <!-- Nombre -->
-      <div class="detalle-bloque">
-        <h4>Nombre</h4>
-        <div class="campo-editable">
-          <input type="text" [(ngModel)]="clienteSeleccionado.nombre"
-            [readonly]="!clienteSeleccionado.editando"
-            class="input-nombre" />
-          <button *ngIf="!clienteSeleccionado.editando" class="btn-icon" (click)="clienteSeleccionado.editando = true">✏️</button>
-          <button *ngIf="clienteSeleccionado.editando" class="btn-icon" (click)="guardarNombre()">💾</button>
-          <button *ngIf="clienteSeleccionado.editando" class="btn-icon" (click)="cancelarEdicionNombre()">↩️</button>
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonNombre = !acordeonNombre">
+          <span>Nombre</span>
+          <span class="chevron" [class.abierto]="acordeonNombre">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonNombre">
+          <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'nombre' }"></ng-container>
+          <div class="campo-editable">
+            <input type="text" [(ngModel)]="clienteSeleccionado.nombre"
+              [readonly]="!clienteSeleccionado.editando"
+              class="input-nombre" />
+            <button *ngIf="!clienteSeleccionado.editando" class="btn-icon" (click)="clienteSeleccionado.editando = true">✏️</button>
+            <button *ngIf="clienteSeleccionado.editando" class="btn-icon" (click)="guardarNombre()">💾</button>
+            <button *ngIf="clienteSeleccionado.editando" class="btn-icon" (click)="cancelarEdicionNombre()">↩️</button>
+          </div>
         </div>
       </div>
 
       <!-- Datos fiscales -->
-      <div class="detalle-bloque">
-        <h4>Datos fiscales</h4>
-        <div class="campo-editable">
-          <input type="text" [(ngModel)]="clienteSeleccionado.cuit_cuil"
-            [readonly]="!clienteSeleccionado.editandoFicha"
-            placeholder="CUIT / CUIL (opcional)" class="input-nombre" />
-          <input type="text" [(ngModel)]="clienteSeleccionado.direccion"
-            [readonly]="!clienteSeleccionado.editandoFicha"
-            placeholder="Dirección (opcional)" class="input-nombre" />
-          <button *ngIf="!clienteSeleccionado.editandoFicha" class="btn-icon"
-            (click)="clienteSeleccionado.editandoFicha = true">✏️</button>
-          <button *ngIf="clienteSeleccionado.editandoFicha" class="btn-icon"
-            (click)="guardarFicha()">💾</button>
-          <button *ngIf="clienteSeleccionado.editandoFicha" class="btn-icon"
-            (click)="cancelarEdicionFicha()">↩️</button>
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonFiscales = !acordeonFiscales">
+          <span>Datos fiscales</span>
+          <span class="chevron" [class.abierto]="acordeonFiscales">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonFiscales">
+          <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'fiscales' }"></ng-container>
+          <div class="campo-editable">
+            <input type="text" [(ngModel)]="clienteSeleccionado.cuit_cuil"
+              [readonly]="!clienteSeleccionado.editandoFicha"
+              placeholder="CUIT / CUIL (opcional)" class="input-nombre" />
+            <input type="text" [(ngModel)]="clienteSeleccionado.direccion"
+              [readonly]="!clienteSeleccionado.editandoFicha"
+              placeholder="Dirección (opcional)" class="input-nombre" />
+            <button *ngIf="!clienteSeleccionado.editandoFicha" class="btn-icon"
+              (click)="clienteSeleccionado.editandoFicha = true">✏️</button>
+            <button *ngIf="clienteSeleccionado.editandoFicha" class="btn-icon"
+              (click)="guardarFicha()">💾</button>
+            <button *ngIf="clienteSeleccionado.editandoFicha" class="btn-icon"
+              (click)="cancelarEdicionFicha()">↩️</button>
+          </div>
         </div>
       </div>
 
       <!-- Teléfonos -->
-      <div class="detalle-bloque">
-        <h4>Teléfonos</h4>
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonTelefonos = !acordeonTelefonos">
+          <span>Teléfonos</span>
+          <span class="chevron" [class.abierto]="acordeonTelefonos">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonTelefonos">
+          <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'telefonos' }"></ng-container>
           <div class="telefonos-lista">
             <div *ngFor="let tel of clienteSeleccionado.telefonos" class="telefono-item">
               
@@ -100,70 +136,82 @@
             </div>
             <div *ngIf="!clienteSeleccionado.telefonos?.length" class="vacio-sm">Sin teléfonos</div>
           </div>
-        <div class="agregar-tel">
-          <input type="text" [(ngModel)]="nuevoTelefono" placeholder="Agregar teléfono..." class="input-tel" />
-          <button class="btn-primary-sm" (click)="agregarTelefono()">➕ Agregar</button>
+          <div class="agregar-tel">
+            <input type="text" [(ngModel)]="nuevoTelefono" placeholder="Agregar teléfono..." class="input-tel" />
+            <button class="btn-primary-sm" (click)="agregarTelefono()">➕ Agregar</button>
+          </div>
         </div>
       </div>
 
       <!-- Fusionar -->
-      <div class="detalle-bloque">
-        <h4>Fusionar cliente</h4>
-
-        <div *ngIf="!mostrandoFusionar">
-          <button class="btn-fusionar" (click)="mostrandoFusionar = true">🔗 Fusionar con duplicado...</button>
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonFusionar = !acordeonFusionar">
+          <span>Fusionar cliente</span>
+          <span class="chevron" [class.abierto]="acordeonFusionar">›</span>
         </div>
+        <div class="acordeon-body" [class.visible]="acordeonFusionar">
+          <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'fusionar' }"></ng-container>
 
-        <div *ngIf="mostrandoFusionar">
-          <p class="fusionar-aviso">
-            Este cliente es el <strong>principal</strong>. Elegí el duplicado a eliminar.
-          </p>
-          <input type="text" class="buscador" [(ngModel)]="busquedaFusionar"
-            placeholder="🔍 Buscar duplicado por nombre o teléfono..." />
-
-          <div class="fusionar-lista">
-            <div *ngFor="let c of clientesParaFusionar"
-              class="fusionar-item"
-              [class.seleccionado]="clienteParaFusionar?.id === c.id"
-              (click)="clienteParaFusionar = c">
-              <div class="cliente-avatar">{{ c.nombre?.charAt(0)?.toUpperCase() }}</div>
-              <div class="cliente-info">
-                <div class="cliente-nombre">{{ c.nombre }}</div>
-                <div class="cliente-tel">{{ c.telefonos?.[0]?.telefono || 'Sin teléfono' }}</div>
-              </div>
-              <span *ngIf="clienteParaFusionar?.id === c.id" class="check-sel">✓</span>
-            </div>
-            <div *ngIf="busquedaFusionar && clientesParaFusionar.length === 0" class="vacio-sm">
-              No se encontraron clientes
-            </div>
+          <div *ngIf="!mostrandoFusionar">
+            <button class="btn-fusionar" (click)="mostrandoFusionar = true">🔗 Fusionar con duplicado...</button>
           </div>
 
-          <div class="fusionar-acciones">
-            <button class="btn-primary-sm" [disabled]="!clienteParaFusionar" (click)="confirmarFusion()">
-              🔗 Confirmar fusión
-            </button>
-            <button class="btn-cancelar-sm" (click)="mostrandoFusionar = false; busquedaFusionar = ''; clienteParaFusionar = null">
-              Cancelar
-            </button>
+          <div *ngIf="mostrandoFusionar">
+            <p class="fusionar-aviso">
+              Este cliente es el <strong>principal</strong>. Elegí el duplicado a eliminar.
+            </p>
+            <input type="text" class="buscador" [(ngModel)]="busquedaFusionar"
+              placeholder="🔍 Buscar duplicado por nombre o teléfono..." />
+
+            <div class="fusionar-lista">
+              <div *ngFor="let c of clientesParaFusionar"
+                class="fusionar-item"
+                [class.seleccionado]="clienteParaFusionar?.id === c.id"
+                (click)="clienteParaFusionar = c">
+                <div class="cliente-avatar">{{ c.nombre?.charAt(0)?.toUpperCase() }}</div>
+                <div class="cliente-info">
+                  <div class="cliente-nombre">{{ c.nombre }}</div>
+                  <div class="cliente-tel">{{ c.telefonos?.[0]?.telefono || 'Sin teléfono' }}</div>
+                </div>
+                <span *ngIf="clienteParaFusionar?.id === c.id" class="check-sel">✓</span>
+              </div>
+              <div *ngIf="busquedaFusionar && clientesParaFusionar.length === 0" class="vacio-sm">
+                No se encontraron clientes
+              </div>
+            </div>
+
+            <div class="fusionar-acciones">
+              <button class="btn-primary-sm" [disabled]="!clienteParaFusionar" (click)="confirmarFusion()">
+                🔗 Confirmar fusión
+              </button>
+              <button class="btn-cancelar-sm" (click)="mostrandoFusionar = false; busquedaFusionar = ''; clienteParaFusionar = null">
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- Turnos -->
-      <div class="detalle-bloque">
-        <h4>Historial de turnos</h4>
-        <div *ngIf="cargandoTurnos" class="vacio-sm">Cargando...</div>
-        <div *ngIf="!cargandoTurnos && turnosCliente.length === 0" class="vacio-sm">Sin registros</div>
-        <div class="turnos-lista">
-          <div *ngFor="let turno of turnosCliente" class="turno-item">
-            <div class="turno-fecha">{{ formatearFecha(turno.fecha) }} a las {{ turno.hora?.slice(0,5) || turno.hora_inicio?.slice(0,5) }}</div>
-            <div class="turno-servicio">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</div>
-            <div class="turno-footer">
-              <span class="turno-precio">
-                ${{ (turno.estado === 'atendido' && turno.precio_final ? turno.precio_final : turno.precio) | number }}
-                <span *ngIf="turno.estado === 'atendido' && turno.metodo_pago"> - {{ turno.metodo_pago }}</span>
-              </span>
-              <span class="badge" [ngClass]="turno.estado">{{ turno.estado }}</span>
+      <div class="acordeon">
+        <div class="acordeon-header" (click)="acordeonTurnos = !acordeonTurnos">
+          <span>Historial de turnos</span>
+          <span class="chevron" [class.abierto]="acordeonTurnos">›</span>
+        </div>
+        <div class="acordeon-body" [class.visible]="acordeonTurnos">
+          <div *ngIf="cargandoTurnos" class="vacio-sm">Cargando...</div>
+          <div *ngIf="!cargandoTurnos && turnosCliente.length === 0" class="vacio-sm">Sin registros</div>
+          <div class="turnos-lista">
+            <div *ngFor="let turno of turnosCliente" class="turno-item">
+              <div class="turno-fecha">{{ formatearFecha(turno.fecha) }} a las {{ turno.hora?.slice(0,5) || turno.hora_inicio?.slice(0,5) }}</div>
+              <div class="turno-servicio">{{ turno.estado === 'atendido' && turno.servicio_nombre_final ? turno.servicio_nombre_final : turno.servicio_nombre }}</div>
+              <div class="turno-footer">
+                <span class="turno-precio">
+                  ${{ (turno.estado === 'atendido' && turno.precio_final ? turno.precio_final : turno.precio) | number }}
+                  <span *ngIf="turno.estado === 'atendido' && turno.metodo_pago"> - {{ turno.metodo_pago }}</span>
+                </span>
+                <span class="badge" [ngClass]="turno.estado">{{ turno.estado }}</span>
+              </div>
             </div>
           </div>
         </div>
