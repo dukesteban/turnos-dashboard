@@ -27,5 +27,15 @@
   align-items: center;
   margin-bottom: 14px;
 
-  h3 { margin: 0; }
+  // El título ("Detalle del cliente / empleado / proveedor") con la MISMA letra
+  // en las tres pestañas. Antes solo se fijaba el margen: el tamaño y el peso
+  // los ponía `.seccion h3` de `_tabla.scss`, que Proveedores usa y las otras
+  // dos no, así que "Detalle del proveedor" salía en 15px semibold y los otros
+  // dos en 18.7px bold. Mismo título, misma pantalla, dos letras distintas.
+  h3 {
+    margin: 0;
+    font-size: 1.17rem;
+    font-weight: 700;
+    color: #1e293b;
+  }
 }

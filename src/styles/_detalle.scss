@@ -29,7 +29,16 @@
   gap: 20px;
 
   &.con-detalle {
-    grid-template-columns: 1fr 0.6fr;
+    // El panel de detalle es la columna ANCHA, no la angosta. Antes era
+    // `1fr 0.6fr` (unos 372px en Empleados) y la ficha quedaba apretada: los
+    // campos largos, el CUIT y la dirección entraban a duras penas, mientras
+    // la lista —que es una fila de nombre y teléfono— se llevaba 620px.
+    //
+    // En Clientes se veía bien por accidente: dos inputs fiscales lado a lado
+    // subían el ancho mínimo del panel y la grilla le daba 533px. Acá el ancho
+    // es explícito y `minmax(0, …)` impide que el contenido vuelva a decidirlo,
+    // así que las tres pestañas de Personas se ven igual.
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
 
     // En el celu no hay lugar para dos columnas y el detalle es lo que
     // importa: se muestra solo, y la lista se oculta. Al elegir otro se

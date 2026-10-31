@@ -150,22 +150,9 @@
 }
 
 // DETALLE
-.detalle-bloque {
-  margin-bottom: 20px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #f1f5f9;
-
-  &:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-
-  h4 {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    color: #94a3b8;
-    letter-spacing: 0.5px;
-    margin-bottom: 10px;
-    font-weight: 600;
-  }
-}
+// `.detalle-bloque` se fue: los cinco bloques de la ficha son acordeones y el
+// último que quedaba con ese estilo (nombre + fiscales) ahora es el acordeón
+// "Datos", igual que en Empleados y Proveedores.
 .btn-icon {
   background: none;
   border: none;

@@ -47,52 +47,65 @@
       </div>
 
       <!--
-        Los cinco bloques son acordeones, igual que la ficha de Empleados: el
-        primero abierto y el resto cerrado. Antes eran cinco `detalle-bloque`
-        siempre desplegados y la ficha del cliente era una columna larguísima
-        donde el historial de turnos tapaba los teléfonos.
+        Los bloques son acordeones, igual que la ficha de Empleados: el primero
+        abierto y el resto cerrado. Antes eran `detalle-bloque` siempre
+        desplegados y la ficha del cliente era una columna larguísima donde el
+        historial de turnos tapaba los teléfonos.
+
+        Nombre y datos fiscales son UN solo bloque con UN botón "Editar", como
+        Empleados y Proveedores. Antes eran dos acordeones con un lápiz cada uno:
+        el mismo cliente se editaba en dos lugares distintos y no había forma de
+        guardar nombre y CUIT juntos.
       -->
 
-      <!-- Nombre -->
+      <!-- Datos -->
       <div class="acordeon">
-        <div class="acordeon-header" (click)="acordeonNombre = !acordeonNombre">
-          <span>Nombre</span>
-          <span class="chevron" [class.abierto]="acordeonNombre">›</span>
+        <div class="acordeon-header" (click)="acordeonDatos = !acordeonDatos">
+          <span>Datos</span>
+          <span class="chevron" [class.abierto]="acordeonDatos">›</span>
         </div>
-        <div class="acordeon-body" [class.visible]="acordeonNombre">
-          <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'nombre' }"></ng-container>
-          <div class="campo-editable">
-            <input type="text" [(ngModel)]="clienteSeleccionado.nombre"
-              [readonly]="!clienteSeleccionado.editando"
-              class="input-nombre" />
-            <button *ngIf="!clienteSeleccionado.editando" class="btn-icon" (click)="clienteSeleccionado.editando = true">✏️</button>
-            <button *ngIf="clienteSeleccionado.editando" class="btn-icon" (click)="guardarNombre()">💾</button>
-            <button *ngIf="clienteSeleccionado.editando" class="btn-icon" (click)="cancelarEdicionNombre()">↩️</button>
-          </div>
-        </div>
-      </div>
+        <div class="acordeon-body" [class.visible]="acordeonDatos">
+          <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'datos' }"></ng-container>
+          <div class="datos-campos">
+            <div class="campo-editable">
+              <label class="label-campo">Nombre</label>
+              <input type="text" [(ngModel)]="clienteSeleccionado.nombre"
+                [readonly]="!clienteSeleccionado.editando"
+                class="input-nombre" />
+            </div>
 
-      <!-- Datos fiscales -->
-      <div class="acordeon">
-        <div class="acordeon-header" (click)="acordeonFiscales = !acordeonFiscales">
-          <span>Datos fiscales</span>
-          <span class="chevron" [class.abierto]="acordeonFiscales">›</span>
-        </div>
-        <div class="acordeon-body" [class.visible]="acordeonFiscales">
-          <ng-container *ngTemplateOutlet="alertaSeccion; context: { seccion: 'fiscales' }"></ng-container>
-          <div class="campo-editable">
-            <input type="text" [(ngModel)]="clienteSeleccionado.cuit_cuil"
-              [readonly]="!clienteSeleccionado.editandoFicha"
-              placeholder="CUIT / CUIL (opcional)" class="input-nombre" />
-            <input type="text" [(ngModel)]="clienteSeleccionado.direccion"
-              [readonly]="!clienteSeleccionado.editandoFicha"
-              placeholder="Dirección (opcional)" class="input-nombre" />
-            <button *ngIf="!clienteSeleccionado.editandoFicha" class="btn-icon"
-              (click)="clienteSeleccionado.editandoFicha = true">✏️</button>
-            <button *ngIf="clienteSeleccionado.editandoFicha" class="btn-icon"
-              (click)="guardarFicha()">💾</button>
-            <button *ngIf="clienteSeleccionado.editandoFicha" class="btn-icon"
-              (click)="cancelarEdicionFicha()">↩️</button>
+            <div class="campo-editable">
+              <label class="label-campo">CUIT / CUIL</label>
+              <input type="text" [(ngModel)]="clienteSeleccionado.cuit_cuil"
+                [readonly]="!clienteSeleccionado.editando"
+                placeholder="Opcional" class="input-nombre" />
+            </div>
+
+            <div class="campo-editable">
+              <label class="label-campo">Dirección</label>
+              <input type="text" [(ngModel)]="clienteSeleccionado.direccion"
+                [readonly]="!clienteSeleccionado.editando"
+                placeholder="Opcional" class="input-nombre" />
+            </div>
+          </div>
+
+          <div class="botones-edicion">
+            <button *ngIf="!clienteSeleccionado.editando" class="btn-primary"
+                    (click)="editarDatos()">
+              ✏️ Editar
+            </button>
+
+            <button *ngIf="clienteSeleccionado.editando" class="btn-primary"
+                    [disabled]="clienteSeleccionado.guardando"
+                    (click)="guardarDatos()">
+              {{ clienteSeleccionado.guardando ? 'Guardando...' : '💾 Guardar' }}
+            </button>
+
+            <button *ngIf="clienteSeleccionado.editando" class="btn-secondary"
+                    [disabled]="clienteSeleccionado.guardando"
+                    (click)="cancelarEdicionDatos()">
+              ↩️ Cancelar
+            </button>
           </div>
         </div>
       </div>

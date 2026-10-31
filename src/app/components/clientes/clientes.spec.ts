@@ -194,33 +194,38 @@ describe('Clientes — detalle', () => {
     expect(cmp.turnosCliente).toEqual([]);
   });
 
-  it('cancelarEdicionNombre restaura el nombre original', async () => {
+  it('cancelarEdicionDatos restaura nombre y datos fiscales', async () => {
     const { cmp } = montar();
     const [daniel] = conClientes(cmp);
     await cmp.seleccionarCliente(daniel);
     cmp.clienteSeleccionado.nombre = 'Cambiado mal';
-    cmp.cancelarEdicionNombre();
+    cmp.clienteSeleccionado.cuit_cuil = '20-11111111-2';
+    cmp.clienteSeleccionado.direccion = 'Calle Falsa 123';
+    cmp.cancelarEdicionDatos();
     expect(cmp.clienteSeleccionado.nombre).toBe('Daniel Prueba');
+    expect(cmp.clienteSeleccionado.cuit_cuil).toBe(daniel.cuit_cuil);
+    expect(cmp.clienteSeleccionado.direccion).toBe(daniel.direccion);
     expect(cmp.clienteSeleccionado.editando).toBe(false);
   });
 });
 
-describe('Clientes — nombre', () => {
-  it('guardarNombre normaliza y actualiza la lista', async () => {
+describe('Clientes — datos (nombre + fiscales)', () => {
+  it('guardarDatos normaliza el nombre y actualiza la lista', async () => {
     const { cmp } = montar({
       normalizarNombre: (n: string) => n.trim().replace(/\s+/g, ' '),
     });
     const [daniel] = conClientes(cmp);
     await cmp.seleccionarCliente(daniel);
+    cmp.clienteSeleccionado.editando = true;
     cmp.clienteSeleccionado.nombre = '  daniel   prueba ';
 
-    await cmp.guardarNombre();
+    await cmp.guardarDatos();
 
     expect(cmp.clientes[0].nombre).toBe('daniel prueba');
     expect(cmp.clienteSeleccionado.editando).toBe(false);
   });
 
-  it('guardarNombre con duplicado NO actualiza y avisa', async () => {
+  it('guardarDatos con duplicado NO actualiza y avisa', async () => {
     const actualizados: any[] = [];
     const { cmp } = montar({
       verificarNombreDuplicado: () => Promise.resolve(true),
@@ -228,15 +233,16 @@ describe('Clientes — nombre', () => {
     });
     const [daniel] = conClientes(cmp);
     await cmp.seleccionarCliente(daniel);
+    cmp.clienteSeleccionado.editando = true;
     cmp.clienteSeleccionado.nombre = 'María Gómez';
 
-    await cmp.guardarNombre();
+    await cmp.guardarDatos();
 
     expect(actualizados).toEqual([]);
     expect(cmp.mensajeError).toMatch(/ya existe/i);
   });
 
-  it('guardarNombre excluye al propio cliente del chequeo de duplicado', async () => {
+  it('guardarDatos excluye al propio cliente del chequeo de duplicado', async () => {
     // Si no se excluye, guardar el mismo nombre da "ya existe" siempre.
     const excluido: any[] = [];
     const { cmp } = montar({
@@ -247,16 +253,34 @@ describe('Clientes — nombre', () => {
     });
     const [daniel] = conClientes(cmp);
     await cmp.seleccionarCliente(daniel);
-    await cmp.guardarNombre();
+    cmp.clienteSeleccionado.editando = true;
+    await cmp.guardarDatos();
     expect(excluido).toEqual([CLI_DANIEL.id]);
   });
 
-  it('guardarNombre sin cliente seleccionado no rompe la pantalla', async () => {
+  it('guardarDatos guarda nombre y fiscales en el mismo "Guardar"', async () => {
+    const fichas: any[] = [];
+    const { cmp } = montar({
+      updateClienteFicha: (_id: number, d: any) => { fichas.push(d); return Promise.resolve(); },
+    });
+    const [daniel] = conClientes(cmp);
+    await cmp.seleccionarCliente(daniel);
+    cmp.clienteSeleccionado.editando = true;
+    cmp.clienteSeleccionado.cuit_cuil = '20-11111111-2';
+    cmp.clienteSeleccionado.direccion = 'Calle Falsa 123';
+
+    await cmp.guardarDatos();
+
+    expect(fichas).toEqual([{ cuit_cuil: '20-11111111-2', direccion: 'Calle Falsa 123' }]);
+    expect(cmp.mensaje).toMatch(/Datos actualizados/i);
+  });
+
+  it('guardarDatos sin cliente seleccionado no rompe la pantalla', async () => {
     // BUG ARREGLADO: leia clienteSeleccionado.nombre sin preguntar, y con el
     // detalle cerrado eso es un "cannot read editando of null" en pantalla.
     const { cmp } = montar();
     cmp.clienteSeleccionado = null;
-    await expect(cmp.guardarNombre()).resolves.not.toThrow();
+    await expect(cmp.guardarDatos()).resolves.not.toThrow();
     expect(cmp.mensajeError).toMatch(/cliente seleccionado/i);
   });
 
@@ -268,7 +292,7 @@ describe('Clientes — nombre', () => {
     await cmp.seleccionarCliente(daniel);
     cmp.clienteSeleccionado.editando = true;
 
-    await cmp.guardarNombre();
+    await cmp.guardarDatos();
 
     expect(cmp.mensajeError).toMatch(/error/i);
     expect(cmp.clienteSeleccionado.editando).toBe(true);
@@ -593,17 +617,30 @@ describe('Clientes — detalle en acordeones', () => {
     [...fixture.nativeElement.querySelectorAll('.detalle-seccion .acordeon')]
       .find((a: any) => a.querySelector('.acordeon-header')?.textContent.includes(titulo)) as HTMLElement;
 
-  it('los cinco bloques son acordeones, con solo Nombre abierto', async () => {
+  it('los cuatro bloques son acordeones, con solo Datos abierto', async () => {
     const { cmp, fixture } = montar({ getClientes: () => Promise.resolve([clonarCliente(CLI_DANIEL)]) });
     await cmp.seleccionarCliente(clonarCliente(CLI_DANIEL));
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelectorAll('.detalle-seccion .acordeon').length).toBe(5);
-    expect(cmp.acordeonNombre).toBe(true);
-    expect(cmp.acordeonFiscales).toBe(false);
+    expect(fixture.nativeElement.querySelectorAll('.detalle-seccion .acordeon').length).toBe(4);
+    expect(cmp.acordeonDatos).toBe(true);
     expect(cmp.acordeonTelefonos).toBe(false);
     expect(cmp.acordeonFusionar).toBe(false);
     expect(cmp.acordeonTurnos).toBe(false);
+  });
+
+  it('Datos tiene nombre y fiscales en el MISMO acordeón y un solo "Editar"', async () => {
+    // Antes eran dos acordeones (Nombre y Datos fiscales) con un lápiz cada uno.
+    const { cmp, fixture } = montar({ getClientes: () => Promise.resolve([clonarCliente(CLI_DANIEL)]) });
+    await cmp.seleccionarCliente(clonarCliente(CLI_DANIEL));
+    fixture.detectChanges();
+
+    const datos = acordeonDe(fixture, 'Datos');
+    expect(datos.querySelectorAll('input').length).toBe(3);   // nombre, CUIT, dirección
+    const botones = [...datos.querySelectorAll('.botones-edicion button')] as HTMLElement[];
+    expect(botones.length).toBe(1);
+    expect(botones[0].textContent).toContain('Editar');
+    expect(botones[0].classList.contains('btn-primary')).toBe(true);
   });
 
   it('el aviso de teléfono agregado va DENTRO del acordeón de Teléfonos', async () => {
@@ -623,15 +660,14 @@ describe('Clientes — detalle en acordeones', () => {
   it('ningún cartel queda suelto arriba del título del detalle', async () => {
     const { cmp, fixture } = montar({ getClientes: () => Promise.resolve([clonarCliente(CLI_DANIEL)]) });
     await cmp.seleccionarCliente(clonarCliente(CLI_DANIEL));
-    cmp.acordeonFiscales = true;
-    cmp.mostrarMensaje('✅ Datos actualizados.', 'fiscales');
+    cmp.mostrarMensaje('✅ Datos actualizados.', 'datos');
     fixture.detectChanges();
 
     const detalle = fixture.nativeElement.querySelector('.detalle-seccion');
     const sueltos = [...detalle.querySelectorAll('.alerta')]
       .filter((a: any) => !a.closest('.acordeon'));
     expect(sueltos.length).toBe(0);
-    expect(acordeonDe(fixture, 'Datos fiscales').querySelector('.alerta')?.textContent).toContain('Datos actualizados');
+    expect(acordeonDe(fixture, 'Datos').querySelector('.alerta')?.textContent).toContain('Datos actualizados');
   });
 
   it('el alta deja el aviso en la lista', async () => {

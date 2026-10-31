@@ -22,11 +22,10 @@ export class ClientesComponent implements OnInit {
   mensajeError = '';
   /**
    * Acordeones del detalle, con el mismo modelo que Empleados: el primero
-   * ("Nombre") abierto y el resto cerrado, para que la ficha no sea una lista
+   * ("Datos") abierto y el resto cerrado, para que la ficha no sea una lista
    * larga de bloques que hay que scrollear.
    */
-  acordeonNombre = true;
-  acordeonFiscales = false;
+  acordeonDatos = true;
   acordeonTelefonos = false;
   acordeonFusionar = false;
   acordeonTurnos = false;
@@ -171,7 +170,20 @@ export class ClientesComponent implements OnInit {
   }
 
   async seleccionarCliente(cliente: any) {
-    this.clienteSeleccionado = { ...cliente, editando: false, editandoFicha: false, nombreOriginal: cliente.nombre };
+    this.clienteSeleccionado = {
+      ...cliente,
+      editando: false,
+      guardando: false,
+      nombreOriginal: cliente.nombre,
+      // Foto de los valores con los que se abrió el panel: es lo que restaura
+      // "Cancelar". Sin ella, al cancelar y volver a "Editar" se veía lo que se
+      // había escrito la vez anterior sin saber que nunca se guardó.
+      _datosOrig: {
+        nombre: cliente.nombre,
+        cuit_cuil: cliente.cuit_cuil,
+        direccion: cliente.direccion,
+      },
+    };
     this.nuevoTelefono = '';
     this.cargandoTurnos = true;
     this.turnosCliente = await this.supabase.getTurnosCliente(cliente.id);
@@ -179,78 +191,78 @@ export class ClientesComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
-  // ─── Datos fiscales ───
-  // En readonly se muestra lo cargado o "Sin dato". Se edita inline, como el nombre.
-  get cuitTexto(): string {
-    return this.clienteSeleccionado?.cuit_cuil?.trim() || 'Sin CUIT/CUIL';
-  }
-
-  get direccionTexto(): string {
-    return this.clienteSeleccionado?.direccion?.trim() || 'Sin dirección';
-  }
-
-  async guardarFicha() {
-    if (!this.clienteSeleccionado) return this.mostrarError('❌ No hay ningún cliente seleccionado.', 'lista');
-    try {
-      await this.supabase.updateClienteFicha(this.clienteSeleccionado.id, {
-        cuit_cuil: this.clienteSeleccionado.cuit_cuil ?? '',
-        direccion: this.clienteSeleccionado.direccion ?? '',
-      });
-      // Se guarda "" como null en la base: el getter lo vuelve a mostrar como "Sin dato".
-      this.clienteSeleccionado.editandoFicha = false;
-      this.mostrarMensaje('✅ Datos actualizados.', 'fiscales');
-    } catch (e) {
-      this.mostrarError('❌ Error al actualizar los datos.', 'fiscales');
-    }
-  }
-
-  cancelarEdicionFicha() {
+  // ─── Datos (nombre + fiscales) ───
+  // Un solo bloque y un solo botón "Editar", como Empleados y Proveedores.
+  // Antes el nombre se editaba en un acordeón y el CUIT/dirección en otro, con
+  // dos flags distintos (`editando` y `editandoFicha`) y dos guardados.
+  editarDatos() {
     if (!this.clienteSeleccionado) return;
-    // Vuelve a lo que tenía: se recargan desde la lista, que es la fuente.
-    const original = this.clientes.find(c => c.id === this.clienteSeleccionado.id);
-    if (original) {
-      this.clienteSeleccionado.cuit_cuil = original.cuit_cuil;
-      this.clienteSeleccionado.direccion = original.direccion;
-    }
-    this.clienteSeleccionado.editandoFicha = false;
+    this.clienteSeleccionado.editando = true;
     this.cdr.detectChanges();
+  }
+
+  cancelarEdicionDatos() {
+    const cli = this.clienteSeleccionado;
+    if (!cli) return;
+    Object.assign(cli, cli._datosOrig ?? { nombre: cli.nombreOriginal });
+    cli.editando = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Guarda nombre y datos fiscales juntos.
+   *
+   * Son dos llamadas porque en la base son dos updates distintos (`clientes` y
+   * los campos fiscales del mismo registro), pero para el usuario es un solo
+   * "Guardar": o se guarda la ficha o no se guarda.
+   */
+  async guardarDatos() {
+    const cli = this.clienteSeleccionado;
+    // Sin el guard, un clic en "guardar" sin cliente seleccionado (o con el
+    // detalle cerrado) rompe la pantalla con "no se puede leer editando de null".
+    if (!cli) return this.mostrarError('❌ No hay ningún cliente seleccionado.', 'lista');
+    if (cli.guardando || !cli.editando) return;
+
+    const nombreNorm = this.supabase.normalizarNombre(cli.nombre);
+    cli.nombre = nombreNorm;
+
+    const duplicado = await this.supabase.verificarNombreDuplicado(nombreNorm, cli.id);
+    if (duplicado) {
+      this.mostrarError('❌ Ya existe un cliente con ese nombre.', 'datos');
+      return;
+    }
+
+    cli.guardando = true;
+    this.cdr.detectChanges();
+    try {
+      await this.supabase.updateCliente(cli.id, nombreNorm);
+      await this.supabase.updateClienteFicha(cli.id, {
+        cuit_cuil: cli.cuit_cuil ?? '',
+        direccion: cli.direccion ?? '',
+      });
+
+      const idx = this.clientes.findIndex(c => c.id === cli.id);
+      if (idx >= 0) {
+        this.clientes[idx].nombre = nombreNorm;
+        this.clientes[idx].cuit_cuil = cli.cuit_cuil;
+        this.clientes[idx].direccion = cli.direccion;
+      }
+      cli.nombreOriginal = nombreNorm;
+      cli._datosOrig = { nombre: cli.nombre, cuit_cuil: cli.cuit_cuil, direccion: cli.direccion };
+      cli.editando = false;
+      this.mostrarMensaje('✅ Datos actualizados.', 'datos');
+    } catch (e) {
+      this.mostrarError('❌ Error al actualizar los datos.', 'datos');
+    } finally {
+      cli.guardando = false;
+      this.cdr.detectChanges();
+    }
   }
 
   cerrarDetalle() {
     this.clienteSeleccionado = null;
     this.turnosCliente = [];
     this.cdr.detectChanges();
-  }
-
-  cancelarEdicionNombre() {
-    if (!this.clienteSeleccionado) return;
-    this.clienteSeleccionado.nombre = this.clienteSeleccionado.nombreOriginal ?? this.clienteSeleccionado.nombre;
-    this.clienteSeleccionado.editando = false;
-    this.cdr.detectChanges();
-  }
-
-  async guardarNombre() {
-    // Sin el guard, un clic en "guardar" sin cliente seleccionado (o con el
-    // detalle cerrado) rompe la pantalla con "no se puede leer editando de null".
-    if (!this.clienteSeleccionado) return this.mostrarError('❌ No hay ningún cliente seleccionado.', 'lista');
-    const nombreNorm = this.supabase.normalizarNombre(this.clienteSeleccionado.nombre);
-    this.clienteSeleccionado.nombre = nombreNorm;
-
-    const duplicado = await this.supabase.verificarNombreDuplicado(nombreNorm, this.clienteSeleccionado.id);
-    if (duplicado) {
-      this.mostrarError('❌ Ya existe un cliente con ese nombre.', 'nombre');
-      return;
-    }
-
-    try {
-      await this.supabase.updateCliente(this.clienteSeleccionado.id, nombreNorm);
-      const idx = this.clientes.findIndex(c => c.id === this.clienteSeleccionado.id);
-      if (idx >= 0) this.clientes[idx].nombre = nombreNorm;
-      this.clienteSeleccionado.editando = false;
-      this.mostrarMensaje('✅ Nombre actualizado.', 'nombre');
-    } catch (e) {
-      this.mostrarError('❌ Error al actualizar el nombre.', 'nombre');
-    }
   }
 
   async agregarTelefono() {
@@ -363,7 +375,7 @@ export class ClientesComponent implements OnInit {
     return `${dia} ${d}/${m}`;
   }
 
-  mostrarMensaje(msg: string, seccion = 'nombre') {
+  mostrarMensaje(msg: string, seccion = 'datos') {
     this.mensaje = msg;
     this.mensajeError = '';
     this.mensajeSeccion = seccion;
@@ -371,7 +383,7 @@ export class ClientesComponent implements OnInit {
     setTimeout(() => { this.mensaje = ''; this.cdr.detectChanges(); }, 3000);
   }
 
-  mostrarError(msg: string, seccion = 'nombre') {
+  mostrarError(msg: string, seccion = 'datos') {
     this.mensajeError = msg;
     this.mensaje = '';
     this.mensajeSeccion = seccion;
