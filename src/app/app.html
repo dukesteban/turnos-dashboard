@@ -26,6 +26,14 @@
       <span class="icono">💰</span><span class="texto"> Caja</span>
     </a>
     <!--
+      EL EMPLEADO VE "MI CAJA", NO "CAJA". Misma plata, otra pantalla: solo sus
+      turnos y sus pagos, sin selector ni botones de escritura. El link va a
+      `/caja-empleado`, que tiene su propia guard.
+    -->
+    <a *ngIf="puedeVerMiCaja" routerLink="/caja-empleado" routerLinkActive="active">
+      <span class="icono">💰</span><span class="texto"> Mi caja</span>
+    </a>
+    <!--
       PERSONAS agrupa las tres fichas de gente: clientes, empleados y
       proveedores. `routerLinkActive` sin `exact` para que `/personas` quede
       marcado también en las tres pestañas: si no, solo se resalta en Clientes y
@@ -147,7 +155,7 @@
           aria-label="Ahora no">✕</button>
 </div>
 
-<footer class="version-footer">v1.0.34</footer>
+<footer class="version-footer">v1.0.36</footer>
 
 <style>
   /* OJO: los estilos globales (body, font-family, reset) van en src/styles.scss.

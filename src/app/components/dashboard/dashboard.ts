@@ -105,6 +105,53 @@ export class DashboardComponent implements OnInit, OnDestroy {
   get puedeFiltrarPorEmpleado(): boolean {
     return !this.auth.soloSusTurnos();
   }
+
+  /**
+   * ¿El cuadro de arriba muestra la comisión del empleado en vez de la
+   * facturación del local?
+   *
+   * Es el mismo criterio que `puedeFiltrarPorEmpleado`, pero al revés, y va como
+   * getter para que el template no tenga que conocer el rol: `auth` es privado
+   * a propósito.
+   */
+  get soloMisGanancias(): boolean {
+    return this.auth.soloSusTurnos();
+  }
+
+  /**
+   * La comisión del empleado por los turnos que atendió HOY.
+   *
+   * El número sale de `turnosHoyVisibles`, que para el rol empleado ya viene
+   * filtrado a sus propios turnos (`cargarTurnos`). O sea: es su ganancia, no
+   * una parte de la facturación de todos.
+   *
+   * La comisión se calcula igual que en Caja (`CajaComponent.porcentajeComision`):
+   * primero el porcentaje POR SERVICIO de `comisiones_empleado`, y si no hay uno
+   * cargado, el general del empleado. Invertir ese orden haría que un empleado
+   * con "40% en lavado completo" cobrara el general en ese servicio.
+   */
+  get miComisionHoy(): number {
+    return this.turnosHoyVisibles
+      .filter((t: any) => t.estado === 'atendido')
+      .reduce((sum: number, t: any) => {
+        const precio = Number(t.precio_final || t.precio) || 0;
+        return sum + (precio * this.porcentajeComisionDe(t)) / 100;
+      }, 0);
+  }
+
+  /** Porcentaje que le corresponde a un turno. Ver `miComisionHoy`. */
+  private porcentajeComisionDe(turno: any): number {
+    const porServicio = this.comisionesPorServicio.find(
+      (c: any) =>
+        c.empleado_id === turno.empleado_id &&
+        c.servicio_id !== null &&
+        c.servicio_id === (turno.servicio_id_final ?? turno.servicio_id)
+    );
+    if (porServicio) return Number(porServicio.porcentaje) || 0;
+
+    const emp = this.empleados.find((e: any) => e.id === turno.empleado_id);
+    return Number(emp?.comision_porcentaje) || 0;
+  }
   mostrarIngresos = JSON.parse(sessionStorage.getItem('mostrarIngresos') ?? 'true');
   fechaTurnos: Date = new Date();
   metodosPago: any[] = [];
@@ -267,6 +314,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.empleados = empleados;
     this.ausencias = ausencias;
     this.telefonosPorCliente = telefonos;
+
+    // Para el rol empleado el cuadro de arriba muestra SU COMISIÓN, no la
+    // facturación del local. Ese número necesita los porcentajes POR SERVICIO
+    // (`comisiones_empleado`), que en el resto de la pantalla solo se piden al
+    // abrir el popup de "atendido". Si no se cargaran acá, un empleado con un
+    // porcentaje especial por servicio vería su comisión calculada con el
+    // general hasta que abriera un turno, y el número cambiaría solo.
+    if (this.auth.soloSusTurnos()) {
+      await this.cargarComisionesPorServicio();
+    }
 
     this.subscription = this.supabase.suscribirTurnos(() => {
       this.cargarTurnos();

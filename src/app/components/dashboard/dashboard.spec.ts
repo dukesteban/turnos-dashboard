@@ -1,9 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { DashboardComponent } from './dashboard';
+import { AuthService } from '../../services/auth';
 import { SupabaseService } from '../../services/supabase';
 import {
-  crearSupabaseMock, EMP_JUAN, EMP_ESTEBAN, cloneEmpleado, turno,
+  crearSupabaseMock, crearAuthMock, EMP_JUAN, EMP_ESTEBAN, cloneEmpleado, turno,
 } from '../../testing/supabase-mock';
 
 /**
@@ -1178,5 +1179,105 @@ describe('Dashboard — botones flotantes de Caja', () => {
 
     const textos = botones(fixture).map(x => x.querySelector('.accion-texto')?.textContent?.trim());
     expect(textos.indexOf('Nueva deuda')).toBe(textos.indexOf('Nuevo ingreso') - 1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ROL EMPLEADO — "Mi ganancia hoy"
+// ═══════════════════════════════════════════════════════════════
+
+describe('Dashboard — el empleado ve SU comisión, no la facturación', () => {
+  const HOY = '2026-12-01';
+
+  /** Turnos de HOY: dos de Juan (el logueado) y uno de Esteban. */
+  const TURNOS_HOY = [
+    turno({ id: 1, fecha: HOY, hora: '10:00', hora_inicio: '10:00', empleado_id: EMP_JUAN.id, estado: 'atendido', servicio_id: 1, precio: 10000, precio_final: 10000 }),
+    turno({ id: 2, fecha: HOY, hora: '12:00', hora_inicio: '12:00', empleado_id: EMP_JUAN.id, estado: 'atendido', servicio_id: 2, precio: 10000, precio_final: 10000 }),
+    turno({ id: 3, fecha: HOY, hora: '16:00', hora_inicio: '16:00', empleado_id: EMP_ESTEBAN.id, estado: 'atendido', servicio_id: 1, precio: 50000, precio_final: 50000 }),
+  ];
+
+  /**
+   * Monta como el empleado Juan. Se inyecta un `AuthService` de mentira en vez
+   * de dejar el real: el real lee el rol de la sesión de Supabase, y montar una
+   * sesión de empleado en el mock es más ceremonia que probar la cuenta.
+   */
+  async function montarEmpleado(over: Record<string, any> = {}) {
+    const mock = crearSupabaseMock({
+      getTurnosHoy: () => Promise.resolve(TURNOS_HOY),
+      getTurnosEntre: () => Promise.resolve(TURNOS_HOY),
+      ...over,
+    });
+    const auth = crearAuthMock({
+      getRol: () => 'empleado',
+      esAdmin: () => false,
+      esEmpleado: () => true,
+      getEmpleadoId: () => EMP_JUAN.id,
+      soloSusTurnos: () => true,
+      empleadoParaFiltrarTurnos: () => EMP_JUAN.id,
+      puedeVer: () => false,
+      puedeEscribirCaja: () => false,
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: SupabaseService, useValue: mock },
+        { provide: AuthService, useValue: auth },
+        {
+          provide: Router,
+          useValue: { navigate: () => Promise.resolve(true) },
+        },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(DashboardComponent);
+    const cmp = fixture.componentInstance;
+    await cmp.ngOnInit();
+    return { cmp, mock, fixture };
+  }
+
+  it('el cuadro se titula "Mi ganancia hoy"', async () => {
+    const { cmp, fixture } = await montarEmpleado();
+    fixture.detectChanges();
+
+    expect(cmp.soloMisGanancias).toBe(true);
+    const label = fixture.nativeElement.querySelector('.stat-label')?.textContent ?? '';
+    expect(label).toContain('Mi ganancia hoy');
+  });
+
+  it('calcula el porcentaje POR SERVICIO y, si no hay, el general', async () => {
+    const { cmp } = await montarEmpleado({
+      // Juan cobra 20% en el servicio 1. El servicio 2 usa su 15% general.
+      getComisionesEmpleado: () => Promise.resolve([
+        { empleado_id: EMP_JUAN.id, servicio_id: 1, porcentaje: 20 },
+      ]),
+    });
+
+    // 10.000 al 20% = 2.000 · 10.000 al 15% = 1.500
+    expect(cmp.miComisionHoy).toBe(3500);
+  });
+
+  it('NO cuenta los turnos de otro empleado ni los pendientes', async () => {
+    const { cmp } = await montarEmpleado({
+      getTurnosHoy: () => Promise.resolve([
+        ...TURNOS_HOY,
+        turno({ id: 4, fecha: HOY, hora: '18:00', hora_inicio: '18:00', empleado_id: EMP_JUAN.id, estado: 'pendiente', precio: 10000 }),
+      ]),
+    });
+
+    // Solo los dos atendidos de Juan, al 15% general (el mock no define
+    // comisiones por servicio).
+    expect(cmp.miComisionHoy).toBe(3000);
+    // La facturación del local sigue siendo otra cosa: no se mezcla.
+    expect(cmp.totalIngresos).toBe(20000);
+  });
+
+  it('al admin el cuadro le sigue diciendo "Ingresos hoy"', async () => {
+    const { cmp, fixture } = montar();
+    await cmp.ngOnInit();
+    fixture.detectChanges();
+
+    expect(cmp.soloMisGanancias).toBe(false);
+    const label = fixture.nativeElement.querySelector('.stat-label')?.textContent ?? '';
+    expect(label).toContain('Ingresos hoy');
   });
 });

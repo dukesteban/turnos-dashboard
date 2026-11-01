@@ -129,6 +129,17 @@ export class App implements OnInit {
     return this.auth.puedeVer('caja');
   }
 
+  /**
+   * ¿El navbar muestra "Mi caja"?
+   *
+   * Solo el rol empleado con `empleado_id`. Admin y secretario siguen viendo
+   * "Caja" (`puedeVerCaja`): para ellos la versión recortada sería una pantalla
+   * de menos, no de más.
+   */
+  get puedeVerMiCaja(): boolean {
+    return this.auth.esEmpleado() && this.auth.getEmpleadoId() !== null;
+  }
+
   get puedeVerPersonas(): boolean {
     return this.auth.puedeVer('personas');
   }

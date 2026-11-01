@@ -1,0 +1,283 @@
+@use '../../../styles/tabla';
+@use '../../../styles/acordeon';
+
+// "Mi caja" es la versión de solo lectura de la pestaña Empleados de Caja. Los
+// estilos son los mismos a propósito: cambiar de pantalla no tiene que cambiar
+// el lenguaje visual. Lo que NO se copia es lo que no existe acá (pestañas,
+// formularios, tablas de proveedores).
+
+.caja-empleado-page {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+@media (min-width: 1500px) {
+  .caja-empleado-page { max-width: 1500px; }
+}
+
+@media (min-width: 1800px) {
+  .caja-empleado-page { max-width: 1700px; }
+}
+
+// ── BARRA DE PERÍODO ─────────────────────────────────────────
+.controles {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.vistas {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
+
+  button {
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: #64748b;
+    font-weight: 500;
+    transition: all 0.2s;
+
+    &.activo {
+      background: white;
+      color: #1e293b;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+  }
+}
+
+.navegacion {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-nav {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 6px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover { background: #f1f5f9; }
+}
+
+.btn-hoy {
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+
+  &:hover { background: #f1f5f9; }
+}
+
+.fecha-titulo {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+// Ir a una fecha con el calendario: input transparente encima del ícono.
+.ir-a-fecha {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.btn-calendario {
+  pointer-events: none;
+  font-size: 1rem;
+}
+
+.input-calendario {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+// ── TARJETAS ─────────────────────────────────────────────────
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+  grid-auto-rows: 1fr;
+
+  @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 700px) { grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
+}
+
+.stats-trio .stat-card {
+  align-items: flex-start;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  &.verde .stat-icon { background: #dcfce7; }
+  &.azul .stat-icon { background: #dbeafe; }
+  &.naranja .stat-icon { background: #ffedd5; }
+  &.violeta .stat-icon { background: #ede9fe; }
+}
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.stat-nota {
+  min-height: 1.15em;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+// El tercer cuadro es LA RESPUESTA: lleva un filete del color en el borde
+// izquierdo para que no se lea como un dato más.
+.stat-card.respuesta {
+  border-left: 4px solid transparent;
+  padding-left: 14px;
+
+  &.verde  { border-left-color: #15803d; }
+  &.naranja { border-left-color: #c2410c; }
+
+  &.verde .stat-value   { color: #15803d; }
+  &.naranja .stat-value { color: #c2410c; }
+}
+
+// Fondo suave solo en la respuesta. Las otras dos tarjetas quedan blancas.
+.stat-card.verde {
+  background: #f0fdf4;
+
+  .stat-icon { background: #dcfce7; }
+}
+
+.stat-card.naranja .stat-icon { background: #ffedd5; }
+
+// ── QUIÉN MIRAMOS ────────────────────────────────────────────
+.selector-seccion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.selector-bloque,
+.selector-periodo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.selector-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.selector-valor {
+  font-size: 0.85rem;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+// ── ACORDEONES ───────────────────────────────────────────────
+.acordeon-total {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  .chevron { color: #94a3b8; }
+}
+
+.celda-tenue {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+// En teléfono, el marco se achica pero el número y la etiqueta se quedan.
+@media (max-width: 700px) {
+  .stat-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    font-size: 0.95rem;
+  }
+
+  .stat-card {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .stat-card.respuesta { padding-left: 8px; }
+
+  .stat-value { font-size: 1rem; }
+  .stat-label { font-size: 0.72rem; }
+  .stat-nota { font-size: 0.68rem; }
+}

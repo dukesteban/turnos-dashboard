@@ -5,7 +5,7 @@ import { AgendaComponent } from './components/agenda/agenda';
 import { CajaComponent } from './components/caja/caja';
 import { PersonasComponent } from './components/personas/personas';
 import { LoginComponent } from './components/login/login';
-import { authGuard, puedeVer } from './services/auth.guard';
+import { authGuard, puedeVer, puedeVerMiCaja } from './services/auth.guard';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -20,6 +20,29 @@ export const routes: Routes = [
   { path: 'ganancias', component: CajaComponent, canActivate: [authGuard, puedeVer('caja')] },
   // Alias para quien ya sepa que se llama Caja.
   { path: 'caja', component: CajaComponent, canActivate: [authGuard, puedeVer('caja')] },
+
+  // ── MI CAJA (rol empleado) ────────────────────────────────────────
+  // La versión recortada de Caja: solo sus turnos atendidos y sus pagos. Es una
+  // pantalla APARTE y no un modo de Caja (ver el comentario del componente).
+  //
+  // Las dos URLs apuntan al mismo componente: `caja-empleado` es la canónica y
+  // `cajaEmpleado` queda como alias porque es el nombre que se pidió al
+  // principio y puede estar en un link guardado.
+  //
+  // `loadComponent` y no import estático: esta pantalla es de un solo rol y
+  // pesa lo suyo (tarjetas, tablas y estilos). Cargarla junto con el resto
+  // empujaba el bundle inicial por encima del presupuesto, y el admin nunca la
+  // abre.
+  {
+    path: 'caja-empleado',
+    loadComponent: () => import('./components/caja-empleado/caja-empleado').then((m) => m.CajaEmpleadoComponent),
+    canActivate: [authGuard, puedeVerMiCaja],
+  },
+  {
+    path: 'cajaEmpleado',
+    loadComponent: () => import('./components/caja-empleado/caja-empleado').then((m) => m.CajaEmpleadoComponent),
+    canActivate: [authGuard, puedeVerMiCaja],
+  },
 
   // ── PERSONAS ──────────────────────────────────────────────────────
   // Clientes, Empleados y Proveedores bajo un mismo grupo, en pestañas.

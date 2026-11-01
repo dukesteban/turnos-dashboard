@@ -51,6 +51,31 @@ export function puedeVer(pantalla: 'caja' | 'personas' | 'configuracion' | 'turn
 }
 
 /**
+ * Guard de "Mi caja" (`/caja-empleado`).
+ *
+ * Es la única pantalla que el rol `empleado` tiene además de Turnos y Agenda.
+ * Admin y secretario NO la usan: ellos tienen la Caja completa, así que se los
+ * manda ahí en vez de mostrarles una versión recortada de su propia pantalla.
+ * Un empleado sin `empleado_id` tampoco entra: no habría a quién mostrarle.
+ */
+export const puedeVerMiCaja: CanActivateFn = async () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  await auth.asegurarSesion();
+  if (!auth.isLoggedIn()) {
+    router.navigate(['/login']);
+    return false;
+  }
+  if (auth.puedeVer('caja')) {
+    router.navigate(['/ganancias']);
+    return false;
+  }
+  if (auth.esEmpleado() && auth.getEmpleadoId() !== null) return true;
+  router.navigate(['/']);
+  return false;
+};
+
+/**
  * NO hay un guard "puede escribir en Caja".
  *
  * Se ve natural ponerlo, pero Caja no se divide en rutas: es una sola pantalla

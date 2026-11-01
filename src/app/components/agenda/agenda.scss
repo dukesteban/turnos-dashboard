@@ -742,8 +742,10 @@ $h-header-semana: 72px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: #2563eb;
-    font-weight: 500;
+    // Mismo gris que los nombres de las tablas (`.enlace-ficha`): el popup no
+    // tiene que inventar un azul propio para el mismo tipo de link.
+    color: #475569;
+    font-weight: 600;
     text-align: right;
   }
 

@@ -61,9 +61,9 @@
   <div class="stats">
     <div class="stat-card">
       <div class="stat-info">
-        <span class="stat-label">💰 Ingresos hoy</span>
+        <span class="stat-label">{{ soloMisGanancias ? '💰 Mi ganancia hoy' : '💰 Ingresos hoy' }}</span>
         <div class="stat-value-row">
-          <span class="stat-value">{{ mostrarIngresos ? ('$' + (totalIngresos | number)) : '$ ****' }}</span>
+          <span class="stat-value">{{ mostrarIngresos ? ('$' + ((soloMisGanancias ? miComisionHoy : totalIngresos) | number)) : '$ ****' }}</span>
           <button class="btn-ojo" (click)="toggleIngresos()">
             {{ mostrarIngresos ? '👁️' : '🙈' }}
           </button>
