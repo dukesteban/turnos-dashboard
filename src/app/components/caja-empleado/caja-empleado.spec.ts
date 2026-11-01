@@ -170,6 +170,15 @@ describe('Mi caja — saldo', () => {
   });
 });
 
+describe('Mi caja — acordeones', () => {
+  it('arrancan cerrados: primero se leen los tres montos', async () => {
+    const { cmp } = await montarCargado(datos());
+
+    expect(cmp.acordeonDetalle).toBe(false);
+    expect(cmp.acordeonPagos).toBe(false);
+  });
+});
+
 describe('Mi caja — período', () => {
   it('el mes va del 1 al último día', async () => {
     const { cmp } = await montarCargado(datos());

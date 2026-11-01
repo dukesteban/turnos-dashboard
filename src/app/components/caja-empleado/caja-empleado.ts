@@ -44,8 +44,10 @@ export class CajaEmpleadoComponent implements OnInit {
   /** La ficha del empleado logueado (para el nombre y el porcentaje general). */
   miEmpleado: any = null;
 
-  acordeonDetalle = true;
-  acordeonPagos = true;
+  // Arrancan CERRADOS, como en Caja: primero se leen los tres montos, y el
+  // detalle se abre solo cuando se va a buscar.
+  acordeonDetalle = false;
+  acordeonPagos = false;
 
   constructor(
     private supabase: SupabaseService,
