@@ -987,7 +987,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // desapercibido: se veía solo al volver a escribir algo que no matchea.
     this.mostrarFormNuevoCliente = false;
     this.nombreNuevoCliente = '';
-    this.nuevoTurnoFecha = '';
+    // La fecha de hoy precargada: lo mas comun es dar un turno de hoy y
+    // arrancar el calendario en otro dia obliga a retocar el input.
+    this.nuevoTurnoFecha = this.fechaLocal(new Date());
     this.nuevoTurnoHora = '';
     this.nuevoTurnoServicioId = null;
     this.nuevoTurnoEmpleadoId = null;

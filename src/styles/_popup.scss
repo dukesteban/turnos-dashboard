@@ -43,7 +43,12 @@
   overflow: hidden;
   // Cada vista (los `*ngIf` que envuelven el body + las acciones) es hija
   // directa del popup. Si no puede encogerse, empuja el pie hacia afuera.
-  > div:not(.popup-header) {
+  //
+  // `.popup-acciones` queda excluida: al venir aca adentro, la orientacion
+  // `column` y el `flex: 1 1 auto` la ganaban de especificidad, los botones Guardar/Cancelar apilaban en
+  // vertical y el pie se robaba el alto del body. Era el bug donde el Cancelar
+  // del popup "Nuevo empleado" se cortaba a la mitad.
+  > div:not(.popup-header):not(.popup-acciones) {
     display: flex;
     flex-direction: column;
     min-height: 0;

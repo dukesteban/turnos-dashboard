@@ -281,6 +281,9 @@ describe('Dashboard — alta de turno: el empleado es obligatorio', () => {
     expect(cmp.errorNuevoTurno).toBe('');
     expect(cmp.nuevoTurnoEmpleadoId).toBeNull();
     expect(cmp.empleadosLibres).toEqual([]);
+    // La fecha de hoy precargada en el input del turno nuevo.
+    // (fechaLocal es private; desde el spec se accede con bracket.)
+    expect(cmp['fechaLocal'](new Date())).toBe(cmp.nuevoTurnoFecha);
   });
 });
 

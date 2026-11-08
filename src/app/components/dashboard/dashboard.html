@@ -490,9 +490,6 @@
                 {{ e.nombre }} ({{ getComisionEmpleadoServicio(e.id) }}%)
               </option>
             </select>
-            <p class="ayuda-campo" *ngIf="nuevoTurnoFecha && nuevoTurnoHora">
-              Solo aparecen los que pueden trabajar en esa fecha y hora.
-            </p>
             <div *ngIf="nuevoTurnoFecha && nuevoTurnoHora && empleadosLibres.length === 0"
                  class="empleados-ocupados">
               ⚠️ No hay empleados libres en este horario
