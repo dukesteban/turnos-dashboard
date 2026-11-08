@@ -447,8 +447,13 @@ export class AgendaComponent implements OnInit, OnDestroy {
   }
 
   // Top en px para una hora dada
+  //
+  // Sin el `+ 8` de margen de antes: era el que dejaba una franja vacía entre
+  // la fila de nombres y la primer línea de hora (7:00), y cada línea quedaba
+  // 8px corrida respecto de donde debería. Los bloques de turno se ubican con
+  // la MISMA función, así que se cuadran solos.
   topParaHora(hora: number): number {
-    return (hora - this.horaInicio) * 60 * PX_POR_MINUTO + 8;
+    return (hora - this.horaInicio) * 60 * PX_POR_MINUTO;
   }
 
   /**
@@ -614,8 +619,10 @@ export class AgendaComponent implements OnInit, OnDestroy {
     const pct = 100 / total;
 
     return {
-      // El +8 replica el margen de topParaHora: sin esto el bloque cae arriba de la linea.
-      top: minutosDesdeInicio * PX_POR_MINUTO + offset + 8,
+      // Sin el +8: topParaHora ya no lo lleva (era la franja vacía entre los
+      // nombres y la primer línea de hora), y el bloque alinea exacto con su
+      // línea: arranca en y, mide duración - 6, y respira por el `- 6`.
+      top: minutosDesdeInicio * PX_POR_MINUTO + offset,
       height: Math.max(duracion * PX_POR_MINUTO - 6, 22),
       // El header y la banda usan `flex: 1 1 0` SIN margen: cada uno es 1/n del
       // ancho. El bloque va 3px adentro de su columna para que no toque el

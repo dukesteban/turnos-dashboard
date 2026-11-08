@@ -66,7 +66,7 @@
           los bloques. Va con `z-index: 0` y `pointer-events: none`: los turnos
           van con `z-index: 1` y tienen que seguir siendo clickeables.
         -->
-        <div class="columnas-fondo" [style.top.px]="offsetHeader + 8" [style.bottom.px]="0">
+        <div class="columnas-fondo" [style.top.px]="offsetHeader" [style.bottom.px]="0">
           <div *ngFor="let col of columnasAgenda"
                class="columna-fondo-celda"
                [class.ausente]="col.ausente || !col.trabaja"></div>
@@ -169,7 +169,7 @@
             en Dia, y el `+ 8` es el mismo margen que usa `topParaHora`: por eso
             las bandas arrancan justo donde arrancan los bloques.
           -->
-          <div class="columnas-fondo" [style.top.px]="offsetHeader + 8" [style.bottom.px]="0">
+          <div class="columnas-fondo" [style.top.px]="offsetHeader" [style.bottom.px]="0">
             <div *ngFor="let col of columnasDe(dia)"
                  class="columna-fondo-celda"
                  [class.ausente]="col.ausente || !col.trabaja"></div>
