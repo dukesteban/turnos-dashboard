@@ -395,3 +395,104 @@ describe('Empleados — selectores de personal', () => {
     expect(cmp.servicios.length).toBe(1);
   });
 });
+
+describe('Empleados — alta con acceso incluido', () => {
+  // El acceso del popup "Nuevo empleado" es OPCIONAL: sin usuario ni clave el
+  // alta sale como siempre; con datos, se crea el login pegado al empleado.
+  // `creados` junta los empleados que el mock "guardó" para saber si el alta
+  // llegó o no a la base.
+  const montarConRegistro = (over: Record<string, any> = {}) => {
+    const creados: any[] = [];
+    const usuarios: any[] = [];
+    const { cmp, mock } = montar({
+      crearEmpleado: (e: any) => {
+        const fila = { id: 7, ...e };
+        creados.push(fila);
+        return Promise.resolve(fila);
+      },
+      crearUsuario: (u: any) => {
+        usuarios.push(u);
+        return Promise.resolve({ ok: true, usuario: { id: 99, ...u } });
+      },
+      ...over,
+    });
+    return { cmp, mock, creados, usuarios };
+  };
+
+  it('sin datos de acceso NO llama a crearUsuario', async () => {
+    const { cmp, usuarios, creados } = montarConRegistro();
+    cmp.nuevoNombre = 'Pedro Gracia';
+    await cmp.agregarEmpleado();
+
+    expect(cmp.errorNuevoEmpleado).toBe('');
+    expect(usuarios.length).toBe(0);
+    expect(creados.length).toBe(1);
+    expect(cmp.mostrarModalNuevoEmpleado).toBe(false);
+  });
+
+  it('con usuario y clave crea el login junto al empleado', async () => {
+    const { cmp, usuarios, creados } = montarConRegistro();
+    cmp.nuevoNombre = 'Pedro Gracia';
+    cmp.nuevoAccesoUsuario = 'pedro.gracia';
+    cmp.nuevoAccesoClave = 'secreto123';
+    cmp.nuevoAccesoRol = 'empleado';
+    await cmp.agregarEmpleado();
+
+    expect(cmp.errorNuevoEmpleado).toBe('');
+    expect(creados.length).toBe(1);
+    expect(usuarios.length).toBe(1);
+    // El id del empleado recién creado viaja como empleado_id.
+    expect(usuarios[0].usuario).toBe('pedro.gracia');
+    expect(usuarios[0].rol).toBe('empleado');
+    expect(usuarios[0].empleado_id).toBe(7);
+    expect(cmp.mostrarModalNuevoEmpleado).toBe(false);
+    // El popup queda limpio para la próxima alta.
+    expect(cmp.nuevoAccesoUsuario).toBe('');
+    expect(cmp.nuevoAccesoClave).toBe('');
+  });
+
+  it('la clave corta corta ANTES de crear al empleado', async () => {
+    const { cmp, usuarios, creados } = montarConRegistro();
+    cmp.abrirModalNuevoEmpleado();
+    cmp.nuevoNombre = 'Pedro Gracia';
+    cmp.nuevoAccesoUsuario = 'pedro.gracia';
+    cmp.nuevoAccesoClave = '123';
+    await cmp.agregarEmpleado();
+
+    expect(cmp.errorNuevoEmpleado).toContain('6 caracteres');
+    expect(creados.length).toBe(0);
+    expect(usuarios.length).toBe(0);
+    expect(cmp.mostrarModalNuevoEmpleado).toBe(true);   // sigue abierto con el error
+  });
+
+  it('usuario sin clave también pide completar antes de crear', async () => {
+    const { cmp, creados } = montarConRegistro();
+    cmp.abrirModalNuevoEmpleado();
+    cmp.nuevoNombre = 'Pedro Gracia';
+    cmp.nuevoAccesoUsuario = 'pedro.gracia';
+    await cmp.agregarEmpleado();
+
+    expect(cmp.errorNuevoEmpleado).toContain('6 caracteres');
+    expect(creados.length).toBe(0);
+  });
+
+  it('si crearUsuario falla, el empleado queda creado y el aviso sale en la lista', async () => {
+    const { cmp, mock, creados } = montarConRegistro();
+    const usuarios: any[] = [];
+    mock.crearUsuario = (u: any) => {
+      usuarios.push(u);
+      return Promise.reject(new Error('duplicate key usuario'));
+    };
+    cmp.nuevoNombre = 'Pedro Gracia';
+    cmp.nuevoAccesoUsuario = 'pedro.gracia';
+    cmp.nuevoAccesoClave = 'secreto123';
+    await cmp.agregarEmpleado();
+
+    expect(cmp.mensajeError).toContain('se creó');
+    expect(cmp.mensajeError).toContain('duplicate');
+    expect(creados.length).toBe(1);                     // el empleado ya está en la base
+    expect(cmp.empleados.some((e: any) => e.id === 7)).toBe(true);
+    expect(usuarios.length).toBe(1);                    // se intentó igual
+    expect(cmp.mostrarModalNuevoEmpleado).toBe(false);  // cerrado: invita a duplicar el alta
+  });
+});

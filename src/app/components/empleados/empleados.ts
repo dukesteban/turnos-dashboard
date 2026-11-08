@@ -65,6 +65,16 @@ export class EmpleadosComponent implements OnInit {
   accesoRol = 'empleado';
   accesoError = '';
   accesoGuardando = false;
+  // ── Acceso dentro del ALTA de "Nuevo empleado" ──
+  // Opcional: si se llena, se crea el login junto con el empleado (un paso
+  // menos). Si queda vacío, el empleado entra sin login y el acceso se da
+  // después desde el detalle, como siempre.
+  nuevoAccesoUsuario = '';
+  nuevoAccesoClave = '';
+  nuevoAccesoRol = 'empleado';
+  // El usuario se auto-sugiere desde el nombre; si el admin lo escribió a mano,
+  // la sugerencia deja de pisarlo.
+  nuevoAccesoUsuarioManual = false;
   guardandoAtiende = false;
 
   private readonly ROLES = [
@@ -294,8 +304,22 @@ export class EmpleadosComponent implements OnInit {
     this.nuevaDireccion = '';
     this.nuevaComision = 10;
     this.jornadaNueva = jornadaVaciaPorDefecto();
+    this.nuevoAccesoUsuario = '';
+    this.nuevoAccesoClave = '';
+    this.nuevoAccesoRol = 'empleado';
+    this.nuevoAccesoUsuarioManual = false;
     this.errorNuevoEmpleado = '';
     this.cdr.detectChanges();
+  }
+
+  /**
+   * El nombre va sugiriendo el usuario del acceso mientras se escribe. Si ya lo
+   * escribieron a mano, la sugerencia no pisa lo que hay.
+   */
+  sugerirAccesoNuevo(nombre: string) {
+    if (!this.nuevoAccesoUsuarioManual) {
+      this.nuevoAccesoUsuario = this.nombreComoUsuario(nombre);
+    }
   }
 
   cerrarModalNuevoEmpleado() {
@@ -321,6 +345,25 @@ export class EmpleadosComponent implements OnInit {
         return;
       }
     }
+    // El acceso es OPCIONAL: se completa si el admin escribió usuario o clave.
+    // Se valida ANTES de crear al empleado: si falta la clave, no conviene
+    // encontrar al empleado ya creado (y habilitado) a mitad del error.
+    const quiereAcceso = !!(this.nuevoAccesoUsuario.trim() || this.nuevoAccesoClave.trim());
+    if (quiereAcceso) {
+      if (!this.nuevoAccesoUsuario.trim()) {
+        this.errorNuevoEmpleado = '❌ Ingresá un nombre de usuario para el acceso.';
+        this.guardandoNuevoEmpleado = false;
+        this.cdr.detectChanges();
+        return;
+      }
+      if (this.nuevoAccesoClave.trim().length < 6) {
+        this.errorNuevoEmpleado = '❌ La clave necesita al menos 6 caracteres.';
+        this.guardandoNuevoEmpleado = false;
+        this.cdr.detectChanges();
+        return;
+      }
+    }
+    let problemaAcceso = '';
     try {
       const empleado = await this.supabase.crearEmpleado({
         nombre: this.nuevoNombre.trim(),
@@ -330,13 +373,38 @@ export class EmpleadosComponent implements OnInit {
         comision_porcentaje: this.nuevaComision,
         jornada: this.jornadaNueva
       });
+      // Mismo alta de login que el popup "Dar acceso", pero pegada al empleado
+      // onCreate: se intenta DESPUÉS de crear al empleado para tener su id.
+      if (quiereAcceso && empleado) {
+        try {
+          await this.supabase.crearUsuario({
+            usuario: this.nuevoAccesoUsuario.trim(),
+            clave: this.nuevoAccesoClave.trim(),
+            rol: this.nuevoAccesoRol,
+            empleado_id: empleado.id,
+          });
+        } catch (err: any) {
+          // El empleado YA quedó creado: no se vuelve atrás ni se reabre el
+          // popup (re-guardar duplicaría el alta). Cerramos con el empleado en
+          // la lista y el aviso manda a dar el acceso desde el detalle.
+          problemaAcceso = err?.message || 'no se pudo crear';
+        }
+      }
       this.empleados.push(empleado);
       this.nuevoNombre = '';
       this.nuevoTelefono = '';
       this.nuevaComision = 10;
       this.jornadaNueva = jornadaVaciaPorDefecto();
+      this.nuevoAccesoUsuario = '';
+      this.nuevoAccesoClave = '';
+      this.nuevoAccesoRol = 'empleado';
+      this.nuevoAccesoUsuarioManual = false;
       this.cerrarModalNuevoEmpleado();
-      this.mostrarMensaje('✅ Empleado agregado.', 'lista');
+      if (problemaAcceso) {
+        this.mostrarError(`⚠️ ${empleado.nombre} se creó, pero el acceso no: ${problemaAcceso}. Dáselo desde el detalle.`, 'lista');
+      } else {
+        this.mostrarMensaje(quiereAcceso ? '✅ Empleado agregado con acceso.' : '✅ Empleado agregado.', 'lista');
+      }
     } catch (e: any) {
       console.error('Error al agregar empleado:', e);
       this.errorNuevoEmpleado = `❌ Error: ${e.message || 'No se pudo agregar'}`;

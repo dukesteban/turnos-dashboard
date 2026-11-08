@@ -292,6 +292,17 @@
   }
 }
 
+// ── Alta de acceso DENTRO del popup "Nuevo empleado" ──
+// Los tres datos (usuario, clave y rol) apilados dentro de su .campo. No hay
+// que estilar los inputs: `.campo input/select` del partial de popup ya los
+// viste por descendencia; acá solo falta el apilado y el aire entre ellos.
+.acceso-alta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 /* Switch de "Atiende turnos": checkbox real (accesible con teclado) + la
    pastilla dibujada al lado. */
 .switch {

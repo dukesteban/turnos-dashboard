@@ -470,7 +470,7 @@
         <div class="form-caja">
           <div class="campo">
             <label>Nombre</label>
-            <input type="text" [(ngModel)]="nuevoNombre" placeholder="Nombre" class="input" />
+            <input type="text" [(ngModel)]="nuevoNombre" (ngModelChange)="sugerirAccesoNuevo($event)" placeholder="Nombre" class="input" />
           </div>
           <div class="campo">
             <label>Teléfono (opcional)</label>
@@ -506,6 +506,21 @@
                   <button class="btn-mini" (click)="limpiarHorarioNueva(i)" title="Jornada completa">∞</button>
                 </div>
               </div>
+            </div>
+          </div>
+          <!-- ACCESO (opcional): crear el login junto con el empleado. Solo lo
+               ven admin y secretario, igual que el bloque de roles del detalle. -->
+          <div class="campo" *ngIf="puedeVerRoles">
+            <label>🔑 Acceso (opcional)</label>
+            <div class="acceso-alta">
+              <input type="text" [(ngModel)]="nuevoAccesoUsuario"
+                (ngModelChange)="nuevoAccesoUsuarioManual = true"
+                placeholder="Usuario" autocomplete="off" />
+              <input type="password" [(ngModel)]="nuevoAccesoClave"
+                placeholder="Clave (mínimo 6)" autocomplete="new-password" />
+              <select [(ngModel)]="nuevoAccesoRol">
+                <option *ngFor="let r of rolesDisponibles" [value]="r.valor">{{ r.etiqueta }}</option>
+              </select>
             </div>
           </div>
         </div>
