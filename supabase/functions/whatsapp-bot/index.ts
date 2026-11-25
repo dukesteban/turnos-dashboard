@@ -165,6 +165,25 @@ const AVISO_LINKS_INVENTADOS =
 const OFFSET_AR = -3;
 
 /**
+ * La fecha de HOY en Argentina ("YYYY-MM-DD").
+ *
+ * La funcion corre en UTC: a las 22:00 de aca el reloj UTC ya esta en el dia
+ * siguiente. Todo lo que le diga al cliente "hoy es ..." y todo lo que valide
+ * fechas tiene que salir de aca, no de `new Date()` a secas.
+ */
+function hoyAr(offsetDias = 0): string {
+  return new Date(Date.now() + (OFFSET_AR * 60 + offsetDias * 1440) * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+/** Los minutos que son AHORA en Argentina (0 = 00:00). */
+function minutosAhoraAr(): number {
+  const d = new Date(Date.now() + OFFSET_AR * 3600 * 1000);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+
+/**
  * El momento exacto (en milisegundos) de una fecha y hora DEL LOCAL.
  *
  * Existe porque la funcion corre en UTC y Argentina es UTC-3: un
@@ -1487,7 +1506,37 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       return JSON.stringify({ ok: true, cliente_id: clienteId, nombre: cliente.nombre });
     }
     case 'consultar_horarios_libres': {
-      const fecha = input.fecha;
+      const fecha = String(input.fecha ?? '');
+
+      // ─── La fecha tiene que ser valida y NO pasada ───
+      //
+      // En produccion el modelo se anclo en fechas viejas cuando la conversacion
+      // tenia un mes de historia: un 22/11 ofrecio "el miercoles 4 de noviembre"
+      // como si fuera la semana que viene, esta tool le devolvio horarios y recien
+      // crear_turno lo freno despues de que el cliente ya habia elegido. El dato
+      // de hoy viaja en el error para que se corrija solo y no vuelva a ofrecer
+      // lo mismo en el mensaje siguiente.
+      const hoy = hoyAr();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return JSON.stringify({
+          ok: false,
+          error: 'fecha_invalida',
+          detalle: `"${input.fecha}" no es una fecha YYYY-MM-DD.`,
+          hoy,
+        });
+      }
+      if (fecha < hoy) {
+        return JSON.stringify({
+          ok: false,
+          error: 'fecha_pasada',
+          fecha,
+          hoy,
+          detalle: `El ${fechaTexto(fecha)} ya paso. Hoy es ${fechaTexto(hoy)} (${hoy}).`,
+          nota:
+            'NO ofrezcas horarios para esa fecha ni la des por buena. Decile al cliente que ya paso ' +
+            'y preguntale para que dia quiere el turno. La fecha de hoy es la de este error.',
+        });
+      }
 
       // ─── Los turnos del MISMO cliente en esa fecha ───
       // Esto es lo que hace dar tantas vueltas cuando un cliente quiere varios
@@ -1506,7 +1555,8 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       // que no ofrezca horas sin chequear, porque la tool le estaba dando horas
       // imposibles como si fueran libres.
       const { data: yo } = await sb.rpc('buscar_cliente_por_telefono', { p_telefono: telefono });
-      const miId = (yo ?? [])[0]?.id ?? null;
+      const ficha = (yo ?? [])[0] ?? null;
+      const miId = ficha?.id ?? null;
       const { data: mios } = miId != null
         ? await sb
             .from('turnos')
@@ -1624,9 +1674,17 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       //    la tool ofrecia al cliente una hora que era libre para el empleado pero
       //    imposible para el, y el conflicto aparecia recien al agendar.
       const libres: number[] = [];
+      // Si la fecha es HOY, las horas que ya pasaron no estan "libres": a las
+      // 20:00 el cliente no puede tomar las 08:00. Sin esto se las ofreciamos y
+      // crear_turno las rechazaba recien al final.
+      const minutosAhora = fecha === hoy ? minutosAhoraAr() : null;
       for (const b of bloques) {
         let cur = b.desde;
         while (cur + duracion <= b.hasta) {
+          if (minutosAhora != null && cur <= minutosAhora) {
+            cur += 15;
+            continue;
+          }
           if (alguien(cur, cur + duracion) && !pisaConLosSuyos(cur, cur + duracion) && !libres.includes(cur)) {
             libres.push(cur);
           }
@@ -1679,7 +1737,8 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       // La hora exacta que pidio tiene prioridad aunque caiga fuera de la grilla: si
       // entra en el horario y hay alguien libre, se agenda ahi y punto.
       const entraEnAlgunBloque = (t: number) => bloques.some((b) => t >= b.desde && t + duracion <= b.hasta);
-      if (pref != null && !libres.includes(pref) && entraEnAlgunBloque(pref) && alguien(pref, pref + duracion)) {
+      const pasoHoy = minutosAhora != null && pref != null && pref <= minutosAhora;
+      if (pref != null && !libres.includes(pref) && !pasoHoy && entraEnAlgunBloque(pref) && alguien(pref, pref + duracion)) {
         libres.push(pref);
       }
 
@@ -1691,7 +1750,7 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       // 7. por que el horario pedido no sirve, si no sirve. Sin esto el bot se inventa una
       //    excusa o dice que esta cerrado cuando en realidad es que no entra el servicio.
       const cabe = pref != null && entraEnAlgunBloque(pref);
-      const estaLibre = cabe && alguien(pref, pref + duracion);
+      const estaLibre = cabe && !pasoHoy && alguien(pref, pref + duracion);
 
       let motivo: string | null = null;
       if (pref != null && !cabe) {
@@ -1707,6 +1766,8 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
             ? `Abrimos a las ${minAHora(bloques[0].desde)}.`
             : `Ese servicio dura ${duracion} min y ese tramo cierra a las ${minAHora(cercano.hasta)}, asi que a las ${minAHora(pref)} se pasaria.` +
               (ultimoReal != null ? ` El ultimo horario posible es las ${minAHora(ultimoReal)}.` : ' Ese dia no entra.');
+      } else if (pasoHoy) {
+        motivo = `Esa hora de hoy ya paso. Ahora son las ${minAHora(minutosAhora!)}.`;
       } else if (pref != null && !estaLibre) {
         // Con `empleado_id` hay tres motivos distintos y se confundian entre si:
         // un empleado que no labra ese dia salia como "ya hay un turno a esa hora",
@@ -1828,6 +1889,15 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       // concreto, buscar_empleados CON LA FECHA se lo dice y se le pasa el id.
       return JSON.stringify({
         ok: true,
+        // Quien escribe, si ya esta en la base. Viaja aca porque es el dato que
+        // el modelo pierde en las conversaciones largas: en produccion, veinte
+        // mensajes despues de buscar_cliente, volvio a pedir nombre y apellido a
+        // un cliente que ya estaba registrado. Con el nombre delante, no hay
+        // nada que preguntar.
+        cliente_registrado: ficha ? { id: ficha.id, nombre: ficha.nombre } : null,
+        nota_cliente: ficha
+          ? `El que escribe ya esta registrado como ${ficha.nombre}: NO le pidas el nombre ni el apellido, crear_turno lo toma de la ficha.`
+          : 'El numero no esta registrado. Si el turno es para quien escribe, pedile nombre y apellido en UNA sola pregunta.',
         libres: horasOrdenadas.map(minAHora),
         total_libres: ordenada.length,
         hay_mas: ordenada.length > cantidad,
@@ -2028,7 +2098,18 @@ async function ejecutarTool(nombre: string, input: any, telefono: string, histor
       if (!fecha || !hora || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return err('fecha_invalida', fecha_hora);
       // La hora viene en hora del local: se compara como tal (ver msLocales), no
       // como si fuera UTC, que es tres horas antes de lo que es.
-      if (msLocales(fecha, hora) < Date.now()) return err('fuera_de_horario', 'La fecha/hora ya pasaron.');
+      if (msLocales(fecha, hora) < Date.now()) {
+        const hoy = hoyAr();
+        return JSON.stringify({
+          ok: false,
+          error: 'fuera_de_horario',
+          fecha_hora,
+          hoy,
+          detalle: `Ese horario ya paso. Hoy es ${fechaTexto(hoy)} (${hoy}).`,
+          nota:
+            'No lo reintentes con la misma fecha. Decile al cliente que ya paso y preguntale para que dia quiere el turno.',
+        });
+      }
 
       // 2. cerrado?
       const { data: cerradosCr } = await sb.from('dias_cerrados').select('fecha, fecha_hasta, motivo');
@@ -2784,12 +2865,14 @@ const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viern
  * Va en el system prompt porque es dato, no instrucción.
  */
 function tablaDeDias(cuantos = 21): string {
-  const hoy = new Date();
+  // Se arranca desde la fecha de Argentina, no la del runtime (UTC): a la noche
+  // la tabla empezaba en el dia siguiente.
+  const base = Date.now() + OFFSET_AR * 3600 * 1000;
   const filas: string[] = [];
   for (let i = 0; i < cuantos; i++) {
-    const d = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + i);
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    filas.push(`${iso} ${DIAS_SEMANA[d.getDay()]}`);
+    const d = new Date(base + i * 86400 * 1000);
+    const iso = d.toISOString().slice(0, 10);
+    filas.push(`${iso} ${DIAS_SEMANA[d.getUTCDay()]}`);
   }
   return filas.join(', ');
 }
@@ -2798,8 +2881,8 @@ function tablaDeDias(cuantos = 21): string {
 async function responderAlCliente(historial: any[], telefono: string, spec: string): Promise<string> {
   const negocio = await contextoNegocio();
   const esPrimerMensaje = historial.filter((m) => m.role === 'user').length <= 1;
-  const hoy = new Date();
-  const hoyIso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+  const hoyIso = hoyAr();
+  const hoy = new Date(`${hoyIso}T00:00:00Z`);
 
   // ─── El prompt, partido en dos: lo que NUNCA cambia y lo que cambia ───
   //
@@ -2877,7 +2960,7 @@ NUNCA mezcles idiomas en un mismo mensaje.
 
 NOMBRE DEL NEGOCIO: "${negocio.nombre}" es un nombre propio, va tal cual y sin traducir. No le pegues terminaciones que dependan de cómo termina la palabra: nada de "Test-turnos'", "Test-turnos's" ni "de la Test-turnos". Para decir a quién pertenece el asistente, usá una forma que no toque el nombre ("the WhatsApp assistant for Test-turnos", "el asistente de Test-turnos"). Si el idioma igual te obliga a una terminación, que la elija el sonido del nombre, no su última letra.
 
-Fechas: hoy es ${hoyIso} (${DIAS_SEMANA[hoy.getDay()]}). Esta es la tabla de los próximos días, con el nombre de cada uno: ${tablaDeDias()}. Cuando el cliente diga un día ("el lunes", "el domingo que viene", "mañana", "el 20"), buscá la fecha en esta tabla y pasala así a las tools. NO la calcules vos: antes te equivocabas el día de la semana y el cliente recibía un horario del día equivocado. Tool de verdad antes de afirmar: nunca confirmás turno sin que crear_turno te devuelva ok, y nunca decís que un horario está libre sin antes llamar consultar_horarios_libres. Si una tool devuelve error, le explicás al cliente qué pasó y ofrecés otro camino.
+Fechas: hoy es ${hoyIso} (${DIAS_SEMANA[hoy.getUTCDay()]}). Esta es la tabla de los próximos días, con el nombre de cada uno: ${tablaDeDias()}. Cuando el cliente diga un día ("el lunes", "el domingo que viene", "mañana", "el 20"), buscá la fecha en esta tabla y pasala así a las tools. NO la calcules vos: antes te equivocabas el día de la semana y el cliente recibía un horario del día equivocado. Tool de verdad antes de afirmar: nunca confirmás turno sin que crear_turno te devuelva ok, y nunca decís que un horario está libre sin antes llamar consultar_horarios_libres. Si una tool devuelve error, le explicás al cliente qué pasó y ofrecés otro camino.
 
 Cierres programados: ${negocio.cierres ? negocio.cierres + '.' : 'no hay ninguno cargado en los proximos 30 dias.'}
 Horarios de atencion: ${negocio.horarios ?? 'no hay horarios cargados'}. Cuando el cliente pregunte cuando atiende el local, usa ESTO tal cual: no lo inventes ni lo deduzcas de los horarios libres.
@@ -3770,7 +3853,7 @@ async function mensajeDeFalla(): Promise<string> {
 // ─── Spec: se puede cargar de una tabla en el futuro. Por ahora es texto fijo. ───
 async function obtenerSpec(): Promise<string> {
   return `Rotina de atencion:
-1. Cuando el cliente saluda, o antes de agendar, llama buscar_cliente. Si devuelve un nombre, saludalo por su nombre y NO le pidas el nombre otra vez: crear_turno lo resuelve solo. Si no devuelve nada, es un cliente nuevo y ahi si se lo pides, SIEMPRE nombre y apellido juntos ("¿Me pasás tu nombre y apellido?"), nunca solo el nombre.
+1. Cuando el cliente saluda, o antes de agendar, llama buscar_cliente. Si devuelve un nombre, saludalo por su nombre y NO le pidas el nombre otra vez: crear_turno lo resuelve solo. Si no devuelve nada, es un cliente nuevo y ahi si se lo pides, SIEMPRE nombre y apellido juntos ("¿Me pasás tu nombre y apellido?"), nunca solo el nombre. Si el cliente ya contesto con dos o mas palabras, eso ES nombre y apellido: no le preguntes cual es el apellido ni si el segundo es el apellido. Y si consultar_horarios_libres trae cliente_registrado, ese es el nombre: no se lo pidas.
 2. Si el cliente viene por un turno nuevo, pedile el servicio. PERO si la pregunta es de GENTE ("quien trabaja mañana", "quien esta el jueves"), no le pidas servicio: llamá empleados_del_dia con la fecha y respondé quién trabaja y en qué horario. Son preguntas distintas y reconducir la segunda a la primera hace que el cliente se enrede.
 3. Cuando elija servicio, llama consultar_horarios_libres y mostra los horarios que devuelve. NO le preguntes "a que hora te gustaria" antes de consultar: la unica respuesta valida sale de esa tool. Si el cliente ya tiene un turno ese dia y suma otro servicio, "hora_inmediata_despues" es la hora que le sigue y va PRIMERO, diciendo que es justo despues del turno que ya tiene.
 4. Si elige horario, crealo con crear_turno.
